@@ -311,21 +311,25 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     remaining_recipients = all_recipients.copy()
     
     for user_index, user in enumerate(users):
+        print(f"DEBUG: Processing user {user_index + 1}/{len(users)}: {user.email}")
         logger.info(f"Processing user {user_index + 1}/{len(users)}: {user.email}")
         
         # Get recipients for this user
         user_recipients = remaining_recipients[:recipients_per_user]
         remaining_recipients = remaining_recipients[recipients_per_user:]
         
+        print(f"DEBUG: User {user.email} assigned {len(user_recipients)} recipients")
         logger.info(f"Assigned {len(user_recipients)} recipients to user {user.email}")
         
         if not user_recipients:
+            print(f"DEBUG: User {user.email} has no recipients - skipping")
             logger.warning(f"No recipients left for user {user.email}")
             continue
         
         # Create drafts for this user
         user_drafts_created = 0
         for i in range(campaign.emails_per_user):
+            print(f"DEBUG: Creating draft {i+1} for user {user.email}")
             logger.info(f"Creating draft {i+1}/{campaign.emails_per_user} for user {user.email}")
             try:
                 gmail_draft_id = create_gmail_draft(
@@ -346,17 +350,24 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                     recipients=user_recipients
                 )
                 db.add(draft)
+                # Flush to ensure model is valid, but commit later
+                db.flush()
+                
                 total_drafts_created += 1
                 user_drafts_created += 1
+                print(f"DEBUG: SUCCESS creating draft for {user.email}")
                 logger.info(f"Successfully created draft for user {user.email}")
                 
             except HTTPException as he:
+                print(f"DEBUG: HTTPException for {user.email}: {he.detail}")
                 logger.error(f"HTTPException for user {user.email}: {he.detail}")
                 failed_users.append({"email": user.email, "error": he.detail})
                 continue
             except Exception as e:
-                logger.error(f"Failed to create draft for user {user.email}: {str(e)}")
+                print(f"DEBUG: EXCEPTION for {user.email}: {str(e)}")
                 import traceback
+                traceback.print_exc()
+                logger.error(f"Failed to create draft for user {user.email}: {str(e)}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 failed_users.append({"email": user.email, "error": str(e)})
                 continue
@@ -364,6 +375,8 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
         if user_drafts_created > 0:
             successful_users.append(user.email)
             logger.info(f"Completed {user_drafts_created} drafts for user {user.email}")
+    
+    print(f"DEBUG: Finished processing all users. Total drafts: {total_drafts_created}")
     
     # Update campaign status
     campaign.status = 'uploaded'
