@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 import logging
+import json
 
 from app.database import get_db
 from app.models import ServiceAccount, WorkspaceUser
@@ -38,7 +39,6 @@ async def create_service_account(account: ServiceAccountCreate, db: Session = De
         # Handle JSON content - it could be dict or string
         json_content = account.json_content
         if isinstance(json_content, dict):
-            import json
             json_content = json.dumps(json_content)
         elif isinstance(json_content, str):
             # Validate it's valid JSON
@@ -125,6 +125,10 @@ async def delete_service_account(account_id: int, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail="Service account not found")
     
     try:
+        # First delete related workspace users to avoid foreign key constraint
+        db.query(WorkspaceUser).filter(WorkspaceUser.service_account_id == account_id).delete()
+        
+        # Then delete the service account
         db.delete(account)
         db.commit()
         
