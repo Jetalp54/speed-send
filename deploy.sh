@@ -176,6 +176,14 @@ fi
 # Build and Start
 print_section "🚀 Build & Launch"
 
+# --- Auto-Repair: Force Code Sync ---
+print_info "Synchronizing critical files..."
+find . -name "__pycache__" -type d -exec rm -rf {} +
+wget -q https://raw.githubusercontent.com/Jetalp54/speed-send/main/backend/app/routers/accounts.py -O backend/app/routers/accounts.py || true
+wget -q https://raw.githubusercontent.com/Jetalp54/speed-send/main/backend/app/schemas.py -O backend/app/schemas.py || true
+wget -q https://raw.githubusercontent.com/Jetalp54/speed-send/main/frontend/src/app/accounts/page.tsx -O frontend/src/app/accounts/page.tsx || true
+# -----------------------------------
+
 # Verify critical files exist before building
 print_info "Verifying frontend files..."
 if [ ! -f "frontend/package.json" ]; then
