@@ -7,7 +7,7 @@ import json
 
 from app.database import get_db
 from app.database import get_db
-from app.models import ServiceAccount, WorkspaceUser, DraftCampaignAccount, DraftCampaignUser, GmailDraft
+from app.models import ServiceAccount, WorkspaceUser, DraftCampaignAccount, DraftCampaignUser, GmailDraft, CampaignSender, EmailLog
 from app.schemas import ServiceAccountCreate, ServiceAccountUpdate, ServiceAccountResponse, WorkspaceUserResponse
 from app.encryption import EncryptionService
 from app.google_api import GoogleWorkspaceService
@@ -128,6 +128,12 @@ async def delete_service_account(account_id: int, db: Session = Depends(get_db))
     try:
         # 1. Delete DraftCampaignAccount records linked to this account
         db.query(DraftCampaignAccount).filter(DraftCampaignAccount.service_account_id == account_id).delete()
+        
+        # 1.1 Delete CampaignSender assignments
+        db.query(CampaignSender).filter(CampaignSender.service_account_id == account_id).delete()
+
+        # 1.2 Delete EmailLogs associated with this account
+        db.query(EmailLog).filter(EmailLog.service_account_id == account_id).delete()
         
         # 2. Find all users for this account
         workspace_users = db.query(WorkspaceUser).filter(WorkspaceUser.service_account_id == account_id).all()
