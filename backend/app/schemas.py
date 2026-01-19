@@ -269,6 +269,10 @@ class DraftCampaignResponse(DraftCampaignBase):
     selected_accounts: List[ServiceAccountResponse] = []
     selected_users: List[WorkspaceUserResponse] = []
     selected_contacts: List[ContactListResponse] = []
+    total_drafts: int = 0
+    drafts_by_user: Dict[str, int] = {}
+    recipients_count: int = 0
+    users_count: int = 0
 
     class Config:
         from_attributes = True
