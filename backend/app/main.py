@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from contextlib import asynccontextmanager
 import logging
+import traceback
 
 from app.config import settings
 from app.database import engine, Base
@@ -102,6 +104,15 @@ app.include_router(data_lists.router, prefix=settings.API_V1_PREFIX)
 app.include_router(drafts.router, prefix=settings.API_V1_PREFIX)
 app.include_router(send_router.router, prefix=settings.API_V1_PREFIX)
 app.include_router(accounts_sync_stub.router, prefix=settings.API_V1_PREFIX)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_msg = f"Global Exception: {str(exc)}\n{traceback.format_exc()}"
+    logger.error(error_msg)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "debug_error": str(exc)},
+    )
 
 logger.info(f"All routers loaded")
 logger.info(f"API Documentation: /docs (disabled in production)")
