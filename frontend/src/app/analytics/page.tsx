@@ -270,7 +270,7 @@ export default function AnalyticsPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">Today's Quota Used</span>
+                    <span className="text-sm">Today&apos;s Quota Used</span>
                     <span className="font-semibold">
                       {stats?.emails_sent_today || 0}
                     </span>

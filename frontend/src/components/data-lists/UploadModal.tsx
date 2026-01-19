@@ -51,7 +51,7 @@ export function UploadModal({ onClose, onUpload }: UploadModalProps) {
           <div className="space-y-2">
             <Label htmlFor="file">CSV File</Label>
             <Input id="file" type="file" accept=".csv" onChange={handleFileChange} />
-            <p className="text-sm text-muted-foreground">Upload a CSV file with an 'email' column.</p>
+            <p className="text-sm text-muted-foreground">Upload a CSV file with an &apos;email&apos; column.</p>
           </div>
         </CardContent>
         <CardFooter className="flex justify-end">

@@ -8,12 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  MoreHorizontal, 
-  Upload, 
-  Edit, 
-  Copy, 
-  Play, 
+import {
+  MoreHorizontal,
+  Upload,
+  Edit,
+  Copy,
+  Play,
   Trash2,
   Eye
 } from 'lucide-react';
@@ -60,7 +60,7 @@ const DraftsPage: React.FC = () => {
     setLoading(true);
     try {
       const response = await axios.post(`${API_URL}/api/v1/drafts/${draftId}/launch`);
-      setDraftCampaigns(prev => prev.map(d => 
+      setDraftCampaigns(prev => prev.map(d =>
         d.id === draftId ? { ...d, status: 'launched' } : d
       ));
       setError(null);
@@ -82,7 +82,7 @@ const DraftsPage: React.FC = () => {
         from_name: originalDraft.from_name,
         body_html: originalDraft.body_html
       });
-      
+
       setDraftCampaigns(prev => [...prev, response.data]);
     } catch (err: any) {
       setError(`Failed to duplicate draft: ${err.response?.data?.detail || err.message}`);
@@ -91,7 +91,7 @@ const DraftsPage: React.FC = () => {
 
   const deleteDraft = async (draftId: number) => {
     if (!confirm('Are you sure you want to delete this draft?')) return;
-    
+
     try {
       await axios.delete(`${API_URL}/api/v1/drafts/${draftId}`);
       setDraftCampaigns(prev => prev.filter(d => d.id !== draftId));
@@ -134,7 +134,7 @@ const DraftsPage: React.FC = () => {
           <CardContent className="flex flex-col items-center justify-center py-12">
             <div className="text-center">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No Draft Campaigns</h3>
-              <p className="text-gray-500 mb-4">You haven't created any draft campaigns yet.</p>
+              <p className="text-gray-500 mb-4">You haven&apos;t created any draft campaigns yet.</p>
               <Button onClick={() => router.push('/drafts/new')} className="flex items-center gap-2">
                 <Upload className="h-4 w-4" />
                 Create Your First Draft
@@ -171,7 +171,7 @@ const DraftsPage: React.FC = () => {
                       <Copy className="h-4 w-4 mr-2" />
                       Duplicate
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => launchDrafts(campaign.id)}
                       disabled={loading || campaign.status !== 'uploaded'}
                       className="text-green-600"
@@ -179,7 +179,7 @@ const DraftsPage: React.FC = () => {
                       <Play className="h-4 w-4 mr-2" />
                       Launch
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => deleteDraft(campaign.id)}
                       className="text-red-600"
                     >
@@ -197,7 +197,7 @@ const DraftsPage: React.FC = () => {
                       <p className="text-sm text-gray-600">From: {campaign.from_name}</p>
                     )}
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span className="text-gray-500">Recipients:</span>

@@ -29,7 +29,7 @@ export function SendTestEmail({ onSend, disabled }: SendTestEmailProps) {
 
   return (
     <>
-      <Button 
+      <Button
         variant="outline"
         className="w-full justify-start gap-3"
         onClick={() => setIsModalOpen(true)}
@@ -41,8 +41,8 @@ export function SendTestEmail({ onSend, disabled }: SendTestEmailProps) {
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Send Test Email">
         <div className="space-y-4">
-          <p className="text-gray-600">Enter the recipient's email address to send a test email.</p>
-          <Input 
+          <p className="text-gray-600">Enter the recipient&apos;s email address to send a test email.</p>
+          <Input
             type="email"
             placeholder="recipient@example.com"
             value={recipientEmail}
