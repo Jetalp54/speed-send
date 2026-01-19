@@ -9,7 +9,6 @@
 
 # Service accounts
 backend/service_accounts/
-*.json
 
 # Python
 __pycache__/
