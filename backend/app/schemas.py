@@ -39,7 +39,7 @@ class ServiceAccountBase(BaseModel):
     admin_email: Optional[str] = None
 
 class ServiceAccountCreate(ServiceAccountBase):
-    json_content: Dict[str, Any]
+    json_content: Union[Dict[str, Any], str]
 
 class ServiceAccountUpdate(BaseModel):
     name: Optional[str] = None
