@@ -33,16 +33,26 @@ export default function AccountsPage() {
     setBackendStatus(isHealthy);
   }, []);
 
+  // Helper to format error messages safely
+  const formatError = (err: any) => {
+    if (typeof err === 'string') return err;
+    if (err.message && typeof err.message === 'string') return err.message;
+    // Handle Pydantic array errors or other objects
+    if (Array.isArray(err)) return err.map((e: any) => e.msg || JSON.stringify(e)).join(', ');
+    if (typeof err === 'object') return JSON.stringify(err);
+    return String(err);
+  };
+
   const loadAccounts = useCallback(async () => {
     try {
       setLoading(true);
       const response = await serviceAccountsApi.list();
-      if (response.error) throw new Error(response.error);
+      if (response.error) throw response.error; // Throw pure error object
 
       setAccounts(Array.isArray(response.data) ? response.data : []);
     } catch (error: any) {
       console.error('Failed to load accounts:', error);
-      showToast(`Failed to load accounts: ${error.message}`, 'error');
+      showToast(`Failed to load accounts: ${formatError(error)}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -62,10 +72,9 @@ export default function AccountsPage() {
         admin_email: name
       });
 
-      if (response.error) throw new Error(response.error);
+      if (response.error) throw response.error;
 
       const newAccount = response.data;
-      // Safety check just in case
       if (!newAccount) throw new Error("Server returned success but no account data.");
 
       showToast(`Account "${newAccount.name}" added successfully!`, 'success');
@@ -79,10 +88,9 @@ export default function AccountsPage() {
       }
 
     } catch (error: any) {
-      const detail = error.message || "Unknown error";
       console.error('Upload failed:', error);
-      showToast(`Failed to add account: ${detail}`, 'error');
-      // Rethrow to keep dialog state consistent if needed
+      showToast(`Failed to add account: ${formatError(error)}`, 'error');
+      // Rethrow to keep dialog state consistent
       throw error;
     }
   };
@@ -103,18 +111,18 @@ export default function AccountsPage() {
       console.log(`Syncing account ${id} with admin email: ${adminEmail}`);
 
       const response = await serviceAccountsApi.sync(id, adminEmail);
-      if (response.error) throw new Error(response.error);
+      if (response.error) throw response.error;
 
       showToast(`Successfully synced users for ${account.name}`, 'success');
       loadAccounts();
     } catch (error: any) {
-      const detail = error.message;
       console.error('Sync failed:', error);
+      const msg = formatError(error);
 
       if (!isAuto) {
-        showToast(`Sync failed: ${detail}`, 'error');
+        showToast(`Sync failed: ${msg}`, 'error');
       } else {
-        showToast(`Account added, but auto-sync failed: ${detail}. Please try syncing manually.`, 'error');
+        showToast(`Account added, but auto-sync failed: ${msg}. Please try syncing manually.`, 'error');
       }
     } finally {
       setSyncingIds(prev => prev.filter(pid => pid !== id));
@@ -127,15 +135,13 @@ export default function AccountsPage() {
     setDeletingIds(prev => [...prev, id]);
     try {
       const response = await serviceAccountsApi.delete(id);
-      if (response.error) throw new Error(response.error);
+      if (response.error) throw response.error;
 
       showToast("Account deleted successfully", 'success');
-      // Force reload
       await loadAccounts();
     } catch (error: any) {
-      const detail = error.message;
-      showToast(`Failed to delete: ${detail}`, 'error');
       console.error("Delete failed:", error);
+      showToast(`Failed to delete: ${formatError(error)}`, 'error');
     } finally {
       setDeletingIds(prev => prev.filter(pid => pid !== id));
     }
