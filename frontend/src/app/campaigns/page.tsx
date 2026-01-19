@@ -446,82 +446,9 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
   }, [showNotification]);
 
   // Load data on mount
-  useEffect(() => {
-    const initializeData = async () => {
-      try {
-        // First check backend health
-        const isHealthy = await checkBackendHealth();
 
-        if (isHealthy) {
-          await Promise.all([
-            loadAccounts(),
-            loadUsers(),
-            loadTemplates(),
-            loadRecipientLists()
-          ]);
 
-          // If an id query param exists, load campaign for editing
-          try {
-            const url = new URL(window.location.href);
-            const idParam = url.searchParams.get('id');
-            if (idParam) {
-              const cid = parseInt(idParam);
-              if (!isNaN(cid)) {
-                setEditingId(cid);
-                const { data: c, error } = await apiClient.request(`/api/v1/campaigns/${cid}/`);
-                if (error) throw new Error(error);
 
-                setConfig(prev => ({
-                  ...prev,
-                  name: c.name || '',
-                  subject: c.subject || '',
-                  body_html: c.body_html || '',
-                  body_plain: c.body_plain || '',
-                  from_name: c.from_name || prev.from_name,
-                  test_after_email: c.test_after_email || '',
-                  test_after_count: c.test_after_count || 0,
-                  workers: c.concurrency || prev.workers,
-                }));
-                if (Array.isArray(c.recipients)) {
-                  setRecipientsText(c.recipients.map((r: any) => r.email).join('\n'));
-                }
-                if (Array.isArray(c.sender_accounts)) {
-                  setSelectedAccounts(c.sender_accounts.map((a: any) => a.id).filter(Boolean));
-                }
-                appendLog(` Loaded campaign ${cid} for editing`);
-              }
-            }
-          } catch (e) {
-            console.warn('Edit preload failed:', e);
-          }
-        } else {
-          showNotification('Backend server is not available. Please check server status.', 'error');
-        }
-      } catch (error) {
-        console.error('Failed to initialize data:', error);
-        showNotification('Failed to load initial data', 'error');
-      }
-    };
-
-    initializeData();
-  }, [checkBackendHealth, loadAccounts, loadUsers, loadTemplates, loadRecipientLists, showNotification, appendLog]);
-
-  // Refresh lists whenever the Manage Lists modal opens
-  useEffect(() => {
-    if (showRecipientModal) {
-      loadRecipientLists();
-      // Prefill list name from campaign name when opening the modal
-      const defaultName = (config.name && config.name.trim()) ? config.name.trim() : `List ${new Date().toLocaleDateString()}`;
-      setNewListName(defaultName);
-    }
-  }, [showRecipientModal, config.name, loadRecipientLists]);
-
-  // Keep inline list name tracked to campaign name by default
-  useEffect(() => {
-    if (!inlineListName) {
-      setInlineListName(config.name || '');
-    }
-  }, [config.name]);
 
   // No need for localStorage sync since we're using database
 
