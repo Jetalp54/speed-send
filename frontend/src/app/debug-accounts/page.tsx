@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { serviceAccountsApi, usersApi, dataListsApi, API_URL, healthCheck } from '@/lib/api';
-// Using apiClient from @/lib/api instead of direct axios
-import axios from 'axios';
+import { serviceAccountsApi, usersApi, dataListsApi, API_URL, healthCheck, apiClient } from '@/lib/api';
 
 export default function DebugAccountsPage() {
   const [results, setResults] = useState<any>({});
@@ -47,14 +45,17 @@ export default function DebugAccountsPage() {
 
       // Test 3: Direct axios call to accounts
       try {
-        console.log('🔍 Testing direct axios accounts...');
-        const directResponse = await axios.get(`${API_URL}/api/v1/accounts/`);
+        console.log('🔍 Testing direct axios accounts (switched to apiClient)...');
+        // Originally axios, but refactored to use apiClient for stability
+        const directResponse = await apiClient.request('/api/v1/accounts/');
+
         testResults.directAccounts = {
           status: 'success',
           data: directResponse.data,
           count: Array.isArray(directResponse.data) ? directResponse.data.length : 0,
           statusCode: directResponse.status
         };
+        if (directResponse.error) throw new Error(directResponse.error);
       } catch (error: any) {
         testResults.directAccounts = {
           status: 'error',
@@ -149,43 +150,41 @@ export default function DebugAccountsPage() {
           <h2 className="text-lg font-semibold text-blue-900">API Configuration</h2>
           <p className="text-blue-800">API URL: <code className="bg-blue-100 px-2 py-1 rounded">{API_URL}</code></p>
         </div>
-        
+
         <div className="grid gap-4">
           {Object.entries(results).map(([key, result]: [string, any]) => (
-            <div key={key} className={`border rounded p-4 ${
-              result.status === 'success' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
-            }`}>
+            <div key={key} className={`border rounded p-4 ${result.status === 'success' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
+              }`}>
               <h3 className="font-semibold capitalize text-lg">
                 {key.replace(/([A-Z])/g, ' $1')}
                 {result.status === 'success' ? ' ✅' : ' ❌'}
               </h3>
               <div className="mt-2">
-                <p><strong>Status:</strong> 
-                  <span className={`ml-2 px-2 py-1 rounded text-sm ${
-                    result.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
+                <p><strong>Status:</strong>
+                  <span className={`ml-2 px-2 py-1 rounded text-sm ${result.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
                     {result.status}
                   </span>
                 </p>
-                
+
                 {result.statusCode && (
                   <p><strong>Status Code:</strong> <code className="bg-gray-100 px-2 py-1 rounded">{result.statusCode}</code></p>
                 )}
-                
+
                 {result.count !== undefined && (
                   <p><strong>Count:</strong> <span className="font-mono text-lg">{result.count}</span></p>
                 )}
-                
+
                 {result.healthy !== undefined && (
                   <p><strong>Healthy:</strong> <span className={`px-2 py-1 rounded ${result.healthy ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{result.healthy ? 'Yes' : 'No'}</span></p>
                 )}
-                
+
                 {result.error && (
                   <div className="mt-2">
                     <p><strong>Error:</strong> <span className="text-red-600">{result.error}</span></p>
                   </div>
                 )}
-                
+
                 {result.response && (
                   <div className="mt-2">
                     <p><strong>Response:</strong></p>
@@ -194,7 +193,7 @@ export default function DebugAccountsPage() {
                     </pre>
                   </div>
                 )}
-                
+
                 {result.data && (
                   <div className="mt-2">
                     <p><strong>Data Preview:</strong></p>
@@ -207,7 +206,7 @@ export default function DebugAccountsPage() {
             </div>
           ))}
         </div>
-        
+
         <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <h3 className="font-semibold text-yellow-800 mb-2">Troubleshooting Steps:</h3>
           <ul className="text-yellow-700 space-y-1 text-sm">

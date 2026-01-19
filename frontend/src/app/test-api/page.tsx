@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import axios from 'axios';
-import { serviceAccountsApi, usersApi, dataListsApi, API_URL } from '@/lib/api';
-// Using apiClient from @/lib/api instead of direct axios
+import { serviceAccountsApi, usersApi, dataListsApi, API_URL, apiClient } from '@/lib/api';
 
 export default function TestApiPage() {
   const [results, setResults] = useState<any>({});
@@ -14,8 +12,9 @@ export default function TestApiPage() {
 
       // Test 1: Direct axios call
       try {
-        console.log('Testing direct axios call...');
-        const directResponse = await axios.get(`${API_URL}/api/v1/accounts/`);
+        console.log('Testing direct axios call (via apiClient)...');
+        const directResponse = await apiClient.request('/api/v1/accounts/');
+        if (directResponse.error) throw new Error(directResponse.error);
         testResults.directAxios = {
           status: 'success',
           data: directResponse.data,
@@ -93,7 +92,7 @@ export default function TestApiPage() {
         <div>
           <h2 className="text-lg font-semibold">API URL: {API_URL}</h2>
         </div>
-        
+
         <div className="grid gap-4">
           {Object.entries(results).map(([key, result]: [string, any]) => (
             <div key={key} className="border rounded p-4">

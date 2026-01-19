@@ -14,11 +14,7 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<number | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, [selectedAccount]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [usersRes, accountsRes] = await Promise.all([
         usersApi.list(selectedAccount ? { service_account_id: selectedAccount } : undefined),
@@ -31,7 +27,11 @@ export default function UsersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedAccount]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const filteredUsers = users.filter(user =>
     user.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -41,7 +41,7 @@ export default function UsersPage() {
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
-      
+
       <div className="flex-1 overflow-auto">
         <div className="p-8">
           <div className="mb-8">
@@ -60,7 +60,7 @@ export default function UsersPage() {
                 className="pl-10"
               />
             </div>
-            
+
             <select
               className="px-4 py-2 border rounded-md bg-background"
               value={selectedAccount || ''}

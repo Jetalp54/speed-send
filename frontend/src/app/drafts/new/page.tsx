@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-// Using apiClient from @/lib/api instead of direct axios
-import axios from 'axios';
+import { serviceAccountsApi, usersApi, dataListsApi, contactsApi, API_URL, apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,11 +10,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { serviceAccountsApi, usersApi, dataListsApi, contactsApi, API_URL } from '@/lib/api';
-import { 
+import {
   Upload,
-  Users, 
-  Mail, 
+  Users,
+  Mail,
   Settings,
   Loader2,
   Save,
@@ -45,7 +43,7 @@ interface User {
 interface ContactList {
   id: number;
   name: string;
-  contacts: Array<{email: string}>;
+  contacts: Array<{ email: string }>;
 }
 
 interface DraftConfig {
@@ -71,7 +69,7 @@ export default function NewDraftPage() {
     body_html: '',
     from_name: ''
   });
-  const [notifications, setNotifications] = useState<Array<{id: string, message: string, type: 'success' | 'error' | 'info'}>>([]);
+  const [notifications, setNotifications] = useState<Array<{ id: string, message: string, type: 'success' | 'error' | 'info' }>>([]);
   const [userSearch, setUserSearch] = useState('');
   const [step, setStep] = useState(1); // 1: Draft Details, 2: Distribution, 3: Upload
 
@@ -82,23 +80,19 @@ export default function NewDraftPage() {
     return base.filter(u => u.email.toLowerCase().includes(q));
   }, [users, selectedAccounts, userSearch]);
 
-  const showNotification = (message: string, type: 'success' | 'error' | 'info') => {
+  const showNotification = useCallback((message: string, type: 'success' | 'error' | 'info') => {
     const id = Date.now().toString();
     setNotifications(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, 5000);
-  };
+  }, []);
 
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     try {
       console.log(' Loading Google Workspace accounts...');
-      const response = await axios.get(`${API_URL}/api/v1/accounts/`, {
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      const response = await apiClient.request('/api/v1/accounts/');
+      if (response.error) throw new Error(response.error);
 
       if (response.data && Array.isArray(response.data)) {
         setAccounts(response.data);
@@ -126,17 +120,13 @@ export default function NewDraftPage() {
 
       showNotification(errorMessage, 'error');
     }
-  };
+  }, [showNotification]);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       console.log(' Loading Google Workspace users...');
-      const response = await axios.get(`${API_URL}/api/v1/users/`, {
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      const response = await apiClient.request('/api/v1/users/');
+      if (response.error) throw new Error(response.error);
 
       if (response.data && Array.isArray(response.data)) {
         setUsers(response.data);
@@ -150,18 +140,14 @@ export default function NewDraftPage() {
       setUsers([]);
       showNotification('Failed to load users', 'error');
     }
-  };
+  }, [showNotification]);
 
-  const loadContactLists = async () => {
+  const loadContactLists = useCallback(async () => {
     try {
       console.log(' Loading contact lists...');
       // Use the correct contacts/lists endpoint
-      const response = await axios.get(`${API_URL}/api/v1/contacts/lists`, {
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      const response = await apiClient.request('/api/v1/contacts/lists');
+      if (response.error) throw new Error(response.error);
 
       if (response.data && Array.isArray(response.data)) {
         setContactLists(response.data);
@@ -185,14 +171,14 @@ export default function NewDraftPage() {
       }
       showNotification(errorMessage, 'error');
     }
-  };
+  }, [showNotification]);
 
   useEffect(() => {
     const initializeData = async () => {
       await Promise.all([loadAccounts(), loadUsers(), loadContactLists()]);
     };
     initializeData();
-  }, []);
+  }, [loadAccounts, loadUsers, loadContactLists]);
 
   // If the user advances to Distribution or Upload steps and lists are empty, refetch defensively
   useEffect(() => {
@@ -210,8 +196,7 @@ export default function NewDraftPage() {
       }
     };
     refetchIfEmpty();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
+  }, [step, accounts.length, users.length, contactLists.length, loadAccounts, loadUsers, loadContactLists]);
 
   const createDraft = async () => {
     if (!config.name.trim() || !config.subject.trim() || !config.body_html.trim()) {
@@ -231,19 +216,23 @@ export default function NewDraftPage() {
 
     setLoading(true);
     try {
-      const response = await axios.post(`${API_URL}/api/v1/drafts`, {
-        ...config,
-        selected_account_ids: selectedAccounts,
-        selected_user_ids: selectedUsers,
-        selected_contact_list_ids: selectedContacts,
-        emails_per_user: emailsPerUser
+      const response = await apiClient.request('/api/v1/drafts', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...config,
+          selected_account_ids: selectedAccounts,
+          selected_user_ids: selectedUsers,
+          selected_contact_list_ids: selectedContacts,
+          emails_per_user: emailsPerUser
+        })
       });
-      
+      if (response.error) throw new Error(response.error);
+
       showNotification('Draft created successfully! Now uploading to users...', 'success');
-      
+
       // Automatically upload the draft
       await uploadDrafts(response.data.id);
-      
+
     } catch (error: any) {
       console.error('Create draft error:', error);
       showNotification(`Failed to create draft: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`, 'error');
@@ -255,8 +244,9 @@ export default function NewDraftPage() {
   const uploadDrafts = async (draftId: number) => {
     setLoading(true);
     try {
-      const response = await axios.post(`${API_URL}/api/v1/drafts/${draftId}/upload`);
-      
+      const response = await apiClient.request(`/api/v1/drafts/${draftId}/upload`, { method: 'POST' });
+      if (response.error) throw new Error(response.error);
+
       showNotification(`Successfully uploaded ${response.data.total_drafts} drafts to ${response.data.users_count} users!`, 'success');
       router.push('/drafts');
     } catch (error: any) {
@@ -326,29 +316,29 @@ export default function NewDraftPage() {
           <div className="xl:col-span-2 space-y-6">
             {/* Step 1: Draft Details */}
             {step === 1 && (
-            <Card>
+              <Card>
                 <CardHeader><CardTitle>Draft Details</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                  <Input 
-                    placeholder="Draft Name" 
-                    value={config.name} 
-                    onChange={e => setConfig(c => ({...c, name: e.target.value}))} 
+                <CardContent className="space-y-4">
+                  <Input
+                    placeholder="Draft Name"
+                    value={config.name}
+                    onChange={e => setConfig(c => ({ ...c, name: e.target.value }))}
                   />
-                  <Input 
-                    placeholder="Subject" 
-                    value={config.subject} 
-                    onChange={e => setConfig(c => ({...c, subject: e.target.value}))} 
+                  <Input
+                    placeholder="Subject"
+                    value={config.subject}
+                    onChange={e => setConfig(c => ({ ...c, subject: e.target.value }))}
                   />
-                  <Input 
-                    placeholder="From Name" 
-                    value={config.from_name} 
-                    onChange={e => setConfig(c => ({...c, from_name: e.target.value}))} 
+                  <Input
+                    placeholder="From Name"
+                    value={config.from_name}
+                    onChange={e => setConfig(c => ({ ...c, from_name: e.target.value }))}
                   />
-                  <Textarea 
-                    placeholder="Email Body (HTML)" 
-                    value={config.body_html} 
-                    onChange={e => setConfig(c => ({...c, body_html: e.target.value}))} 
-                    rows={12} 
+                  <Textarea
+                    placeholder="Email Body (HTML)"
+                    value={config.body_html}
+                    onChange={e => setConfig(c => ({ ...c, body_html: e.target.value }))}
+                    rows={12}
                   />
                 </CardContent>
               </Card>
@@ -440,19 +430,19 @@ export default function NewDraftPage() {
                       Total drafts: {selectedUsers.length * emailsPerUser}
                     </p>
                   </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
             )}
 
             {/* Step 3: Upload Confirmation */}
             {step === 3 && (
-            <Card>
+              <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Upload className="h-5 w-5" />
                     Upload Confirmation
                   </CardTitle>
-              </CardHeader>
+                </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <h3 className="font-semibold text-blue-900 mb-2">Ready to Upload</h3>
@@ -465,7 +455,7 @@ export default function NewDraftPage() {
                       <p><strong>Total Drafts:</strong> {selectedUsers.length * emailsPerUser}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => router.push('/drafts')}>
                       Cancel
@@ -475,8 +465,8 @@ export default function NewDraftPage() {
                       Create & Upload Draft
                     </Button>
                   </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
             )}
           </div>
 
@@ -496,23 +486,23 @@ export default function NewDraftPage() {
                     </div>
                   ) : (
                     <>
-                    <div className="max-h-48 overflow-auto border rounded-md p-2 space-y-2">
+                      <div className="max-h-48 overflow-auto border rounded-md p-2 space-y-2">
                         {accounts.map(acc => (
-                            <div key={acc.id} className="flex items-center space-x-2">
-                                <Checkbox 
-                                    id={`acc-${acc.id}`} 
-                                    checked={selectedAccounts.includes(acc.id)} 
-                                    onCheckedChange={checked => {
-                                        setSelectedAccounts(prev => checked ? [...prev, acc.id] : prev.filter(id => id !== acc.id))
-                                    }}
-                                />
+                          <div key={acc.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`acc-${acc.id}`}
+                              checked={selectedAccounts.includes(acc.id)}
+                              onCheckedChange={checked => {
+                                setSelectedAccounts(prev => checked ? [...prev, acc.id] : prev.filter(id => id !== acc.id))
+                              }}
+                            />
                             <Label htmlFor={`acc-${acc.id}`} className="font-normal text-sm">
                               {acc.name || acc.client_email}
                             </Label>
-                            </div>
+                          </div>
                         ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{selectedAccounts.length} of {accounts.length} accounts selected.</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{selectedAccounts.length} of {accounts.length} accounts selected.</p>
                     </>
                   )}
                 </div>
@@ -521,13 +511,13 @@ export default function NewDraftPage() {
 
             {/* Users of Selected Accounts */}
             <Card>
-                <CardHeader><CardTitle>Users of Selected Accounts ({filteredSelectedUsers.length})</CardTitle></CardHeader>
-                <CardContent>
-                    <Input placeholder="Search users..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+              <CardHeader><CardTitle>Users of Selected Accounts ({filteredSelectedUsers.length})</CardTitle></CardHeader>
+              <CardContent>
+                <Input placeholder="Search users..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
                 {accounts.length === 0 ? (
                   <div className="text-sm text-muted-foreground mt-2">Select accounts first to view users.</div>
                 ) : (
-                    <div className="max-h-48 overflow-auto border rounded-md mt-2">
+                  <div className="max-h-48 overflow-auto border rounded-md mt-2">
                     {filteredSelectedUsers.map(u => (
                       <div key={u.id} className="flex items-center space-x-2 py-1">
                         <Checkbox
@@ -586,9 +576,9 @@ export default function NewDraftPage() {
                   <div className="mt-3 flex items-center justify-between border rounded-md p-2 bg-muted/30 text-sm">
                     <span>No contact lists found.</span>
                     <Button size="sm" variant="outline" onClick={loadContactLists}>Reload</Button>
-                    </div>
+                  </div>
                 )}
-                </CardContent>
+              </CardContent>
             </Card>
 
             {/* Step Navigation */}
@@ -609,11 +599,10 @@ export default function NewDraftPage() {
         </div>
 
         {notifications.map(notification => (
-          <Alert key={notification.id} className={`fixed top-5 right-5 max-w-sm z-50 ${
-            notification.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' :
+          <Alert key={notification.id} className={`fixed top-5 right-5 max-w-sm z-50 ${notification.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' :
             notification.type === 'error' ? 'border-red-200 bg-red-50 text-red-800' :
-            'border-blue-200 bg-blue-50 text-blue-800'
-          }`}>
+              'border-blue-200 bg-blue-50 text-blue-800'
+            }`}>
             <AlertDescription>{notification.message}</AlertDescription>
           </Alert>
         ))}

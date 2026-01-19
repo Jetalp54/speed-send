@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-// Using apiClient from @/lib/api instead of direct axios
-import axios from 'axios';
+import { apiClient, API_URL } from '@/lib/api';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,9 +31,10 @@ const DraftCampaignDetailsPage: React.FC = () => {
 
   const fetchCampaignDetails = async (campaignId: string) => {
     try {
-      const response = await axios.get(`/api/v1/drafts/${campaignId}`);
+      const response = await apiClient.request(`/api/v1/drafts/${campaignId}`);
+      if (response.error) throw new Error(response.error);
       setCampaign(response.data);
-    } catch (err) {
+    } catch (err: any) {
       setError('Failed to fetch draft campaign details.');
     }
   };

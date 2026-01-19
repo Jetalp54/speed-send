@@ -1,6 +1,6 @@
 'use client';
-import axios from 'axios';
-import React, { useState, useEffect, useMemo } from 'react';
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 // Using apiClient from @/lib/api instead of direct axios
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Sidebar } from '@/components/Sidebar';
-import { serviceAccountsApi, usersApi, dataListsApi, contactsApi, API_URL } from '@/lib/api';
+import { serviceAccountsApi, usersApi, dataListsApi, contactsApi, API_URL, apiClient } from '@/lib/api';
 import asString from '@/lib/asString';
 import {
   Send,
@@ -144,10 +144,11 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
   }, [users, selectedAccounts]);
 
   // Debug logging helpers
-  const appendLog = (line: string) => {
+  // Debug logging helpers
+  const appendLog = useCallback((line: string) => {
     const ts = new Date().toISOString();
     setLogs(prev => [...prev.slice(-499), `[${ts}] ${line}`]);
-  };
+  }, []);
 
   // Context menu handlers
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -203,18 +204,22 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
   const queuedCount = recipients.length;
   const estDuration = Math.ceil(queuedCount / (config.workers * 10));
 
+  // Utility Functions - Moved up to be used by other functions
+  const showNotification = useCallback((message: string, type: 'success' | 'error' | 'info') => {
+    const id = Date.now().toString();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 5000);
+  }, []);
+
   // Backend health check
-  const checkBackendHealth = async () => {
+  const checkBackendHealth = useCallback(async () => {
     try {
       setBackendStatus('checking');
-      const response = await axios.get(`${API_URL}/health`, {
-        timeout: 5000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      const { data, error, status } = await apiClient.request('/health');
 
-      if (response.status === 200) {
+      if (status === 200 && !error) {
         setBackendStatus('connected');
         setConnectionError(null);
         console.log(' Backend health check passed');
@@ -236,7 +241,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
       console.error(' Backend health check failed:', error);
       return false;
     }
-  };
+  }, []);
 
   // Load data on mount
   useEffect(() => {
@@ -261,8 +266,9 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
               const cid = parseInt(idParam);
               if (!isNaN(cid)) {
                 setEditingId(cid);
-                const res = await axios.get(`${API_URL}/api/v1/campaigns/${cid}/`);
-                const c = res.data || {};
+                const { data: c, error } = await apiClient.request(`/api/v1/campaigns/${cid}/`);
+                if (error) throw new Error(error);
+
                 setConfig(prev => ({
                   ...prev,
                   name: c.name || '',
@@ -296,7 +302,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
     };
 
     initializeData();
-  }, []);
+  }, [checkBackendHealth, loadAccounts, loadUsers, loadTemplates, loadRecipientLists, showNotification, appendLog]);
 
   // Refresh lists whenever the Manage Lists modal opens
   useEffect(() => {
@@ -306,7 +312,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
       const defaultName = (config.name && config.name.trim()) ? config.name.trim() : `List ${new Date().toLocaleDateString()}`;
       setNewListName(defaultName);
     }
-  }, [showRecipientModal, config.name]);
+  }, [showRecipientModal, config.name, loadRecipientLists]);
 
   // Keep inline list name tracked to campaign name by default
   useEffect(() => {
@@ -351,22 +357,19 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
   }, [config.subject, config.body_html, config.name]);
 
   // API Functions
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     try {
       console.log(' Loading Google Workspace accounts...');
-      const response = await axios.get(`${API_URL}/api/v1/accounts/`, {
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      const { data, error } = await apiClient.request('/api/v1/accounts/');
 
-      if (response.data && Array.isArray(response.data)) {
-        setAccounts(response.data);
-        console.log(' Accounts loaded successfully:', Array.isArray(response.data) ? response.data.length : 0, 'accounts');
-        showNotification(`Loaded ${(Array.isArray(response.data) ? response.data.length : 0)} Google Workspace accounts`, 'success');
+      if (error) throw new Error(error);
+
+      if (data && Array.isArray(data)) {
+        setAccounts(data);
+        console.log(' Accounts loaded successfully:', data.length, 'accounts');
+        showNotification(`Loaded ${data.length} Google Workspace accounts`, 'success');
       } else {
-        console.warn(' Invalid response format:', response.data);
+        console.warn(' Invalid response format:', data);
         setAccounts([]);
         showNotification('No accounts found. Please add Google Workspace service accounts first.', 'info');
       }
@@ -387,22 +390,19 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
 
       showNotification(errorMessage, 'error');
     }
-  };
+  }, [showNotification]);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       appendLog(' Loading Google Workspace users...');
       console.log(' Loading Google Workspace users...');
-      const response = await axios.get(`${API_URL}/api/v1/users/`, {
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      const { data, error } = await apiClient.request('/api/v1/users/');
 
-      if (response.data && Array.isArray(response.data)) {
+      if (error) throw new Error(error);
+
+      if (data && Array.isArray(data)) {
         // FORCE FILTER admin users on frontend as well (double protection)
-        const filteredUsers = response.data.filter(user => {
+        const filteredUsers = data.filter((user: any) => {
           if (!user.email) return false;
 
           const email = user.email.toLowerCase();
@@ -442,12 +442,12 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
         });
 
         setUsers(filteredUsers);
-        appendLog(` Users loaded successfully: ${filteredUsers.length} users (${(Array.isArray(response.data) ? response.data.length : 0) - filteredUsers.length} admin users excluded)`);
+        appendLog(` Users loaded successfully: ${filteredUsers.length} users (${data.length - filteredUsers.length} admin users excluded)`);
         console.log(' Users loaded successfully:', filteredUsers.length, 'users (admin users excluded)');
         showNotification(`Loaded ${filteredUsers.length} Google Workspace users (admin users excluded)`, 'success');
       } else {
         appendLog(' Invalid response format from users API');
-        console.warn(' Invalid response format:', response.data);
+        console.warn(' Invalid response format:', data);
         setUsers([]);
         showNotification('No users found. Please sync accounts first.', 'info');
       }
@@ -483,9 +483,9 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
 
       showNotification(errorMessage, 'error');
     }
-  };
+  }, [appendLog, showNotification]);
 
-  const loadTemplates = () => {
+  const loadTemplates = useCallback(() => {
     try {
       if (typeof window !== 'undefined') {
         const savedTemplates = localStorage.getItem('email_templates');
@@ -497,23 +497,20 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
       console.error('Failed to load templates:', error);
       setTemplates([]);
     }
-  };
+  }, []);
 
-  const loadRecipientLists = async () => {
+  const loadRecipientLists = useCallback(async () => {
     try {
       // Use the correct contacts/lists endpoint instead of data-lists
-      const response = await axios.get(`${API_URL}/api/v1/contacts/lists`, {
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
+      const { data, error } = await apiClient.request('/api/v1/contacts/lists');
 
-      if (response.data && Array.isArray(response.data)) {
-        setRecipientLists(response.data);
-        console.log('Contact lists loaded successfully:', Array.isArray(response.data) ? response.data.length : 0, 'lists');
+      if (error) throw new Error(error);
+
+      if (data && Array.isArray(data)) {
+        setRecipientLists(data);
+        console.log('Contact lists loaded successfully:', data.length, 'lists');
       } else {
-        console.warn('Invalid response format:', response.data);
+        console.warn('Invalid response format:', data);
         setRecipientLists([]);
       }
     } catch (error: any) {
@@ -521,7 +518,85 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
       showNotification('Failed to load recipient lists.', 'error');
       setRecipientLists([]);
     }
-  };
+  }, [showNotification]);
+
+  // Load data on mount
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        // First check backend health
+        const isHealthy = await checkBackendHealth();
+
+        if (isHealthy) {
+          await Promise.all([
+            loadAccounts(),
+            loadUsers(),
+            loadTemplates(),
+            loadRecipientLists()
+          ]);
+
+          // If an id query param exists, load campaign for editing
+          try {
+            const url = new URL(window.location.href);
+            const idParam = url.searchParams.get('id');
+            if (idParam) {
+              const cid = parseInt(idParam);
+              if (!isNaN(cid)) {
+                setEditingId(cid);
+                const { data: c, error } = await apiClient.request(`/api/v1/campaigns/${cid}/`);
+                if (error) throw new Error(error);
+
+                setConfig(prev => ({
+                  ...prev,
+                  name: c.name || '',
+                  subject: c.subject || '',
+                  body_html: c.body_html || '',
+                  body_plain: c.body_plain || '',
+                  from_name: c.from_name || prev.from_name,
+                  test_after_email: c.test_after_email || '',
+                  test_after_count: c.test_after_count || 0,
+                  workers: c.concurrency || prev.workers,
+                }));
+                if (Array.isArray(c.recipients)) {
+                  setRecipientsText(c.recipients.map((r: any) => r.email).join('\n'));
+                }
+                if (Array.isArray(c.sender_accounts)) {
+                  setSelectedAccounts(c.sender_accounts.map((a: any) => a.id).filter(Boolean));
+                }
+                appendLog(` Loaded campaign ${cid} for editing`);
+              }
+            }
+          } catch (e) {
+            console.warn('Edit preload failed:', e);
+          }
+        } else {
+          showNotification('Backend server is not available. Please check server status.', 'error');
+        }
+      } catch (error) {
+        console.error('Failed to initialize data:', error);
+        showNotification('Failed to load initial data', 'error');
+      }
+    };
+
+    initializeData();
+  }, [checkBackendHealth, loadAccounts, loadUsers, loadTemplates, loadRecipientLists, showNotification, appendLog]);
+
+  // Refresh lists whenever the Manage Lists modal opens
+  useEffect(() => {
+    if (showRecipientModal) {
+      loadRecipientLists();
+      // Prefill list name from campaign name when opening the modal
+      const defaultName = (config.name && config.name.trim()) ? config.name.trim() : `List ${new Date().toLocaleDateString()}`;
+      setNewListName(defaultName);
+    }
+  }, [showRecipientModal, config.name, loadRecipientLists]);
+
+  // Keep inline list name tracked to campaign name by default
+  useEffect(() => {
+    if (!inlineListName) {
+      setInlineListName(config.name || '');
+    }
+  }, [config.name]);
 
   // No need for localStorage sync since we're using database
 
@@ -754,13 +829,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
   }, [showAnalytics]);
 
   // Utility Functions
-  const showNotification = (message: string, type: 'success' | 'error' | 'info') => {
-    const id = Date.now().toString();
-    setNotifications(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 5000);
-  };
+  // showNotification moved up
 
   const stripHtml = (html: string) => {
     if (typeof window === 'undefined') return html.replace(/<[^>]*>/g, '');
@@ -819,14 +888,20 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
         const user = (users || []).find(u => u.id === userId);
         if (!user) return null;
 
-        return axios.post(`${API_URL}/api/v1/test-email/`, {
-          recipient_email: testEmail,
-          subject: config.subject,
-          body_html: asString(config.body_html),
-          body_plain: asString(stripHtml(config.body_html)),
-          from_name: config.from_name,
-          sender_account_id: user.service_account_id,
-          sender_user_id: userId
+        return apiClient.request('/api/v1/test-email/', {
+          method: 'POST',
+          body: JSON.stringify({
+            recipient_email: testEmail,
+            subject: config.subject,
+            body_html: asString(config.body_html),
+            body_plain: asString(stripHtml(config.body_html)),
+            from_name: config.from_name,
+            sender_account_id: user.service_account_id,
+            sender_user_id: userId
+          })
+        }).then(({ data, error }) => {
+          if (error) throw new Error(error);
+          return { data };
         });
       });
 
@@ -921,19 +996,25 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
         custom_header: config.custom_header
       };
       if (editingId) {
-        const url = `${API_URL}/api/v1/campaigns/${editingId}/`;
+        const url = `/api/v1/campaigns/${editingId}/`;
         appendLog(`PATCH ${url}`);
-        await axios.patch(url, payload, { headers: { 'Content-Type': 'application/json' } });
+        const { error } = await apiClient.request(url, {
+          method: 'PATCH',
+          body: JSON.stringify(payload)
+        });
+        if (error) throw new Error(error);
         showNotification(`Campaign updated successfully! ID: ${editingId}`, 'success');
         router.push('/campaigns');
       } else {
-        const url = `${API_URL}/api/v1/campaigns/`;
+        const url = '/api/v1/campaigns/';
         appendLog(`POST ${url} (recipients=${payload.recipients.length}, senders=${payload.sender_account_ids.length})`);
-        const response = await axios.post(url, payload, {
-          headers: { 'Content-Type': 'application/json' }
+        const { data, error, status } = await apiClient.request(url, {
+          method: 'POST',
+          body: JSON.stringify(payload)
         });
-        appendLog(`POST ${url} -> ${response.status} id=${response.data?.id}`);
-        showNotification(`Campaign created successfully! ID: ${response.data.id}`, 'success');
+        if (error) throw new Error(error);
+        appendLog(`POST ${url} -> ${status} id=${data?.id}`);
+        showNotification(`Campaign created successfully! ID: ${data.id}`, 'success');
         router.push('/campaigns');
       }
     } catch (error: any) {
@@ -997,8 +1078,8 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
               {/* Backend Status Indicator */}
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${backendStatus === 'connected' ? 'bg-green-500' :
-                    backendStatus === 'checking' ? 'bg-yellow-500 animate-pulse' :
-                      'bg-red-500'
+                  backendStatus === 'checking' ? 'bg-yellow-500 animate-pulse' :
+                    'bg-red-500'
                   }`}></div>
                 <span className="text-sm text-gray-600">
                   {backendStatus === 'connected' ? 'Backend Connected' :
@@ -1044,10 +1125,10 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
 
                     for (const endpoint of endpoints) {
                       try {
-                        const response = await axios.get(`${API_URL}${endpoint.url}`, { timeout: 5000 });
-                        console.log(` ${endpoint.name}:`, response.status, response.data);
+                        const { status, data, error } = await apiClient.request(endpoint.url);
+                        console.log(` ${endpoint.name}:`, status, data || error);
                       } catch (error: any) {
-                        console.error(` ${endpoint.name}:`, error.response?.status, error.message);
+                        console.error(` ${endpoint.name}:`, error.message);
                       }
                     }
 
@@ -1083,8 +1164,8 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
           {/* Notifications */}
           {notifications.map(notification => (
             <Alert key={notification.id} className={`mb-4 ${notification.type === 'success' ? 'border-green-200 bg-green-50' :
-                notification.type === 'error' ? 'border-red-200 bg-red-50' :
-                  'border-blue-200 bg-blue-50'
+              notification.type === 'error' ? 'border-red-200 bg-red-50' :
+                'border-blue-200 bg-blue-50'
               }`}>
               <AlertDescription className={
                 notification.type === 'success' ? 'text-green-800' :
@@ -2165,8 +2246,8 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
 
                 <div className="flex-1 p-6 overflow-auto">
                   <div className={`mx-auto bg-white border rounded-lg shadow-lg ${previewMode === 'desktop' ? 'max-w-4xl' :
-                      previewMode === 'tablet' ? 'max-w-2xl' :
-                        'max-w-sm'
+                    previewMode === 'tablet' ? 'max-w-2xl' :
+                      'max-w-sm'
                     }`}>
                     <div className="p-4 border-b bg-gray-50">
                       <div className="text-sm text-gray-600 mb-1">From: {config.from_name} &lt;{selectedAccounts.length > 0 ? users.find(u => selectedAccounts.includes(u.service_account_id))?.email || 'sender@example.com' : 'sender@example.com'}&gt;</div>

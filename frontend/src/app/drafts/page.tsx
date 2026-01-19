@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-// Using apiClient from @/lib/api instead of direct axios
-import axios from 'axios';
+// axios removed
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
-import { serviceAccountsApi, usersApi, dataListsApi, API_URL } from '@/lib/api';
+import { serviceAccountsApi, usersApi, dataListsApi, API_URL, apiClient } from '@/lib/api';
 
 interface DraftCampaign {
   id: number;
@@ -48,8 +48,9 @@ const DraftsPage: React.FC = () => {
 
   const fetchDraftCampaigns = async () => {
     try {
-      const response = await axios.get(`${API_URL}/api/v1/drafts`);
-      setDraftCampaigns(response.data);
+      const response = await apiClient.request('/api/v1/drafts');
+      if (response.error) throw new Error(response.error);
+      setDraftCampaigns(response.data || []);
       setError(null);
     } catch (err) {
       setError('Failed to fetch draft campaigns.');
@@ -59,7 +60,8 @@ const DraftsPage: React.FC = () => {
   const launchDrafts = async (draftId: number) => {
     setLoading(true);
     try {
-      const response = await axios.post(`${API_URL}/api/v1/drafts/${draftId}/launch`);
+      const response = await apiClient.request(`/api/v1/drafts/${draftId}/launch`, { method: 'POST' });
+      if (response.error) throw new Error(response.error);
       setDraftCampaigns(prev => prev.map(d =>
         d.id === draftId ? { ...d, status: 'launched' } : d
       ));
@@ -76,12 +78,16 @@ const DraftsPage: React.FC = () => {
       const originalDraft = draftCampaigns.find(d => d.id === draftId);
       if (!originalDraft) return;
 
-      const response = await axios.post(`${API_URL}/api/v1/drafts`, {
-        name: `${originalDraft.name} (Copy)`,
-        subject: originalDraft.subject,
-        from_name: originalDraft.from_name,
-        body_html: originalDraft.body_html
+      const response = await apiClient.request('/api/v1/drafts', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `${originalDraft.name} (Copy)`,
+          subject: originalDraft.subject,
+          from_name: originalDraft.from_name,
+          body_html: originalDraft.body_html
+        })
       });
+      if (response.error) throw new Error(response.error);
 
       setDraftCampaigns(prev => [...prev, response.data]);
     } catch (err: any) {
@@ -93,7 +99,8 @@ const DraftsPage: React.FC = () => {
     if (!confirm('Are you sure you want to delete this draft?')) return;
 
     try {
-      await axios.delete(`${API_URL}/api/v1/drafts/${draftId}`);
+      const response = await apiClient.request(`/api/v1/drafts/${draftId}`, { method: 'DELETE' });
+      if (response.error) throw new Error(response.error);
       setDraftCampaigns(prev => prev.filter(d => d.id !== draftId));
     } catch (err: any) {
       setError(`Failed to delete draft: ${err.response?.data?.detail || err.message}`);

@@ -1,13 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-// Using apiClient from @/lib/api instead of direct axios
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { API_URL } from '@/lib/api';
-import axios from 'axios';
+import { API_URL, apiClient } from '@/lib/api';
 
 interface ContactList {
   id: string;
@@ -32,8 +30,9 @@ export const ContactListModal: React.FC<ContactListModalProps> = ({ isOpen, onCl
       const fetchContactLists = async () => {
         setError(null);
         try {
-          const response = await axios.get(`${API_URL}/api/v1/contacts/lists`);
-          const lists = response.data.map((list: any) => ({
+          const response = await apiClient.request('/api/v1/contacts/lists');
+          if (response.error) throw new Error(response.error);
+          const lists = (response.data || []).map((list: any) => ({
             ...list,
             contacts_count: list.contacts.length,
           }));
@@ -84,7 +83,7 @@ export const ContactListModal: React.FC<ContactListModalProps> = ({ isOpen, onCl
               </div>
             ))}
             {contactLists.length === 0 && !error && (
-                <div className="text-center text-gray-500">No contact lists found.</div>
+              <div className="text-center text-gray-500">No contact lists found.</div>
             )}
           </div>
         </ScrollArea>
