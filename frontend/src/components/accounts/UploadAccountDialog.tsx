@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Assuming Tabs component exists, if not I'll use simple state
+// Tabs removed as component does not exist
 import { Upload, FileJson, Clipboard, Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 
