@@ -281,7 +281,6 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
   }, [config.subject, config.body_html, config.name]);
 
   // API Functions
-  // API Functions
   const loadAccounts = useCallback(async () => {
     try {
       console.log(' Loading Google Workspace accounts...');
@@ -446,9 +445,46 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
   }, [showNotification]);
 
   // Load data on mount
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        // First check backend health
+        const isHealthy = await checkBackendHealth();
 
+        if (isHealthy) {
+          await Promise.all([
+            loadAccounts(),
+            loadUsers(),
+            loadTemplates(),
+            loadRecipientLists()
+          ]);
+        } else {
+          showNotification('Backend server is not available. Please check server status.', 'error');
+        }
+      } catch (error) {
+        console.error('Failed to initialize data:', error);
+        showNotification('Failed to load initial data', 'error');
+      }
+    };
 
+    initializeData();
+  }, [checkBackendHealth, loadAccounts, loadUsers, loadTemplates, loadRecipientLists, showNotification]);
 
+  // Refresh lists whenever the Manage Lists modal opens
+  useEffect(() => {
+    if (showRecipientModal) {
+      loadRecipientLists();
+      const defaultName = (config.name && config.name.trim()) ? config.name.trim() : `List ${new Date().toLocaleDateString()}`;
+      setNewListName(defaultName);
+    }
+  }, [showRecipientModal, config.name, loadRecipientLists]);
+
+  // Keep inline list name tracked to campaign name by default
+  useEffect(() => {
+    if (!inlineListName) {
+      setInlineListName(config.name || '');
+    }
+  }, [config.name, inlineListName]);
 
   // No need for localStorage sync since we're using database
 
