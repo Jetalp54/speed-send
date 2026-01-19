@@ -126,43 +126,47 @@ async def delete_service_account(account_id: int, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail="Service account not found")
     
     try:
-        # 1. Delete DraftCampaignAccount records linked to this account
-        db.query(DraftCampaignAccount).filter(DraftCampaignAccount.service_account_id == account_id).delete()
+        # Use Raw SQL to force cleanup order and avoid ORM session state conflicts
+        from sqlalchemy import text
         
-        # 1.1 Delete CampaignSender assignments
-        db.query(CampaignSender).filter(CampaignSender.service_account_id == account_id).delete()
-
-        # 1.2 Delete EmailLogs associated with this account
-        db.query(EmailLog).filter(EmailLog.service_account_id == account_id).delete()
+        # 1. Clear simple dependencies
+        db.execute(text("DELETE FROM draft_campaign_accounts WHERE service_account_id = :id"), {"id": account_id})
+        db.execute(text("DELETE FROM campaign_senders WHERE service_account_id = :id"), {"id": account_id})
+        db.execute(text("DELETE FROM email_logs WHERE service_account_id = :id"), {"id": account_id})
         
-        # 2. Find all users for this account
-        workspace_users = db.query(WorkspaceUser).filter(WorkspaceUser.service_account_id == account_id).all()
-        user_ids = [u.id for u in workspace_users]
+        # 2. Clear user-related dependencies (Using subqueries to identifying target rows)
+        # Note: We must clean these up before deleting workspace_users
         
-        if user_ids:
-            logger.info(f"Cleaning up dependencies for {len(user_ids)} users...")
-            
-            # 3. Delete GmailDraft records for these users
-            deleted_drafts = db.query(GmailDraft).filter(GmailDraft.user_id.in_(user_ids)).delete(synchronize_session=False)
-            logger.info(f"Deleted {deleted_drafts} GmailDraft records")
-            db.flush()
-            
-            # 4. Delete DraftCampaignUser records for these users
-            deleted_dcus = db.query(DraftCampaignUser).filter(DraftCampaignUser.user_id.in_(user_ids)).delete(synchronize_session=False)
-            logger.info(f"Deleted {deleted_dcus} DraftCampaignUser records")
-            db.flush()
-            
-            # 5. Delete WorkspaceUser records (now safe from FK constraints)
-            deleted_users = db.query(WorkspaceUser).filter(WorkspaceUser.service_account_id == account_id).delete(synchronize_session=False)
-            logger.info(f"Deleted {deleted_users} WorkspaceUser records")
-            db.flush()
+        # Gmail Drafts
+        db.execute(text("""
+            DELETE FROM gmail_drafts 
+            WHERE user_id IN (SELECT id FROM workspace_users WHERE service_account_id = :id)
+        """), {"id": account_id})
         
-        # 6. Finally delete the service account
-        db.delete(account)
+        # Draft Campaign Users (The source of the specific error we saw)
+        db.execute(text("""
+            DELETE FROM draft_campaign_users 
+            WHERE user_id IN (SELECT id FROM workspace_users WHERE service_account_id = :id)
+        """), {"id": account_id})
+        
+        # 3. Delete Workspace Users
+        db.execute(text("DELETE FROM workspace_users WHERE service_account_id = :id"), {"id": account_id})
+        
+        # 4. Finally delete the service account itself
+        db.execute(text("DELETE FROM service_accounts WHERE id = :id"), {"id": account_id})
+        
         db.commit()
         
-        logger.info(f"Successfully deleted service account: {account.name}")
+        logger.info(f"Successfully deleted service account {account_id} and all dependencies via SQL")
         return {"message": "Service account deleted successfully"}
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete service account: {e}")
+        # Log stack trace for debugging
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
         
     except Exception as e:
         db.rollback()
