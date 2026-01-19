@@ -37,10 +37,12 @@ export default function AccountsPage() {
     try {
       setLoading(true);
       const response = await serviceAccountsApi.list();
+      if (response.error) throw new Error(response.error);
+
       setAccounts(Array.isArray(response.data) ? response.data : []);
     } catch (error: any) {
       console.error('Failed to load accounts:', error);
-      showToast('Failed to load accounts. Check backend connection.', 'error');
+      showToast(`Failed to load accounts: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -60,7 +62,12 @@ export default function AccountsPage() {
         admin_email: name
       });
 
+      if (response.error) throw new Error(response.error);
+
       const newAccount = response.data;
+      // Safety check just in case
+      if (!newAccount) throw new Error("Server returned success but no account data.");
+
       showToast(`Account "${newAccount.name}" added successfully!`, 'success');
 
       // Refresh list
@@ -68,14 +75,14 @@ export default function AccountsPage() {
 
       // 2. Auto-trigger sync
       if (newAccount.id) {
-        // Determine admin email from domain if possible, or use name logic
         handleSync(newAccount.id, true);
       }
 
     } catch (error: any) {
-      const detail = error.response?.data?.detail || error.message;
+      const detail = error.message || "Unknown error";
       console.error('Upload failed:', error);
       showToast(`Failed to add account: ${detail}`, 'error');
+      // Rethrow to keep dialog state consistent if needed
       throw error;
     }
   };
@@ -87,10 +94,6 @@ export default function AccountsPage() {
     setSyncingIds(prev => [...prev, id]);
 
     try {
-      // Try to determine admin email: 
-      // 1. Existing admin_email
-      // 2. "admin@" + domain
-      // 3. Name (fallback)
       let adminEmail = account.admin_email;
       if ((!adminEmail || !adminEmail.includes('@')) && account.domain) {
         adminEmail = `admin@${account.domain}`;
@@ -99,12 +102,13 @@ export default function AccountsPage() {
 
       console.log(`Syncing account ${id} with admin email: ${adminEmail}`);
 
-      await serviceAccountsApi.sync(id, adminEmail);
+      const response = await serviceAccountsApi.sync(id, adminEmail);
+      if (response.error) throw new Error(response.error);
 
       showToast(`Successfully synced users for ${account.name}`, 'success');
       loadAccounts();
     } catch (error: any) {
-      const detail = error.response?.data?.detail || error.message;
+      const detail = error.message;
       console.error('Sync failed:', error);
 
       if (!isAuto) {
@@ -122,15 +126,15 @@ export default function AccountsPage() {
 
     setDeletingIds(prev => [...prev, id]);
     try {
-      await serviceAccountsApi.delete(id);
-      showToast("Account deleted successfully", 'success');
-      loadAccounts();
-    } catch (error: any) {
-      const detail = error.response?.data?.detail || error.message;
-      const debugInfo = error.response?.data?.debug_error;
-      const displayMsg = debugInfo ? `Error: ${detail} (Debug: ${debugInfo})` : `Failed to delete: ${detail}`;
+      const response = await serviceAccountsApi.delete(id);
+      if (response.error) throw new Error(response.error);
 
-      showToast(displayMsg, 'error');
+      showToast("Account deleted successfully", 'success');
+      // Force reload
+      await loadAccounts();
+    } catch (error: any) {
+      const detail = error.message;
+      showToast(`Failed to delete: ${detail}`, 'error');
       console.error("Delete failed:", error);
     } finally {
       setDeletingIds(prev => prev.filter(pid => pid !== id));
