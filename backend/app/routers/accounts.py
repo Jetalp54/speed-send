@@ -140,14 +140,22 @@ async def delete_service_account(account_id: int, db: Session = Depends(get_db))
         user_ids = [u.id for u in workspace_users]
         
         if user_ids:
+            logger.info(f"Cleaning up dependencies for {len(user_ids)} users...")
+            
             # 3. Delete GmailDraft records for these users
-            db.query(GmailDraft).filter(GmailDraft.user_id.in_(user_ids)).delete(synchronize_session=False)
+            deleted_drafts = db.query(GmailDraft).filter(GmailDraft.user_id.in_(user_ids)).delete(synchronize_session=False)
+            logger.info(f"Deleted {deleted_drafts} GmailDraft records")
+            db.flush()
             
             # 4. Delete DraftCampaignUser records for these users
-            db.query(DraftCampaignUser).filter(DraftCampaignUser.user_id.in_(user_ids)).delete(synchronize_session=False)
+            deleted_dcus = db.query(DraftCampaignUser).filter(DraftCampaignUser.user_id.in_(user_ids)).delete(synchronize_session=False)
+            logger.info(f"Deleted {deleted_dcus} DraftCampaignUser records")
+            db.flush()
             
             # 5. Delete WorkspaceUser records (now safe from FK constraints)
-            db.query(WorkspaceUser).filter(WorkspaceUser.service_account_id == account_id).delete(synchronize_session=False)
+            deleted_users = db.query(WorkspaceUser).filter(WorkspaceUser.service_account_id == account_id).delete(synchronize_session=False)
+            logger.info(f"Deleted {deleted_users} WorkspaceUser records")
+            db.flush()
         
         # 6. Finally delete the service account
         db.delete(account)
