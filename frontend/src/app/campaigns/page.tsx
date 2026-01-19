@@ -212,7 +212,6 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
   const estDuration = Math.ceil(queuedCount / (config.workers * 10));
 
   // Backend health check
-  // Backend health check
   const checkBackendHealth = useCallback(async () => {
     try {
       setBackendStatus('checking');
@@ -241,8 +240,6 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
       return false;
     }
   }, []);
-
-  // Load data on mount
 
 
   // Removed selectedListIds useEffect - not used in current implementation
