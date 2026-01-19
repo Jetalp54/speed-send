@@ -6,7 +6,8 @@ import logging
 import json
 
 from app.database import get_db
-from app.models import ServiceAccount, WorkspaceUser
+from app.database import get_db
+from app.models import ServiceAccount, WorkspaceUser, DraftCampaignAccount, DraftCampaignUser, GmailDraft
 from app.schemas import ServiceAccountCreate, ServiceAccountUpdate, ServiceAccountResponse, WorkspaceUserResponse
 from app.encryption import EncryptionService
 from app.google_api import GoogleWorkspaceService
@@ -125,10 +126,24 @@ async def delete_service_account(account_id: int, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail="Service account not found")
     
     try:
-        # First delete related workspace users to avoid foreign key constraint
-        db.query(WorkspaceUser).filter(WorkspaceUser.service_account_id == account_id).delete()
+        # 1. Delete DraftCampaignAccount records linked to this account
+        db.query(DraftCampaignAccount).filter(DraftCampaignAccount.service_account_id == account_id).delete()
         
-        # Then delete the service account
+        # 2. Find all users for this account
+        workspace_users = db.query(WorkspaceUser).filter(WorkspaceUser.service_account_id == account_id).all()
+        user_ids = [u.id for u in workspace_users]
+        
+        if user_ids:
+            # 3. Delete GmailDraft records for these users
+            db.query(GmailDraft).filter(GmailDraft.user_id.in_(user_ids)).delete(synchronize_session=False)
+            
+            # 4. Delete DraftCampaignUser records for these users
+            db.query(DraftCampaignUser).filter(DraftCampaignUser.user_id.in_(user_ids)).delete(synchronize_session=False)
+            
+            # 5. Delete WorkspaceUser records (now safe from FK constraints)
+            db.query(WorkspaceUser).filter(WorkspaceUser.service_account_id == account_id).delete(synchronize_session=False)
+        
+        # 6. Finally delete the service account
         db.delete(account)
         db.commit()
         
