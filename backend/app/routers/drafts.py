@@ -258,73 +258,130 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     if not campaign:
         raise HTTPException(status_code=404, detail="Draft campaign not found")
     
+    logger.info(f"Campaign found: {campaign.name}")
+    logger.info(f"Number of selected_users associations: {len(campaign.selected_users)}")
+    
     if not campaign.selected_users:
         raise HTTPException(status_code=400, detail="No users selected for this campaign")
     
     if not campaign.selected_contacts:
         raise HTTPException(status_code=400, detail="No contact lists selected for this campaign")
     
+    # Load contacts for each contact list
+    for contact_assoc in campaign.selected_contacts:
+        if contact_assoc.contact_list:
+            contact_list = db.query(models.ContactList).options(
+                joinedload(models.ContactList.contacts)
+            ).filter(models.ContactList.id == contact_assoc.contact_list.id).first()
+            if contact_list:
+                contact_assoc.contact_list.contacts = contact_list.contacts
+    
     # Get all recipients from selected contact lists
     all_recipients = []
     for contact_assoc in campaign.selected_contacts:
         if contact_assoc.contact_list:
-            all_recipients.extend([contact.email for contact in contact_assoc.contact_list.contacts])
+            contacts = contact_assoc.contact_list.contacts or []
+            logger.info(f"Contact list '{contact_assoc.contact_list.name}' has {len(contacts)} contacts")
+            all_recipients.extend([contact.email for contact in contacts])
+    
+    logger.info(f"Total recipients collected: {len(all_recipients)}")
     
     if not all_recipients:
         raise HTTPException(status_code=400, detail="No recipients found in selected contact lists")
     
-    # Calculate recipients per user
+    # Get all users from selected users
     users = [assoc.user for assoc in campaign.selected_users if assoc.user]
-    recipients_per_user = math.ceil(len(all_recipients) / len(users)) if users else 0
+    logger.info(f"Total users to process: {len(users)}")
+    for i, user in enumerate(users):
+        logger.info(f"User {i+1}: {user.email} (ID: {user.id})")
+    
+    if not users:
+        raise HTTPException(status_code=400, detail="No valid users found in selection")
+    
+    # Calculate recipients per user
+    recipients_per_user = math.ceil(len(all_recipients) / len(users))
+    logger.info(f"Recipients per user: {recipients_per_user}")
     
     # Create Gmail drafts for each user
     total_drafts_created = 0
-    for user in users:
+    failed_users = []
+    successful_users = []
+    
+    # Make a copy of recipients list for distribution
+    remaining_recipients = all_recipients.copy()
+    
+    for user_index, user in enumerate(users):
+        logger.info(f"Processing user {user_index + 1}/{len(users)}: {user.email}")
+        
         # Get recipients for this user
-        user_recipients = all_recipients[:recipients_per_user]
-        all_recipients = all_recipients[recipients_per_user:]
+        user_recipients = remaining_recipients[:recipients_per_user]
+        remaining_recipients = remaining_recipients[recipients_per_user:]
+        
+        logger.info(f"Assigned {len(user_recipients)} recipients to user {user.email}")
+        
+        if not user_recipients:
+            logger.warning(f"No recipients left for user {user.email}")
+            continue
         
         # Create drafts for this user
+        user_drafts_created = 0
         for i in range(campaign.emails_per_user):
-            if user_recipients:
-                # Create Gmail draft via API
-                try:
-                    gmail_draft_id = create_gmail_draft(
-                        user_id=user.id,
-                        subject=campaign.subject,
-                        from_name=campaign.from_name,
-                        body_html=campaign.body_html,
-                        recipients=user_recipients,
-                        db=db
-                    )
-                    
-                    # Save draft to database
-                    draft = models.GmailDraft(
-                        draft_campaign_id=campaign.id,
-                        user_id=user.id,
-                        gmail_draft_id=gmail_draft_id,
-                        status='created',
-                        recipients=user_recipients
-                    )
-                    db.add(draft)
-                    total_drafts_created += 1
-                    
-                except Exception as e:
-                    print(f"Failed to create draft for user {user.email}: {str(e)}")
-                    continue
+            logger.info(f"Creating draft {i+1}/{campaign.emails_per_user} for user {user.email}")
+            try:
+                gmail_draft_id = create_gmail_draft(
+                    user_id=user.id,
+                    subject=campaign.subject,
+                    from_name=campaign.from_name,
+                    body_html=campaign.body_html,
+                    recipients=user_recipients,
+                    db=db
+                )
+                
+                # Save draft to database
+                draft = models.GmailDraft(
+                    draft_campaign_id=campaign.id,
+                    user_id=user.id,
+                    gmail_draft_id=gmail_draft_id,
+                    status='created',
+                    recipients=user_recipients
+                )
+                db.add(draft)
+                total_drafts_created += 1
+                user_drafts_created += 1
+                logger.info(f"Successfully created draft for user {user.email}")
+                
+            except HTTPException as he:
+                logger.error(f"HTTPException for user {user.email}: {he.detail}")
+                failed_users.append({"email": user.email, "error": he.detail})
+                continue
+            except Exception as e:
+                logger.error(f"Failed to create draft for user {user.email}: {str(e)}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                failed_users.append({"email": user.email, "error": str(e)})
+                continue
+        
+        if user_drafts_created > 0:
+            successful_users.append(user.email)
+            logger.info(f"Completed {user_drafts_created} drafts for user {user.email}")
     
     # Update campaign status
     campaign.status = 'uploaded'
     db.commit()
     
+    logger.info(f"UPLOAD COMPLETE: Total drafts created: {total_drafts_created}")
+    logger.info(f"Successful users: {successful_users}")
+    logger.info(f"Failed users: {failed_users}")
+    
     return schemas.DraftUploadResponse(
         success=True,
-        message=f"Successfully uploaded {total_drafts_created} drafts to {len(users)} users",
+        message=f"Successfully uploaded {total_drafts_created} drafts to {len(successful_users)} users",
         total_drafts=total_drafts_created,
-        users_count=len(users),
+        users_count=len(successful_users),
         details={
             "recipients_count": len(all_recipients),
-            "users": [user.email for user in users]
+            "successful_users": successful_users,
+            "failed_users": failed_users
         }
     )
 
