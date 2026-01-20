@@ -27,10 +27,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // REMOVED
 // import { useToast } from '@/components/ui/use-toast'; // REMOVED
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 
 interface DraftConfig {
     name: string;
@@ -288,14 +295,10 @@ export default function EditDraftPage() {
                                 <Select
                                     value={config.body_format}
                                     onValueChange={(val) => setConfig(c => ({ ...c, body_format: val }))}
+                                    className="w-[180px]"
                                 >
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="Format" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="html">HTML</SelectItem>
-                                        <SelectItem value="text">Plain Text</SelectItem>
-                                    </SelectContent>
+                                    <SelectItem value="html">HTML</SelectItem>
+                                    <SelectItem value="text">Plain Text</SelectItem>
                                 </Select>
 
                                 <Button variant="outline" size="sm" onClick={() => setShowTagsGuide(true)}>
@@ -390,15 +393,21 @@ export default function EditDraftPage() {
             </div>
 
             {/* Template Tags Guide Component */}
-            <TemplateTagsGuide
-                open={showTagsGuide}
-                onOpenChange={setShowTagsGuide}
-            />
+            <Dialog open={showTagsGuide} onOpenChange={setShowTagsGuide}>
+                <DialogContent className="sm:max-w-[600px]">
+                    <DialogHeader>
+                        <DialogTitle>Template Tags Guide</DialogTitle>
+                    </DialogHeader>
+                    <TemplateTagsGuide
+                        showInsertButton={false}
+                    />
+                </DialogContent>
+            </Dialog>
 
             {/* Template Preview Modal */}
             <TemplatePreview
-                open={showPreview}
-                onOpenChange={setShowPreview}
+                isOpen={showPreview}
+                onClose={() => setShowPreview(false)}
                 headers={previewData.headers}
                 body={previewData.body}
             />
