@@ -249,15 +249,21 @@ export default function NewDraftPage() {
 
     setLoading(true);
     try {
+      const payload = {
+        ...config,
+        selected_account_ids: selectedAccounts,
+        selected_user_ids: selectedUsers,
+        selected_contact_list_ids: selectedContacts,
+        emails_per_user: emailsPerUser
+      };
+
+      console.log('🚀 Creating draft with payload:', payload);
+      console.log('✅ use_custom_headers:', payload.use_custom_headers);
+      console.log('✅ custom_headers length:', payload.custom_headers?.length || 0);
+
       const response = await apiClient.request('/api/v1/drafts', {
         method: 'POST',
-        body: JSON.stringify({
-          ...config,
-          selected_account_ids: selectedAccounts,
-          selected_user_ids: selectedUsers,
-          selected_contact_list_ids: selectedContacts,
-          emails_per_user: emailsPerUser
-        })
+        body: JSON.stringify(payload)
       });
       if (response.error) throw new Error(response.error);
 
