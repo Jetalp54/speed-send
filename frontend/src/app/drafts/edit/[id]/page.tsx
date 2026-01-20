@@ -27,8 +27,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/components/ui/use-toast';
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // REMOVED
+// import { useToast } from '@/components/ui/use-toast'; // REMOVED
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -46,9 +46,11 @@ interface DraftConfig {
 export default function EditDraftPage() {
     const router = useRouter();
     const params = useParams(); // Get ID from URL
-    const { toast } = useToast();
+    // const { toast } = useToast(); // REMOVED
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
 
     const [config, setConfig] = useState<DraftConfig>({
         name: '',
@@ -130,11 +132,7 @@ export default function EditDraftPage() {
                 body_template: data.body_template || ''
             });
         } catch (err: any) {
-            toast({
-                title: "Error",
-                description: err.message || "Failed to load draft details",
-                variant: "destructive"
-            });
+            setError(err.message || "Failed to load draft details");
         } finally {
             setLoading(false);
         }
@@ -143,18 +141,18 @@ export default function EditDraftPage() {
     const updateDraft = async () => {
         // Validate
         if (!config.name.trim()) {
-            toast({ title: "Validation Error", description: "Please enter a draft name.", variant: "destructive" });
+            setError("Please enter a draft name.");
             return;
         }
 
         // If not using custom headers, validate subject
         if (!config.use_custom_headers && !config.subject.trim()) {
-            toast({ title: "Validation Error", description: "Please enter a subject.", variant: "destructive" });
+            setError("Please enter a subject.");
             return;
         }
 
         if (!config.body_html.trim()) {
-            toast({ title: "Validation Error", description: "Please enter email body.", variant: "destructive" });
+            setError("Please enter email body.");
             return;
         }
 
@@ -166,19 +164,12 @@ export default function EditDraftPage() {
             });
             if (response.error) throw new Error(response.error);
 
-            toast({
-                title: "Success",
-                description: "Draft updated successfully!",
-            });
+            setSuccess("Draft updated successfully!");
 
             // Optionally redirect back to list
-            router.push('/drafts');
+            setTimeout(() => router.push('/drafts'), 1000);
         } catch (err: any) {
-            toast({
-                title: "Error",
-                description: err.message || "Failed to update draft",
-                variant: "destructive"
-            });
+            setError(err.message || "Failed to update draft");
         } finally {
             setSaving(false);
         }
@@ -209,7 +200,7 @@ export default function EditDraftPage() {
             });
             setShowPreview(true);
         } catch (err: any) {
-            toast({ title: "Preview Failed", description: err.message, variant: "destructive" });
+            setError(`Preview Failed: ${err.message}`);
         }
     };
 
@@ -233,10 +224,10 @@ export default function EditDraftPage() {
 
             if (response.error) throw new Error(response.error);
 
-            toast({ title: "Test Email Sent", description: `Sent to ${testEmail}` });
+            setSuccess(`Test Email Sent to ${testEmail}`);
             setShowTestEmail(false);
         } catch (err: any) {
-            toast({ title: "Test Failed", description: err.message, variant: "destructive" });
+            setError(`Test Failed: ${err.message}`);
         }
     };
 
@@ -258,6 +249,18 @@ export default function EditDraftPage() {
                 </Button>
                 <h1 className="text-3xl font-bold">Edit Draft</h1>
             </div>
+
+            {error && (
+                <Alert className="mb-6 border-red-200 bg-red-50">
+                    <AlertDescription className="text-red-800">{error}</AlertDescription>
+                </Alert>
+            )}
+
+            {success && (
+                <Alert className="mb-6 border-green-200 bg-green-50">
+                    <AlertDescription className="text-green-800">{success}</AlertDescription>
+                </Alert>
+            )}
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 <div className="xl:col-span-2 space-y-6">
