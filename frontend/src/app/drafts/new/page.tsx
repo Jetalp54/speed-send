@@ -17,8 +17,14 @@ import {
   Settings,
   Loader2,
   Save,
-  ArrowRight
+  ArrowRight,
+  Eye,
+  Send,
+  Book,
+  Code
 } from 'lucide-react';
+import { TemplateTagsGuide } from '@/components/drafts/TemplateTagsGuide';
+import { TemplatePreview } from '@/components/drafts/TemplatePreview';
 
 // API Configuration - Use imported API URL from centralized config
 
@@ -51,6 +57,10 @@ interface DraftConfig {
   subject: string;
   body_html: string;
   from_name: string;
+  use_custom_headers: boolean;
+  custom_headers: string;
+  body_format: string;
+  body_template: string;
 }
 
 export default function NewDraftPage() {
@@ -67,11 +77,22 @@ export default function NewDraftPage() {
     name: '',
     subject: '',
     body_html: '',
-    from_name: ''
+    from_name: '',
+    use_custom_headers: false,
+    custom_headers: `MIME-version: 1.0\nContent-type: text/html\nTo: [to]\nfrom: [from] <[smtp]>\nSubject: [subject]\nDate: [date]\nMessage-ID: [Message-ID]`,
+    body_format: 'html',
+    body_template: ''
   });
   const [notifications, setNotifications] = useState<Array<{ id: string, message: string, type: 'success' | 'error' | 'info' }>>([]);
   const [userSearch, setUserSearch] = useState('');
   const [step, setStep] = useState(1); // 1: Draft Details, 2: Distribution, 3: Upload
+
+  // Template customization state
+  const [showTagsGuide, setShowTagsGuide] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState({ headers: '', body: '' });
+  const [showTestEmail, setShowTestEmail] = useState(false);
+  const [testEmail, setTestEmail] = useState('');
 
   const filteredSelectedUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
@@ -338,8 +359,74 @@ export default function NewDraftPage() {
                     placeholder="Email Body (HTML)"
                     value={config.body_html}
                     onChange={e => setConfig(c => ({ ...c, body_html: e.target.value }))}
-                    rows={12}
+                    rows={8}
                   />
+
+                  {/* Template Customization Section */}
+                  <div className="border-t pt-4 mt-4 space-y-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Code className="h-5 w-5" />
+                      Advanced Template Options
+                    </h4>
+
+                    {/* Custom Headers Toggle */}
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="custom-headers"
+                        checked={config.use_custom_headers}
+                        onCheckedChange={(checked) => setConfig(c => ({ ...c, use_custom_headers: !!checked }))}
+                      />
+                      <Label htmlFor="custom-headers">Use Custom Email Headers</Label>
+                    </div>
+
+                    {config.use_custom_headers && (
+                      <Textarea
+                        placeholder="Custom Email Headers"
+                        value={config.custom_headers}
+                        onChange={e => setConfig(c => ({ ...c, custom_headers: e.target.value }))}
+                        rows={6}
+                        className="font-mono text-sm"
+                      />
+                    )}
+
+                    {/* Template Tags & Preview Buttons */}
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowTagsGuide(!showTagsGuide)}
+                        className="flex items-center gap-2"
+                      >
+                        <Book className="h-4 w-4" />
+                        {showTagsGuide ? 'Hide' : 'Show'} Template Tags
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setPreviewData({
+                            headers: config.use_custom_headers ? config.custom_headers : '',
+                            body: config.body_html
+                          });
+                          setShowPreview(true);
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <Eye className="h-4 w-4" />
+                        Preview Template
+                      </Button>
+                    </div>
+
+                    {/* Template Tags Guide */}
+                    {showTagsGuide && (
+                      <TemplateTagsGuide
+                        onInsertTag={(tag) => {
+                          // Insert tag at cursor position in body
+                          setConfig(c => ({ ...c, body_html: c.body_html + tag }));
+                        }}
+                      />
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -606,6 +693,14 @@ export default function NewDraftPage() {
             <AlertDescription>{notification.message}</AlertDescription>
           </Alert>
         ))}
+
+        {/* Template Preview Modal */}
+        <TemplatePreview
+          isOpen={showPreview}
+          onClose={() => setShowPreview(false)}
+          headers={previewData.headers}
+          body={previewData.body}
+        />
       </div>
     </div>
   );
