@@ -80,8 +80,8 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                     recipient_email = recipients[i % len(recipients)] if recipients else ""
                     context = {
                         'smtp': user.email,
-                        'from': from_name or 'Sender',
-                        'subject': subject or '',
+                        'from': from_name or '',  # Use empty if not provided
+                        'subject': subject or '',  # Use empty if not provided
                         'to': recipient_email,
                         'domain': user.email.split('@')[1] if '@' in user.email else 'localhost'
                     }
@@ -89,17 +89,21 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                     # Process custom headers with template engine
                     processed_headers = TemplateEngine.process_template(custom_headers, context)
                     
-                    # Parse and apply custom headers
+                    # Parse and apply custom headers (ONLY if non-empty)
                     for line in processed_headers.split('\n'):
                         line = line.strip()
                         if ':' in line:
                             key, value = line.split(':', 1)
                             key = key.strip()
                             value = value.strip()
-                            # Standard headers
+                            
+                            # Skip empty values (tags that resolved to nothing)
+                            if not value:
+                                continue
+                            
+                            # Apply header
                             if key.lower() in ['to', 'from', 'subject', 'date', 'message-id', 'reply-to', 'cc', 'bcc']:
                                 message[key] = value
-                            # Other custom headers
                             else:
                                 message[key] = value
                     
