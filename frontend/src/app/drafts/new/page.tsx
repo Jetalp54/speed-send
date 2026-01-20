@@ -220,8 +220,20 @@ export default function NewDraftPage() {
   }, [step, accounts.length, users.length, contactLists.length, loadAccounts, loadUsers, loadContactLists]);
 
   const createDraft = async () => {
-    if (!config.name.trim() || !config.subject.trim() || !config.body_html.trim()) {
-      showNotification('Please fill in all required fields.', 'error');
+    // When using custom headers, subject and from_name are optional (tags will be used)
+    const requiresSubject = !config.use_custom_headers;
+    const requiresFromName = !config.use_custom_headers;
+
+    if (!config.name.trim()) {
+      showNotification('Please enter a draft name.', 'error');
+      return;
+    }
+    if (requiresSubject && !config.subject.trim()) {
+      showNotification('Please enter a subject (or enable custom headers to use tags).', 'error');
+      return;
+    }
+    if (!config.body_html.trim()) {
+      showNotification('Please enter email body.', 'error');
       return;
     }
 
@@ -280,8 +292,20 @@ export default function NewDraftPage() {
 
   const nextStep = () => {
     if (step === 1) {
-      if (!config.name.trim() || !config.subject.trim() || !config.body_html.trim()) {
-        showNotification('Please fill in all required fields.', 'error');
+      // When using custom headers, subject and from_name are optional (tags will be used)
+      const requiresSubject = !config.use_custom_headers;
+      const requiresFromName = !config.use_custom_headers;
+
+      if (!config.name.trim()) {
+        showNotification('Please enter a draft name.', 'error');
+        return;
+      }
+      if (requiresSubject && !config.subject.trim()) {
+        showNotification('Please enter a subject (or enable custom headers to use tags).', 'error');
+        return;
+      }
+      if (!config.body_html.trim()) {
+        showNotification('Please enter email body.', 'error');
         return;
       }
       setStep(2);
