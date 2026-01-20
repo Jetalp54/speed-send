@@ -6,6 +6,7 @@ from typing import List, Dict
 import math
 from datetime import datetime
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 import logging
@@ -310,19 +311,21 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     # Make a copy of recipients list for distribution
     remaining_recipients = all_recipients.copy()
     
-    for user_index, user in enumerate(users):
+    # Worker function to process one user's drafts
+    def process_user_drafts(user_index, user):
+        """Process draft creation for a single user (runs in parallel)"""
         print(f"DEBUG: Processing user {user_index + 1}/{len(users)}: {user.email}")
         logger.info(f"Processing user {user_index + 1}/{len(users)}: {user.email}")
         
         # ALL users should get ALL recipients (shared distribution)
-        # This ensures every user creates drafts even if recipients < users
         user_recipients = all_recipients
         
         print(f"DEBUG: User {user.email} assigned {len(user_recipients)} recipients")
         logger.info(f"Assigned {len(user_recipients)} recipients to user {user.email}")
         
-        # Create drafts for this user
         user_drafts_created = 0
+        user_failed = []
+        
         for i in range(campaign.emails_per_user):
             print(f"DEBUG: Creating draft {i+1} for user {user.email}")
             logger.info(f"Creating draft {i+1}/{campaign.emails_per_user} for user {user.email}")
@@ -345,10 +348,8 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                     recipients=user_recipients
                 )
                 db.add(draft)
-                # Flush to ensure model is valid, but commit later
                 db.flush()
                 
-                total_drafts_created += 1
                 user_drafts_created += 1
                 print(f"DEBUG: SUCCESS creating draft for {user.email}")
                 logger.info(f"Successfully created draft for user {user.email}")
@@ -356,7 +357,7 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
             except HTTPException as he:
                 print(f"DEBUG: HTTPException for {user.email}: {he.detail}")
                 logger.error(f"HTTPException for user {user.email}: {he.detail}")
-                failed_users.append({"email": user.email, "error": he.detail})
+                user_failed.append({"email": user.email, "error": he.detail})
                 continue
             except Exception as e:
                 print(f"DEBUG: EXCEPTION for {user.email}: {str(e)}")
@@ -364,12 +365,37 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                 traceback.print_exc()
                 logger.error(f"Failed to create draft for user {user.email}: {str(e)}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
-                failed_users.append({"email": user.email, "error": str(e)})
+                user_failed.append({"email": user.email, "error": str(e)})
                 continue
         
-        if user_drafts_created > 0:
-            successful_users.append(user.email)
-            logger.info(f"Completed {user_drafts_created} drafts for user {user.email}")
+        return {
+            "user_email": user.email,
+            "drafts_created": user_drafts_created,
+            "failed": user_failed
+        }
+    
+    # Process all users in parallel using ThreadPoolExecutor
+    max_workers = min(50, len(users))  # Up to 50 concurrent workers
+    logger.info(f"Starting parallel draft creation with {max_workers} workers")
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all user processing tasks
+        futures = {executor.submit(process_user_drafts, idx, user): user for idx, user in enumerate(users)}
+        
+        # Collect results as they complete
+        for future in as_completed(futures):
+            user = futures[future]
+            try:
+                result = future.result()
+                if result["drafts_created"] > 0:
+                    successful_users.append(result["user_email"])
+                    total_drafts_created += result["drafts_created"]
+                    logger.info(f"Completed {result['drafts_created']} drafts for user {result['user_email']}")
+                if result["failed"]:
+                    failed_users.extend(result["failed"])
+            except Exception as e:
+                logger.error(f"Failed to process user {user.email}: {str(e)}")
+                failed_users.append({"email": user.email, "error": str(e)})
     
     print(f"DEBUG: Finished processing all users. Total drafts: {total_drafts_created}")
     
