@@ -3,9 +3,9 @@
 
 // Use different URLs for server-side and client-side requests
 // Server-side: Use Docker service name, Client-side: Use server IP
-export const API_URL: string = typeof window === 'undefined' 
+export const API_URL: string = typeof window === 'undefined'
   ? (process.env.NEXT_PUBLIC_API_URL || 'http://backend:8000')  // Server-side (Docker network)
-  : 'http://167.99.131.112:8000';  // Client-side (browser to server IP)
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');  // Client-side (respects env vars)
 
 export interface ApiResponse<T = any> {
   data?: T;
@@ -39,7 +39,7 @@ class ApiClient {
         payload = await response.text();
       }
       if (!response.ok) {
-        return { error: (payload && (payload.detail || payload.error)) || `HTTP ${response.status}` , status: response.status };
+        return { error: (payload && (payload.detail || payload.error)) || `HTTP ${response.status}`, status: response.status };
       }
       return { data: payload, status: response.status };
     } catch (err: any) {
