@@ -13,7 +13,7 @@ import time
 logger = logging.getLogger(__name__)
 
 @celery_app.task(bind=True, max_retries=2, time_limit=300)
-def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name, body_html, recipients, emails_per_user, task_group_id):
+def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name, body_html, recipients, emails_per_user, task_group_id, use_custom_headers=False, custom_headers=None):
     """
     OPTIMIZED: Upload drafts for ONE user with caching + connection pooling.
     Performance improvements:
@@ -70,11 +70,47 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                 from email.mime.text import MIMEText
                 from email.mime.multipart import MIMEMultipart
                 import base64
+                from app.template_engine import TemplateEngine
                 
                 message = MIMEMultipart('alternative')
-                message['To'] = ', '.join(recipients)
-                message['From'] = f"{from_name} <{user.email}>" if from_name else user.email
-                message['Subject'] = subject
+                
+                # Process custom headers if enabled
+                if use_custom_headers and custom_headers:
+                    # Prepare context for template engine
+                    recipient_email = recipients[i % len(recipients)] if recipients else ""
+                    context = {
+                        'smtp': user.email,
+                        'from': from_name or 'Sender',
+                        'subject': subject or '',
+                        'to': recipient_email,
+                        'domain': user.email.split('@')[1] if '@' in user.email else 'localhost'
+                    }
+                    
+                    # Process custom headers with template engine
+                    processed_headers = TemplateEngine.process_template(custom_headers, context)
+                    
+                    # Parse and apply custom headers
+                    for line in processed_headers.split('\n'):
+                        line = line.strip()
+                        if ':' in line:
+                            key, value = line.split(':', 1)
+                            key = key.strip()
+                            value = value.strip()
+                            # Standard headers
+                            if key.lower() in ['to', 'from', 'subject', 'date', 'message-id', 'reply-to', 'cc', 'bcc']:
+                                message[key] = value
+                            # Other custom headers
+                            else:
+                                message[key] = value
+                    
+                    # Ensure To header is set (Gmail requires it)
+                    if 'To' not in message:
+                        message['To'] = recipient_email
+                else:
+                    # Standard headers (no custom)
+                    message['To'] = ', '.join(recipients)
+                    message['From'] = f"{from_name} <{user.email}>" if from_name else user.email
+                    message['Subject'] = subject
                 
                 html_part = MIMEText(body_html, 'html')
                 message.attach(html_part)
@@ -241,14 +277,15 @@ def launch_drafts_optimized_task(self, user_id, draft_ids, task_group_id):
         db.close()
 
 
-def queue_optimized_upload(campaign_id, users, subject, from_name, body_html, recipients, emails_per_user):
+def queue_optimized_upload(campaign_id, users, subject, from_name, body_html, recipients, emails_per_user, use_custom_headers=False, custom_headers=None):
     """Queue optimized upload tasks with progress tracking"""
     import uuid
     task_group_id = str(uuid.uuid4())
     
     tasks = [
         upload_drafts_optimized_task.s(
-            campaign_id, user.id, subject, from_name, body_html, recipients, emails_per_user, task_group_id
+            campaign_id, user.id, subject, from_name, body_html, recipients, emails_per_user, task_group_id,
+            use_custom_headers, custom_headers
         )
         for user in users
     ]

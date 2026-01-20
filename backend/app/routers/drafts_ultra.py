@@ -73,7 +73,9 @@ def upload_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
         from_name=campaign.from_name,
         body_html=campaign.body_html,
         recipients=all_recipients,
-        emails_per_user=campaign.emails_per_user
+        emails_per_user=campaign.emails_per_user,
+        use_custom_headers=campaign.use_custom_headers,
+        custom_headers=campaign.custom_headers
     )
     
     return {
