@@ -65,9 +65,11 @@ const DraftsPage: React.FC = () => {
       if (response.error) throw new Error(response.error);
       setDraftCampaigns(prev => prev.map(d =>
         d.id === draftId ? { ...d, status: 'launched' } : d
-      ));
       setError(null);
-      console.log(`✅ Launch queued: ${response.users_count} users, ${response.total_drafts} drafts`);
+      // Log success (response has users_count and total_drafts from ultra endpoint)
+      if ((response as any).users_count) {
+        console.log(`✅ Launch queued: ${(response as any).users_count} users, ${(response as any).total_drafts} drafts`);
+      }
     } catch (err: any) {
       setError(`Failed to launch drafts: ${err.response?.data?.detail || err.message}`);
     } finally {
