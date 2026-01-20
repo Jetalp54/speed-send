@@ -56,10 +56,48 @@ export default function EditDraftPage() {
         body_html: '',
         from_name: '',
         use_custom_headers: false,
-        custom_headers: `MIME-version: 1.0\nContent-type: text/html\nTo: [to]\nfrom: [from] <[smtp]>\nSubject: [subject]\nDate: [date]\nMessage-ID: [Message-ID]`,
+        custom_headers: '', // Initialize empty!
         body_format: 'html',
         body_template: ''
     });
+
+    const DEFAULT_HEADERS = `MIME-version: 1.0\nContent-type: text/html\nTo: [to]\nfrom: [from] <[smtp]>\nSubject: [subject]\nDate: [date]\nMessage-ID: [Message-ID]`;
+
+    /* ... skipping to UI section ... */
+
+    {/* Custom Headers Toggle - Auto-controlled but clickable */ }
+    <div className="flex items-center gap-2">
+        <Checkbox
+            id="custom-headers"
+            checked={config.use_custom_headers}
+            onCheckedChange={(checked) => {
+                // If checked manually, and empty, fill with default
+                if (checked && !config.custom_headers) {
+                    setConfig(c => ({ ...c, use_custom_headers: true, custom_headers: DEFAULT_HEADERS }));
+                } else {
+                    setConfig(c => ({ ...c, use_custom_headers: !!checked }));
+                }
+            }}
+        />
+        <Label htmlFor="custom-headers">Use Custom Email Headers (Auto-enables when you type)</Label>
+    </div>
+
+    {/* Custom Headers Textarea - Always visible for better UX */ }
+    <Textarea
+        placeholder={`Custom Email Headers (e.g. ${DEFAULT_HEADERS})`}
+        value={config.custom_headers}
+        onChange={e => {
+            const val = e.target.value;
+            setConfig(c => ({
+                ...c,
+                custom_headers: val,
+                // FORCE ENABLE if content exists, FORCE DISABLE if empty
+                use_custom_headers: val.trim().length > 0
+            }));
+        }}
+        rows={6}
+        className="font-mono text-sm"
+    />
 
     // Template customization state
     const [showTagsGuide, setShowTagsGuide] = useState(false);
