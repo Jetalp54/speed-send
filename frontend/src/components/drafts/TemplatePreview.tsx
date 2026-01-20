@@ -65,7 +65,7 @@ export function TemplatePreview({
                                         <div>
                                             <p className="text-sm font-medium text-green-700 mb-2">Rendered (Sample)</p>
                                             <pre className="bg-green-50 border border-green-200 rounded-lg p-4 text-sm font-mono overflow-x-auto whitespace-pre-wrap">
-                                                {renderedHeaders || 'Click "Preview" to see rendered output'}
+                                                {renderedHeaders || 'Click &quot;Preview&quot; to see rendered output'}
                                             </pre>
                                         </div>
                                     </div>
@@ -91,7 +91,7 @@ export function TemplatePreview({
                                                 {renderedBody ? (
                                                     <div dangerouslySetInnerHTML={{ __html: renderedBody }} />
                                                 ) : (
-                                                    <p className="text-gray-500 text-sm">Click "Preview" to see rendered output</p>
+                                                    <p className="text-gray-500 text-sm">Click &quot;Preview&quot; to see rendered output</p>
                                                 )}
                                             </div>
                                         </div>
