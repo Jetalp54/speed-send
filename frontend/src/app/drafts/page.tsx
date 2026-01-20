@@ -65,6 +65,7 @@ const DraftsPage: React.FC = () => {
       if (response.error) throw new Error(response.error);
       setDraftCampaigns(prev => prev.map(d =>
         d.id === draftId ? { ...d, status: 'launched' } : d
+      ));
       setError(null);
       // Log success (response has users_count and total_drafts from ultra endpoint)
       if ((response as any).users_count) {
