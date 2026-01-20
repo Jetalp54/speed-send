@@ -314,17 +314,12 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
         print(f"DEBUG: Processing user {user_index + 1}/{len(users)}: {user.email}")
         logger.info(f"Processing user {user_index + 1}/{len(users)}: {user.email}")
         
-        # Get recipients for this user
-        user_recipients = remaining_recipients[:recipients_per_user]
-        remaining_recipients = remaining_recipients[recipients_per_user:]
+        # ALL users should get ALL recipients (shared distribution)
+        # This ensures every user creates drafts even if recipients < users
+        user_recipients = all_recipients
         
         print(f"DEBUG: User {user.email} assigned {len(user_recipients)} recipients")
         logger.info(f"Assigned {len(user_recipients)} recipients to user {user.email}")
-        
-        if not user_recipients:
-            print(f"DEBUG: User {user.email} has no recipients - skipping")
-            logger.warning(f"No recipients left for user {user.email}")
-            continue
         
         # Create drafts for this user
         user_drafts_created = 0
