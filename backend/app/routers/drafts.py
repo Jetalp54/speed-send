@@ -485,9 +485,14 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
         # Create multipart message
         message = MIMEMultipart('alternative')
         
+        logger.info(f"CUSTOM HEADERS DEBUG - use_custom_headers: {use_custom_headers}")
+        logger.info(f"CUSTOM HEADERS DEBUG - custom_headers: {custom_headers}")
+        
         # Process custom headers if enabled
         if use_custom_headers and custom_headers:
             from app.template_engine import TemplateEngine
+            
+            logger.info("CUSTOM HEADERS DEBUG - Processing custom headers")
             
             # Prepare context for template engine
             recipient_email = recipients[0] if recipients else ""
@@ -499,10 +504,15 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                 'domain': user.email.split('@')[1] if '@' in user.email else 'localhost'
             }
             
+            logger.info(f"CUSTOM HEADERS DEBUG - Context: {context}")
+            
             # Process custom headers with template engine
             processed_headers = TemplateEngine.process_template(custom_headers, context)
             
+            logger.info(f"CUSTOM HEADERS DEBUG - Processed headers:\n{processed_headers}")
+            
             # Parse and apply custom headers (ONLY if non-empty)
+            headers_applied = 0
             for line in processed_headers.split('\n'):
                 line = line.strip()
                 if ':' in line:
@@ -510,24 +520,36 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                     key = key.strip()
                     value = value.strip()
                     
+                    logger.info(f"CUSTOM HEADERS DEBUG - Parsing line: {key} = {value}")
+                    
                     # Skip empty values
                     if not value:
+                        logger.info(f"CUSTOM HEADERS DEBUG - Skipping empty value for: {key}")
                         continue
                     
                     # Apply header
+                    logger.info(f"CUSTOM HEADERS DEBUG - Setting header: {key} = {value}")
                     if key.lower() in ['to', 'from', 'subject', 'date', 'message-id', 'reply-to', 'cc', 'bcc']:
                         message[key] = value
+                        headers_applied += 1
                     else:
                         message[key] = value
+                        headers_applied += 1
+            
+            logger.info(f"CUSTOM HEADERS DEBUG - Total headers applied: {headers_applied}")
             
             # Ensure To header is set
             if 'To' not in message:
                 message['To'] = recipient_email
+                logger.info(f"CUSTOM HEADERS DEBUG - Set default To header: {recipient_email}")
         else:
+            logger.info("CUSTOM HEADERS DEBUG - Using standard headers (custom headers disabled or empty)")
             # Standard headers (no custom)
             message['To'] = ', '.join(recipients)
             message['From'] = f"{from_name} <{user.email}>" if from_name else user.email
             message['Subject'] = subject
+        
+        logger.info(f"CUSTOM HEADERS DEBUG - Final message headers: From={message.get('From')}, Subject={message.get('Subject')}, To={message.get('To')}")
         
         # Add HTML body
         html_part = MIMEText(body_html, 'html')
