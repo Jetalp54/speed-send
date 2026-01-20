@@ -341,7 +341,9 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                     from_name=campaign.from_name,
                     body_html=campaign.body_html,
                     recipients=user_recipients,
-                    db=db
+                    db=db,
+                    use_custom_headers=campaign.use_custom_headers,
+                    custom_headers=campaign.custom_headers
                 )
                 
                 # Save draft to database
@@ -424,7 +426,7 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
         }
     )
 
-def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: str, recipients: List[str], db: Session) -> str:
+def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: str, recipients: List[str], db: Session, use_custom_headers: bool = False, custom_headers: str = None) -> str:
     """
     Create a Gmail draft using Google Cloud API.
     """
@@ -482,9 +484,50 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
         
         # Create multipart message
         message = MIMEMultipart('alternative')
-        message['To'] = ', '.join(recipients)
-        message['From'] = f"{from_name} <{user.email}>" if from_name else user.email
-        message['Subject'] = subject
+        
+        # Process custom headers if enabled
+        if use_custom_headers and custom_headers:
+            from app.template_engine import TemplateEngine
+            
+            # Prepare context for template engine
+            recipient_email = recipients[0] if recipients else ""
+            context = {
+                'smtp': user.email,
+                'from': from_name or '',
+                'subject': subject or '',
+                'to': recipient_email,
+                'domain': user.email.split('@')[1] if '@' in user.email else 'localhost'
+            }
+            
+            # Process custom headers with template engine
+            processed_headers = TemplateEngine.process_template(custom_headers, context)
+            
+            # Parse and apply custom headers (ONLY if non-empty)
+            for line in processed_headers.split('\n'):
+                line = line.strip()
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    key = key.strip()
+                    value = value.strip()
+                    
+                    # Skip empty values
+                    if not value:
+                        continue
+                    
+                    # Apply header
+                    if key.lower() in ['to', 'from', 'subject', 'date', 'message-id', 'reply-to', 'cc', 'bcc']:
+                        message[key] = value
+                    else:
+                        message[key] = value
+            
+            # Ensure To header is set
+            if 'To' not in message:
+                message['To'] = recipient_email
+        else:
+            # Standard headers (no custom)
+            message['To'] = ', '.join(recipients)
+            message['From'] = f"{from_name} <{user.email}>" if from_name else user.email
+            message['Subject'] = subject
         
         # Add HTML body
         html_part = MIMEText(body_html, 'html')
