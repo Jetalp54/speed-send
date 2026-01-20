@@ -1,0 +1,10 @@
+# Update requirements.txt with new dependencies
+
+# Add these lines to requirements.txt:
+
+# Performance & Caching
+gevent==24.2.1
+redis==5.0.1
+
+# WebSockets
+websockets==12.0
