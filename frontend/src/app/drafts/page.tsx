@@ -15,7 +15,10 @@ import {
   Copy,
   Play,
   Trash2,
-  Eye
+  Eye,
+  Rocket,
+  Clock,
+  X
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
@@ -40,6 +43,9 @@ const DraftsPage: React.FC = () => {
   const [draftCampaigns, setDraftCampaigns] = useState<DraftCampaign[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [selectedDraftForSchedule, setSelectedDraftForSchedule] = useState<number | null>(null);
+  const [scheduleConfig, setScheduleConfig] = useState({ repetitions: 20, interval_seconds: 1 });
   const router = useRouter();
 
   useEffect(() => {
@@ -76,6 +82,50 @@ const DraftsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // RESUME NOW: Send all Gmail drafts immediately
+  const resumeNow = async (draftId: number) => {
+    setLoading(true);
+    try {
+      const response = await apiClient.request(`/api/v1/drafts/${draftId}/resume-now`, { method: 'POST' });
+      if (response.error) throw new Error(response.error);
+      setError(null);
+      alert(`✅ Resume started for ${(response as any).users_count} users!`);
+    } catch (err: any) {
+      setError(`Failed to resume drafts: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // SCHEDULED RESUME: Auto-launch at intervals
+  const startScheduledResume = async () => {
+    if (!selectedDraftForSchedule) return;
+
+    setLoading(true);
+    try {
+      const response = await apiClient.request(
+        `/api/v1/drafts/${selectedDraftForSchedule}/resume-scheduled`,
+        {
+          method: 'POST',
+          body: JSON.stringify(scheduleConfig)
+        }
+      );
+      if (response.error) throw new Error(response.error);
+      setError(null);
+      setShowScheduleModal(false);
+      alert(`✅ Scheduled resume started: ${scheduleConfig.repetitions} iterations, ${scheduleConfig.interval_seconds}s interval`);
+    } catch (err: any) {
+      setError(`Failed to start scheduled resume: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openScheduleModal = (draftId: number) => {
+    setSelectedDraftForSchedule(draftId);
+    setShowScheduleModal(true);
   };
 
   const duplicateDraft = async (draftId: number) => {
@@ -191,6 +241,26 @@ const DraftsPage: React.FC = () => {
                       <Play className="h-4 w-4 mr-2" />
                       Launch
                     </DropdownMenuItem>
+                    {campaign.status === 'uploaded' && (
+                      <>
+                        <DropdownMenuItem
+                          onClick={() => resumeNow(campaign.id)}
+                          disabled={loading}
+                          className="text-blue-600"
+                        >
+                          <Rocket className="h-4 w-4 mr-2" />
+                          Resume Now
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => openScheduleModal(campaign.id)}
+                          disabled={loading}
+                          className="text-purple-600"
+                        >
+                          <Clock className="h-4 w-4 mr-2" />
+                          Schedule Resume
+                        </DropdownMenuItem>
+                      </>
+                    )}
                     <DropdownMenuItem
                       onClick={() => deleteDraft(campaign.id)}
                       className="text-red-600"
@@ -246,6 +316,91 @@ const DraftsPage: React.FC = () => {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Schedule Resume Modal */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">Schedule Resume</h3>
+              <button
+                onClick={() => setShowScheduleModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-6">
+              Auto-launch ALL Gmail drafts at regular intervals (PowerMTA-style).
+              Perfect for warming up accounts and spreading out email blasts.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Repetitions
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value={scheduleConfig.repetitions}
+                  onChange={(e) => setScheduleConfig(prev => ({ ...prev, repetitions: parseInt(e.target.value) || 1 }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="20"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  How many times to repeat the resume process (1-1000)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Interval (seconds)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="3600"
+                  value={scheduleConfig.interval_seconds}
+                  onChange={(e) => setScheduleConfig(prev => ({ ...prev, interval_seconds: parseInt(e.target.value) || 1 }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="1"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Seconds between each repetition (1-3600)
+                </p>
+              </div>
+
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                <p className="text-sm text-blue-700">
+                  <strong>Total duration:</strong> ~{scheduleConfig.repetitions * scheduleConfig.interval_seconds} seconds
+                  <br />
+                  <strong>Example:</strong> 20 reps × 1s = launches all drafts 20 times over 20 seconds
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setShowScheduleModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={startScheduledResume}
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Clock className="h-4 w-4" />
+                  Start Schedule
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
