@@ -217,6 +217,14 @@ def update_draft_campaign(draft_id: int, draft_data: schemas.DraftCampaignUpdate
         campaign.from_name = draft_data.from_name
     if draft_data.body_html is not None:
         campaign.body_html = draft_data.body_html
+    if draft_data.use_custom_headers is not None:
+        campaign.use_custom_headers = draft_data.use_custom_headers
+    if draft_data.custom_headers is not None:
+        campaign.custom_headers = draft_data.custom_headers
+    if draft_data.body_format is not None:
+        campaign.body_format = draft_data.body_format
+    if draft_data.body_template is not None:
+        campaign.body_template = draft_data.body_template
     
     db.commit()
     db.refresh(campaign)

@@ -263,6 +263,10 @@ class DraftCampaignUpdate(BaseModel):
     from_name: Optional[str] = None
     subject: Optional[str] = None
     body_html: Optional[str] = None
+    use_custom_headers: Optional[bool] = None
+    custom_headers: Optional[str] = None
+    body_format: Optional[str] = None
+    body_template: Optional[str] = None
     emails_per_user: Optional[int] = None
     selected_account_ids: Optional[List[int]] = None
     selected_user_ids: Optional[List[int]] = None
