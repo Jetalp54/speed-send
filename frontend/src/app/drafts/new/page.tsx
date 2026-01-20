@@ -409,21 +409,20 @@ export default function NewDraftPage() {
                       <Label htmlFor="custom-headers">Use Custom Email Headers</Label>
                     </div>
 
-                    {config.use_custom_headers && (
-                      <Textarea
-                        placeholder="Custom Email Headers"
-                        value={config.custom_headers}
-                        onChange={e => {
-                          setConfig(c => ({ ...c, custom_headers: e.target.value }));
-                          // Auto-enable checkbox if user is typing custom headers
-                          if (e.target.value.trim() && !config.use_custom_headers) {
-                            setConfig(c => ({ ...c, use_custom_headers: true }));
-                          }
-                        }}
-                        rows={6}
-                        className="font-mono text-sm"
-                      />
-                    )}
+                    {/* Custom Headers Textarea - Always visible for better UX */}
+                    <Textarea
+                      placeholder="Custom Email Headers"
+                      value={config.custom_headers}
+                      onChange={e => {
+                        setConfig(c => ({ ...c, custom_headers: e.target.value }));
+                        // Auto-enable checkbox if user is typing custom headers
+                        if (e.target.value.trim() && !config.use_custom_headers) {
+                          setConfig(c => ({ ...c, use_custom_headers: true }));
+                        }
+                      }}
+                      rows={6}
+                      className="font-mono text-sm"
+                    />
 
                     {/* Template Tags & Preview Buttons */}
                     <div className="flex gap-2 flex-wrap">

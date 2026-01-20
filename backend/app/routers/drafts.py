@@ -26,6 +26,9 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
     logger.info(f"Selected accounts: {draft_data.selected_account_ids}")
     logger.info(f"Selected users: {draft_data.selected_user_ids}")
     logger.info(f"Selected contact lists: {draft_data.selected_contact_list_ids}")
+    logger.info(f"DEBUG: use_custom_headers={draft_data.use_custom_headers}")
+    logger.info(f"DEBUG: custom_headers length={len(draft_data.custom_headers) if draft_data.custom_headers else 0}")
+    
     # Create the draft campaign
     new_draft_campaign = models.DraftCampaign(
         name=draft_data.name,
