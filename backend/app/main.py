@@ -8,9 +8,9 @@ import traceback
 
 from app.config import settings
 from app.database import engine, Base
-from app.routers import accounts, users, campaigns, dashboard, test_email, drafts, contacts, data_lists
+from app.routers import accounts, users, campaigns, dashboard, test_email, drafts,  contacts, data_lists
 from app.routers import send as send_router
-from app.routers import accounts_sync_stub
+from app.routers import accounts_sync_stub, drafts_celery
 from app.middleware import PerformanceMiddleware
 
 # Configure logging
@@ -102,6 +102,7 @@ app.include_router(test_email.router, prefix=settings.API_V1_PREFIX)
 app.include_router(contacts.router, prefix=settings.API_V1_PREFIX)
 app.include_router(data_lists.router, prefix=settings.API_V1_PREFIX)
 app.include_router(drafts.router, prefix=settings.API_V1_PREFIX)
+app.include_router(drafts_celery.router_celery, prefix=settings.API_V1_PREFIX, tags=["Drafts-UltraSpeed"])
 app.include_router(send_router.router, prefix=settings.API_V1_PREFIX)
 app.include_router(accounts_sync_stub.router, prefix=settings.API_V1_PREFIX)
 

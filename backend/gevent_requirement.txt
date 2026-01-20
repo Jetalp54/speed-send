@@ -1,0 +1,2 @@
+# Add this to requirements.txt for gevent support
+gevent==24.2.1

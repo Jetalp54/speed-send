@@ -88,9 +88,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # Optimized Mode: Reasonable concurrency for stable parallel sending
-    # Each worker handles multiple senders with proper resource management
-    command: celery -A app.celery_app worker --loglevel=info --concurrency=50 --pool=threads --prefetch-multiplier=100 --max-tasks-per-child=1000
+    # ULTRA-HIGH-SPEED MODE: Gevent pool for 600+ concurrent users (12 accounts × 50 users each)
+    # Gevent allows 1000s of concurrent tasks vs threads' 50-worker limit
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=1000 --pool=gevent --prefetch-multiplier=200
     restart: unless-stopped
 
   # Celery Beat (for scheduled tasks)
