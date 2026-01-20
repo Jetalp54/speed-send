@@ -90,7 +90,7 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                 gmail_draft_id = result['id']
                 
                 # Save to database
- draft = models.GmailDraft(
+                draft = models.GmailDraft(
                     draft_campaign_id=campaign_id,
                     user_id=user_id,
                     gmail_draft_id=gmail_draft_id,
