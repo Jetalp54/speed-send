@@ -27,7 +27,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { Badge } from '@/components/ui/badge';
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'; // REMOVED
 // import { useToast } from '@/components/ui/use-toast'; // REMOVED
 import { Alert, AlertDescription } from '@/components/ui/alert';
