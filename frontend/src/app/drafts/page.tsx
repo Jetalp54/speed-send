@@ -60,12 +60,14 @@ const DraftsPage: React.FC = () => {
   const launchDrafts = async (draftId: number) => {
     setLoading(true);
     try {
-      const response = await apiClient.request(`/api/v1/drafts/${draftId}/launch`, { method: 'POST' });
+      // ULTRA-FAST: Parallel launch across all users simultaneously
+      const response = await apiClient.request(`/api/v1/drafts/${draftId}/launch-ultra`, { method: 'POST' });
       if (response.error) throw new Error(response.error);
       setDraftCampaigns(prev => prev.map(d =>
         d.id === draftId ? { ...d, status: 'launched' } : d
       ));
       setError(null);
+      console.log(`✅ Launch queued: ${response.users_count} users, ${response.total_drafts} drafts`);
     } catch (err: any) {
       setError(`Failed to launch drafts: ${err.response?.data?.detail || err.message}`);
     } finally {
