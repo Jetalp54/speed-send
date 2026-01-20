@@ -255,6 +255,12 @@ class DraftCampaign(Base):
     status = Column(String(50), default='draft')
     emails_per_user = Column(Integer, default=1)
     
+    # Advanced customization fields
+    use_custom_headers = Column(Boolean, default=False)
+    custom_headers = Column(Text)  # Custom email headers template
+    body_format = Column(String(10), default='html')  # 'html' or 'txt'
+    body_template = Column(Text)  # Body with template tags
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

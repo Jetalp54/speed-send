@@ -246,6 +246,12 @@ class DraftCampaignBase(BaseModel):
     subject: str
     body_html: Optional[str] = None
     emails_per_user: int = 1
+    
+    # Advanced customization fields
+    use_custom_headers: bool = False
+    custom_headers: Optional[str] = None
+    body_format: str = 'html'  # 'html' or 'txt'
+    body_template: Optional[str] = None
 
 class DraftCampaignCreate(DraftCampaignBase):
     selected_account_ids: List[int]
