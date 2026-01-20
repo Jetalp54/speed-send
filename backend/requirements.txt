@@ -32,5 +32,5 @@ python-dotenv==1.0.0
 httpx==0.25.2
 
 # High-performance async
-gevent==23.9.1
-
+gevent==24.2.1
+websockets==12.0
