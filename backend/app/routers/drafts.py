@@ -33,7 +33,12 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         from_name=draft_data.from_name,
         body_html=draft_data.body_html,
         status='draft',
-        emails_per_user=draft_data.emails_per_user
+        emails_per_user=draft_data.emails_per_user,
+        # Custom headers fields
+        use_custom_headers=draft_data.use_custom_headers,
+        custom_headers=draft_data.custom_headers,
+        body_format=draft_data.body_format,
+        body_template=draft_data.body_template
     )
     db.add(new_draft_campaign)
     db.flush()  # Get the ID before committing
