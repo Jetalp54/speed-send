@@ -27,7 +27,7 @@ async def list_service_accounts(db: Session = Depends(get_db)):
         logger.error(f"Failed to fetch service accounts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/", response_model=ServiceAccountResponse)
+@router.post("", response_model=ServiceAccountResponse)
 async def create_service_account(account: ServiceAccountCreate, db: Session = Depends(get_db)):
     """Create a new service account"""
     try:
