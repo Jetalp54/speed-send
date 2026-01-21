@@ -89,7 +89,7 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                     # Process custom headers with template engine
                     processed_headers = TemplateEngine.process_template(custom_headers, context)
                     
-                    # Parse headers to inspect Content-Type and Content-Transfer-Encoding
+                    # Parse headers to inspect Content-Type
                     header_lines = [line.strip() for line in processed_headers.split('\n') if line.strip()]
                     parsed_headers = []
                     for line in header_lines:
@@ -97,49 +97,28 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                             k, v = line.split(':', 1)
                             parsed_headers.append((k.strip(), v.strip()))
                     
-                    # Check for user-defined Content-Type and Content-Transfer-Encoding
+                    # Determine Content-Type strategy
                     content_type_val = next((v for k, v in parsed_headers if k.lower() == 'content-type'), None)
-                    transfer_encoding_val = next((v for k, v in parsed_headers if k.lower() == 'content-transfer-encoding'), None)
                     
-                    # Determine message construction strategy
-                    if transfer_encoding_val or (content_type_val and 'multipart' in content_type_val.lower()):
-                        # User wants full control over encoding - use raw Message()
-                        # This preserves user-specified Content-Transfer-Encoding exactly
-                        message = Message()
-                        
-                        # Handle encoding based on user's Content-Transfer-Encoding
-                        if transfer_encoding_val:
-                            enc_lower = transfer_encoding_val.lower()
-                            if enc_lower == 'base64':
-                                import base64 as b64
-                                encoded_body = b64.b64encode(body_html.encode('utf-8')).decode('ascii')
-                                message.set_payload(encoded_body)
-                            elif enc_lower == 'quoted-printable':
-                                import quopri
-                                encoded_body = quopri.encodestring(body_html.encode('utf-8')).decode('ascii')
-                                message.set_payload(encoded_body)
-                            elif enc_lower in ('7bit', '8bit', 'binary'):
-                                # No encoding transformation needed
-                                message.set_payload(body_html)
-                            else:
-                                # Unknown encoding - use as-is
-                                message.set_payload(body_html)
-                        else:
-                            # Multipart without explicit encoding
+                    if content_type_val:
+                        # User provided Content-Type
+                        if 'multipart' in content_type_val.lower():
+                            # User providing raw multipart body with boundaries
+                            message = Message()
                             message.set_payload(body_html)
-                    elif content_type_val:
-                        # User specified Content-Type but not Transfer-Encoding
-                        # Let MIMEText auto-encode
-                        subtype = 'html' if 'html' in content_type_val.lower() else 'plain'
-                        message = MIMEText(body_html, subtype, 'utf-8')
+                        else:
+                            # User providing text (html/plain/etc)
+                            # Let MIMEText handle encoding of the body_html string
+                            subtype = 'html' if 'html' in content_type_val.lower() else 'plain'
+                            message = MIMEText(body_html, subtype)
                     else:
-                        # Default: HTML with auto-encoding
-                        message = MIMEText(body_html, 'html', 'utf-8')
+                        # Fallback: User used custom headers but didn't specify Content-Type -> Default HTML
+                        message = MIMEText(body_html, 'html')
                     
-                    # Apply all user-defined headers (overwriting any defaults)
+                    # Apply headers (overwriting any defaults set by MIMEText/Message)
                     for k, v in parsed_headers:
                         if not v: continue
-                        # Remove default header if exists
+                        # Remove default header if exists (e.g. from MIMEText init)
                         if k in message:
                             del message[k]
                         message[k] = v
