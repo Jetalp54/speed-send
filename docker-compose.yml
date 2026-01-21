@@ -55,7 +55,7 @@ services:
     volumes:
       - service_accounts:/app/service_accounts
     ports:
-      - "8001:8000"
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
