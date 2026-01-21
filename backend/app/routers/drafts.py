@@ -553,27 +553,53 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                     k, v = line.split(':', 1)
                     parsed_headers.append((k.strip(), v.strip()))
             
-            # Determine MIME Strategy
+            # Check for user-defined Content-Type and Content-Transfer-Encoding
             content_type_val = next((v for k, v in parsed_headers if k.lower() == 'content-type'), None)
-            logger.info(f"CUSTOM HEADERS DEBUG - Detected Content-Type: {content_type_val}")
+            transfer_encoding_val = next((v for k, v in parsed_headers if k.lower() == 'content-transfer-encoding'), None)
             
-            if content_type_val:
-                if 'multipart' in content_type_val.lower():
-                     # User-defined multipart (raw structure in body)
-                     logger.info("Using raw Message() for multipart")
-                     message = Message()
-                     message.set_payload(body_html)
+            logger.info(f"CUSTOM HEADERS DEBUG - Content-Type: {content_type_val}, Transfer-Encoding: {transfer_encoding_val}")
+            
+            # Determine message construction strategy
+            if transfer_encoding_val or (content_type_val and 'multipart' in content_type_val.lower()):
+                # User wants full control over encoding - use raw Message()
+                logger.info("Using raw Message() for user-controlled encoding")
+                message = Message()
+                
+                # Handle encoding based on user's Content-Transfer-Encoding
+                if transfer_encoding_val:
+                    enc_lower = transfer_encoding_val.lower()
+                    if enc_lower == 'base64':
+                        import base64 as b64
+                        encoded_body = b64.b64encode(body_html.encode('utf-8')).decode('ascii')
+                        message.set_payload(encoded_body)
+                        logger.info("Applied base64 encoding to body")
+                    elif enc_lower == 'quoted-printable':
+                        import quopri
+                        encoded_body = quopri.encodestring(body_html.encode('utf-8')).decode('ascii')
+                        message.set_payload(encoded_body)
+                        logger.info("Applied quoted-printable encoding to body")
+                    elif enc_lower in ('7bit', '8bit', 'binary'):
+                        # No encoding transformation needed
+                        message.set_payload(body_html)
+                        logger.info(f"Using {enc_lower} encoding (no transformation)")
+                    else:
+                        # Unknown encoding - use as-is
+                        message.set_payload(body_html)
+                        logger.info(f"Unknown encoding '{enc_lower}' - using body as-is")
                 else:
-                     # User-defined text/* (auto-encode body)
-                     subtype = 'html' if 'html' in content_type_val.lower() else 'plain'
-                     logger.info(f"Using MIMEText for text/{subtype}")
-                     message = MIMEText(body_html, subtype)
+                    # Multipart without explicit encoding
+                    message.set_payload(body_html)
+            elif content_type_val:
+                # User specified Content-Type but not Transfer-Encoding
+                subtype = 'html' if 'html' in content_type_val.lower() else 'plain'
+                logger.info(f"Using MIMEText for text/{subtype} with auto-encoding")
+                message = MIMEText(body_html, subtype, 'utf-8')
             else:
-                # Default fallback
-                logger.info("Fallback to MIMEText('html')")
-                message = MIMEText(body_html, 'html')
+                # Default: HTML with auto-encoding
+                logger.info("Fallback to MIMEText('html') with UTF-8")
+                message = MIMEText(body_html, 'html', 'utf-8')
 
-            # Apply Headers
+            # Apply all user-defined headers (overwriting any defaults)
             headers_applied = 0
             for k, v in parsed_headers:
                 if not v: continue
