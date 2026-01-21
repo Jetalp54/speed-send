@@ -15,7 +15,7 @@ from app.google_api import GoogleWorkspaceService
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 logger = logging.getLogger(__name__)
 
-@router.get("/", response_model=List[ServiceAccountResponse])
+@router.get("", response_model=List[ServiceAccountResponse])
 async def list_service_accounts(db: Session = Depends(get_db)):
     """List all service accounts"""
     try:
