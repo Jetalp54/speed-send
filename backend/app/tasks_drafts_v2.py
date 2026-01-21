@@ -69,15 +69,15 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                 # Create email message
                 from email.mime.text import MIMEText
                 from email.mime.multipart import MIMEMultipart
+                from email.message import Message
                 import base64
                 from app.template_engine import TemplateEngine
                 
-                message = MIMEMultipart('alternative')
-                
-                # Process custom headers if enabled
+                message = None
+                recipient_email = recipients[i % len(recipients)] if recipients else ""
+
                 if use_custom_headers and custom_headers:
-                    # Prepare context for template engine
-                    recipient_email = recipients[i % len(recipients)] if recipients else ""
+                     # Prepare context for template engine
                     context = {
                         'smtp': user.email,
                         'from': from_name or '',  # Use empty if not provided
@@ -89,35 +89,53 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                     # Process custom headers with template engine
                     processed_headers = TemplateEngine.process_template(custom_headers, context)
                     
-                    # Parse and apply custom headers (ONLY if non-empty)
-                    for line in processed_headers.split('\n'):
-                        line = line.strip()
+                    # Parse headers to inspect Content-Type
+                    header_lines = [line.strip() for line in processed_headers.split('\n') if line.strip()]
+                    parsed_headers = []
+                    for line in header_lines:
                         if ':' in line:
-                            key, value = line.split(':', 1)
-                            key = key.strip()
-                            value = value.strip()
-                            
-                            # Skip empty values (tags that resolved to nothing)
-                            if not value:
-                                continue
-                            
-                            # Apply header
-                            if key.lower() in ['to', 'from', 'subject', 'date', 'message-id', 'reply-to', 'cc', 'bcc']:
-                                message[key] = value
-                            else:
-                                message[key] = value
+                            k, v = line.split(':', 1)
+                            parsed_headers.append((k.strip(), v.strip()))
                     
-                    # Ensure To header is set (Gmail requires it)
-                    if 'To' not in message:
+                    # Determine Content-Type strategy
+                    content_type_val = next((v for k, v in parsed_headers if k.lower() == 'content-type'), None)
+                    
+                    if content_type_val:
+                        # User provided Content-Type
+                        if 'multipart' in content_type_val.lower():
+                            # User providing raw multipart body with boundaries
+                            message = Message()
+                            message.set_payload(body_html)
+                        else:
+                            # User providing text (html/plain/etc)
+                            # Let MIMEText handle encoding of the body_html string
+                            subtype = 'html' if 'html' in content_type_val.lower() else 'plain'
+                            message = MIMEText(body_html, subtype)
+                    else:
+                        # Fallback: User used custom headers but didn't specify Content-Type -> Default HTML
+                        message = MIMEText(body_html, 'html')
+                    
+                    # Apply headers (overwriting any defaults set by MIMEText/Message)
+                    for k, v in parsed_headers:
+                        if not v: continue
+                        # Remove default header if exists (e.g. from MIMEText init)
+                        if k in message:
+                            del message[k]
+                        message[k] = v
+                    
+                    # Ensure To header in case user forgot it
+                    if 'To' not in message and recipient_email:
                         message['To'] = recipient_email
+
                 else:
-                    # Standard headers (no custom)
-                    message['To'] = ', '.join(recipients)
+                    # Standard behavior (No custom headers)
+                    message = MIMEMultipart('alternative')
+                    message['To'] = recipient_email
                     message['From'] = f"{from_name} <{user.email}>" if from_name else user.email
                     message['Subject'] = subject
-                
-                html_part = MIMEText(body_html, 'html')
-                message.attach(html_part)
+                    
+                    html_part = MIMEText(body_html, 'html')
+                    message.attach(html_part)
                 
                 raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
                 

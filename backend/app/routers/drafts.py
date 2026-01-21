@@ -491,22 +491,20 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
         # Create the email message
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
+        from email.message import Message
         import base64
         
-        # Create multipart message
-        message = MIMEMultipart('alternative')
+        message = None
+        recipient_email = recipients[0] if recipients else ""
         
         logger.info(f"CUSTOM HEADERS DEBUG - use_custom_headers: {use_custom_headers}")
-        logger.info(f"CUSTOM HEADERS DEBUG - custom_headers: {custom_headers}")
         
         # Process custom headers if enabled
         if use_custom_headers and custom_headers:
             from app.template_engine import TemplateEngine
-            
-            logger.info("CUSTOM HEADERS DEBUG - Processing custom headers")
+            logger.info("CUSTOM HEADERS DEBUG - Processing custom headers with smart MIME handling")
             
             # Prepare context for template engine
-            recipient_email = recipients[0] if recipients else ""
             context = {
                 'smtp': user.email,
                 'from': from_name or '',
@@ -515,56 +513,61 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                 'domain': user.email.split('@')[1] if '@' in user.email else 'localhost'
             }
             
-            logger.info(f"CUSTOM HEADERS DEBUG - Context: {context}")
-            
             # Process custom headers with template engine
             processed_headers = TemplateEngine.process_template(custom_headers, context)
             
-            logger.info(f"CUSTOM HEADERS DEBUG - Processed headers:\n{processed_headers}")
-            
-            # Parse and apply custom headers (ONLY if non-empty)
-            headers_applied = 0
-            for line in processed_headers.split('\n'):
-                line = line.strip()
+            # Parse headers
+            header_lines = [line.strip() for line in processed_headers.split('\n') if line.strip()]
+            parsed_headers = []
+            for line in header_lines:
                 if ':' in line:
-                    key, value = line.split(':', 1)
-                    key = key.strip()
-                    value = value.strip()
-                    
-                    logger.info(f"CUSTOM HEADERS DEBUG - Parsing line: {key} = {value}")
-                    
-                    # Skip empty values
-                    if not value:
-                        logger.info(f"CUSTOM HEADERS DEBUG - Skipping empty value for: {key}")
-                        continue
-                    
-                    # Apply header
-                    logger.info(f"CUSTOM HEADERS DEBUG - Setting header: {key} = {value}")
-                    if key.lower() in ['to', 'from', 'subject', 'date', 'message-id', 'reply-to', 'cc', 'bcc']:
-                        message[key] = value
-                        headers_applied += 1
-                    else:
-                        message[key] = value
-                        headers_applied += 1
+                    k, v = line.split(':', 1)
+                    parsed_headers.append((k.strip(), v.strip()))
             
-            logger.info(f"CUSTOM HEADERS DEBUG - Total headers applied: {headers_applied}")
+            # Determine MIME Strategy
+            content_type_val = next((v for k, v in parsed_headers if k.lower() == 'content-type'), None)
+            logger.info(f"CUSTOM HEADERS DEBUG - Detected Content-Type: {content_type_val}")
             
-            # Ensure To header is set
-            if 'To' not in message:
+            if content_type_val:
+                if 'multipart' in content_type_val.lower():
+                     # User-defined multipart (raw structure in body)
+                     logger.info("Using raw Message() for multipart")
+                     message = Message()
+                     message.set_payload(body_html)
+                else:
+                     # User-defined text/* (auto-encode body)
+                     subtype = 'html' if 'html' in content_type_val.lower() else 'plain'
+                     logger.info(f"Using MIMEText for text/{subtype}")
+                     message = MIMEText(body_html, subtype)
+            else:
+                # Default fallback
+                logger.info("Fallback to MIMEText('html')")
+                message = MIMEText(body_html, 'html')
+
+            # Apply Headers
+            headers_applied = 0
+            for k, v in parsed_headers:
+                if not v: continue
+                if k in message: del message[k]
+                message[k] = v
+                headers_applied += 1
+                
+            if 'To' not in message and recipient_email:
                 message['To'] = recipient_email
-                logger.info(f"CUSTOM HEADERS DEBUG - Set default To header: {recipient_email}")
+                
+            logger.info(f"CUSTOM HEADERS DEBUG - Applied {headers_applied} custom headers")
+            
         else:
-            logger.info("CUSTOM HEADERS DEBUG - Using standard headers (custom headers disabled or empty)")
-            # Standard headers (no custom)
+            logger.info("Using standard MIMEMultipart logic")
+            # Create multipart message
+            message = MIMEMultipart('alternative')
             message['To'] = ', '.join(recipients)
             message['From'] = f"{from_name} <{user.email}>" if from_name else user.email
             message['Subject'] = subject
-        
-        logger.info(f"CUSTOM HEADERS DEBUG - Final message headers: From={message.get('From')}, Subject={message.get('Subject')}, To={message.get('To')}")
-        
-        # Add HTML body
-        html_part = MIMEText(body_html, 'html')
-        message.attach(html_part)
+            
+            # Add HTML body
+            html_part = MIMEText(body_html, 'html')
+            message.attach(html_part)
         
         # Encode message
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
