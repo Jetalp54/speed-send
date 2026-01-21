@@ -199,6 +199,35 @@ def get_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         emails_per_user=campaign.emails_per_user or 0
     )
 
+@router.get("/drafts/{draft_id}", response_model=schemas.DraftCampaignResponse)
+def get_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
+    """
+    Get a specific draft campaign.
+    """
+    campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == draft_id).first()
+    
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Draft campaign not found")
+        
+    return schemas.DraftCampaignResponse(
+        id=campaign.id,
+        name=campaign.name,
+        subject=campaign.subject,
+        from_name=campaign.from_name,
+        body_html=campaign.body_html,
+        body_format=campaign.body_format,
+        body_template=campaign.body_template,
+        use_custom_headers=campaign.use_custom_headers,
+        custom_headers=campaign.custom_headers,
+        created_at=campaign.created_at,
+        total_drafts=0,
+        drafts_by_user={},
+        status=campaign.status or 'draft',
+        recipients_count=0,
+        users_count=0,
+        emails_per_user=campaign.emails_per_user or 0
+    )
+
 @router.patch("/drafts/{draft_id}", response_model=schemas.DraftCampaignResponse)
 def update_draft_campaign(draft_id: int, draft_data: schemas.DraftCampaignUpdate, db: Session = Depends(get_db)):
     """

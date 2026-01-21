@@ -100,6 +100,8 @@ export const campaignsApi = {
 export const draftsApi = {
   list: () => apiClient.request(`/api/v1/drafts/`),
   create: (payload: any) => apiClient.request(`/api/v1/drafts/`, { method: 'POST', body: JSON.stringify(payload) }),
+  get: (id: number | string) => apiClient.request(`/api/v1/drafts/${id}`),
+  update: (id: number | string, payload: any) => apiClient.request(`/api/v1/drafts/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 };
 
 // Data Lists API
