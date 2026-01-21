@@ -2,26 +2,12 @@
 // Provides compatibility with existing pages that import named APIs
 
 // Use different URLs for server-side and client-side requests
-// Server-side: Use Docker service name, Client-side: Use server IP
-// Use different URLs for server-side and client-side requests
-// Server-side: Use Docker service name, Client-side: Use server IP
-export const API_URL: string = (() => {
-  if (typeof window === 'undefined') {
-    return process.env.NEXT_PUBLIC_API_URL || 'http://backend:8000';
-  }
-
-  // Client-side logic
-  const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  // If the env var is set to the docker service name (default in compose), it's useless for the browser.
-  // We prefer the environment variable ONLY if it's a real URL (not "backend" or internal docker name).
-  if (envUrl && !envUrl.includes('backend') && envUrl !== 'http://backend:8000') {
-    return envUrl;
-  }
-
-  // Dynamic fallback: Use the current page's hostname with port 8000
-  // This works for localhost, IP addresses, and domains (assuming API is on same host:8000)
-  return `${window.location.protocol}//${window.location.hostname}:8000`;
-})();
+// Server-side: Use Docker service name (internal network)
+// Client-side: Use relative path (empty string) to use Next.js Rewrites (Proxy)
+// This avoids CORS issues and firewall blocking on backend port 8000
+export const API_URL: string = typeof window === 'undefined'
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://backend:8000')
+  : '';
 
 export interface ApiResponse<T = any> {
   data?: T;
