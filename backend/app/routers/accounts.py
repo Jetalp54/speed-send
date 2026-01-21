@@ -12,7 +12,7 @@ from app.schemas import ServiceAccountCreate, ServiceAccountUpdate, ServiceAccou
 from app.encryption import EncryptionService
 from app.google_api import GoogleWorkspaceService
 
-router = APIRouter(prefix="/accounts", tags=["accounts"])
+router = APIRouter(tags=["accounts"])
 logger = logging.getLogger(__name__)
 
 @router.get("", response_model=List[ServiceAccountResponse])

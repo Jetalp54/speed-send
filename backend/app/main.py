@@ -95,7 +95,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(accounts.router, prefix=settings.API_V1_PREFIX)
+app.include_router(accounts.router, prefix=f"{settings.API_V1_PREFIX}/accounts")
 app.include_router(users.router, prefix=settings.API_V1_PREFIX)
 app.include_router(campaigns.router, prefix=settings.API_V1_PREFIX)
 app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
