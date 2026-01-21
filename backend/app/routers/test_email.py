@@ -20,7 +20,7 @@ class TestEmailRequest(BaseModel):
     sender_account_id: int
     sender_user_id: Optional[int] = None
 
-@router.post("/")
+@router.post("")
 async def send_test_email(
     request: TestEmailRequest,
     db: Session = Depends(get_db)

@@ -10,7 +10,7 @@ from app.schemas import DataListCreate, DataListUpdate, DataListResponse
 router = APIRouter(prefix="/data-lists", tags=["data-lists"])
 logger = logging.getLogger(__name__)
 
-@router.get("/", response_model=List[DataListResponse])
+@router.get("", response_model=List[DataListResponse])
 async def list_data_lists(db: Session = Depends(get_db)):
     """List all data lists"""
     try:
@@ -22,7 +22,7 @@ async def list_data_lists(db: Session = Depends(get_db)):
         logger.error(f"Failed to fetch data lists: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/", response_model=DataListResponse)
+@router.post("", response_model=DataListResponse)
 async def create_data_list(data_list: DataListCreate, db: Session = Depends(get_db)):
     """Create a new data list"""
     try:

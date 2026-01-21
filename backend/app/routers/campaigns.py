@@ -35,7 +35,7 @@ redis_client = redis.from_url("redis://redis:6379/0", decode_responses=True)
 def _logs_key(campaign_id: int) -> str:
     return f"campaign:{campaign_id}:logs"
 
-@router.get("/", response_model=List[CampaignResponse])
+@router.get("", response_model=List[CampaignResponse])
 async def list_campaigns(
     status: Optional[str] = None,
     skip: int = 0,
@@ -58,7 +58,7 @@ async def get_campaign(
         raise HTTPException(status_code=404, detail="Campaign not found")
     return campaign
 
-@router.post("/", response_model=CampaignResponse)
+@router.post("", response_model=CampaignResponse)
 async def create_campaign(
     campaign: CampaignCreate,
     db: Session = Depends(get_db)

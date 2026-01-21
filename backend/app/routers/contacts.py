@@ -105,7 +105,7 @@ async def delete_contact_list(list_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Contacts
-@router.get("/", response_model=List[ContactResponse])
+@router.get("", response_model=List[ContactResponse])
 async def list_contacts(
     contact_list_id: Optional[int] = None,
     db: Session = Depends(get_db)
@@ -127,7 +127,7 @@ async def list_contacts(
         logger.error(f"Failed to fetch contacts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/", response_model=ContactResponse)
+@router.post("", response_model=ContactResponse)
 async def create_contact(contact: ContactCreate, db: Session = Depends(get_db)):
     """Create a new contact"""
     try:

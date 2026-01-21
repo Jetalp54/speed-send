@@ -9,7 +9,7 @@ from app.schemas import WorkspaceUserResponse
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.get("/", response_model=List[WorkspaceUserResponse])
+@router.get("", response_model=List[WorkspaceUserResponse])
 async def list_workspace_users(
     service_account_id: Optional[int] = None,
     is_active: Optional[bool] = None,
