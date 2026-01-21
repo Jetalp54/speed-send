@@ -211,6 +211,9 @@ class Campaign(Base):
     # Relationships
     sender_accounts = relationship("ServiceAccount", secondary="campaign_senders", back_populates="campaigns")
     email_logs = relationship("EmailLog", back_populates="campaign", cascade="all, delete-orphan")
+    
+    # Optimistic locking
+    version = Column(Integer, default=1, nullable=False)
 
 # Campaign Senders (Many-to-Many)
 class CampaignSender(Base):
@@ -325,3 +328,17 @@ class GmailDraft(Base):
     # Relationships
     draft_campaign = relationship("DraftCampaign", back_populates="gmail_drafts")
     user = relationship("WorkspaceUser", back_populates="gmail_drafts")
+
+# State Transition Logs (Audit)
+class StateTransitionLog(Base):
+    __tablename__ = "state_transition_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(50), nullable=False)  # 'campaign' or 'draft_campaign'
+    entity_id = Column(Integer, nullable=False, index=True)
+    from_status = Column(String(50), nullable=False)
+    to_status = Column(String(50), nullable=False)
+    triggered_by = Column(String(100))  # 'api', 'celery_task', etc.
+    celery_task_id = Column(String(255))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    metadata = Column(JSON)

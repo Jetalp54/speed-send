@@ -8,6 +8,7 @@ from app.database import SessionLocal
 from app.models import Campaign, EmailLog, WorkspaceUser, ServiceAccount, CampaignStatus, EmailStatus
 from app.google_api import GoogleWorkspaceService, substitute_variables, process_custom_header_tags
 from app.encryption import encryption_service
+from app.state_machine import transition_campaign_status
 from datetime import datetime
 import logging
 import json
@@ -122,8 +123,14 @@ def prepare_campaign_redis(campaign_id: int):
             append_campaign_log(campaign_id, "❌ PREPARATION ABORTED: Campaign was canceled.")
             return {"campaign_id": campaign_id, "status": "canceled", "message": "Preparation aborted due to cancellation"}
         
-        campaign.status = CampaignStatus.PREPARING
-        campaign.prepared_at = datetime.utcnow()
+        transition_campaign_status(
+            db,
+            campaign_id,
+            CampaignStatus.PREPARING,
+            triggered_by="celery:prepare_campaign_redis",
+            celery_task_id=prepare_campaign_redis.request.id
+        )
+        # Note: prepared_at is set by the state machine
         db.commit()
         
         # Get sender accounts
@@ -380,7 +387,13 @@ def prepare_campaign_redis(campaign_id: int):
         redis_client.expire(progress_key, 86400)  # 24 hour expiry
         
         # Mark campaign as READY
-        campaign.status = CampaignStatus.READY
+        transition_campaign_status(
+            db, 
+            campaign_id, 
+            CampaignStatus.READY, 
+            triggered_by="celery:prepare_campaign_redis",
+            celery_task_id=prepare_campaign_redis.request.id
+        )
         campaign.pending_count = task_count
         campaign.sent_count = 0
         campaign.failed_count = 0
@@ -404,7 +417,17 @@ def prepare_campaign_redis(campaign_id: int):
         logger.error(f"[{request_id}] ❌ Preparation failed: {e}")
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
         if campaign:
-            campaign.status = CampaignStatus.FAILED
+            try:
+                transition_campaign_status(
+                    db,
+                    campaign_id,
+                    CampaignStatus.FAILED,
+                    triggered_by="celery:prepare_campaign_redis:error",
+                    celery_task_id=prepare_campaign_redis.request.id,
+                    metadata={"error": str(e)}
+                )
+            except Exception:
+                pass # Already logged
             db.commit()
         raise
     
@@ -441,8 +464,13 @@ def resume_campaign_instant(campaign_id: int):
         if campaign.status == CampaignStatus.SENDING:
             logger.info(f"[{request_id}] ⚠️ Campaign already SENDING, continuing with existing process...")
         
-        campaign.status = CampaignStatus.SENDING
-        campaign.started_at = datetime.utcnow()
+        transition_campaign_status(
+            db,
+            campaign_id,
+            CampaignStatus.SENDING,
+            triggered_by="celery:resume_campaign_instant",
+            celery_task_id=resume_campaign_instant.request.id
+        )
         db.commit()
         
         # Fetch all tasks from Redis
@@ -489,7 +517,17 @@ def resume_campaign_instant(campaign_id: int):
         logger.error(f"[{request_id}] ❌ Resume failed: {e}")
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
         if campaign:
-            campaign.status = CampaignStatus.FAILED
+            try:
+                transition_campaign_status(
+                    db,
+                    campaign_id,
+                    CampaignStatus.FAILED,
+                    triggered_by="celery:resume_campaign_instant:error",
+                    celery_task_id=resume_campaign_instant.request.id,
+                    metadata={"error": str(e)}
+                )
+            except Exception:
+                pass
             db.commit()
         raise
     
@@ -637,8 +675,14 @@ def execute_sender_batch_v2(batch_data: Dict, campaign_id: int, request_id: str)
         # Check if campaign is complete (no more pending emails)
         if campaign.pending_count == 0:
             # All emails have been processed, mark campaign as completed
-            campaign.status = CampaignStatus.COMPLETED
-            campaign.completed_at = datetime.utcnow()
+            transition_campaign_status(
+                db,
+                campaign_id,
+                CampaignStatus.COMPLETED,
+                triggered_by="celery:execute_sender_batch_v2",
+                celery_task_id=request_id
+            )
+            # campaign.completed_at = datetime.utcnow() # Handled by state machine
             logger.info(f"[{request_id}] 🎉 Campaign {campaign_id} completed: {campaign.sent_count} sent, {campaign.failed_count} failed")
             append_campaign_log(campaign_id, f"🎉 Campaign completed: {campaign.sent_count} sent, {campaign.failed_count} failed")
         

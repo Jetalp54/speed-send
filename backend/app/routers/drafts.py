@@ -10,6 +10,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 import logging
+from app.state_machine import transition_draft_status
+from app.models import DraftStatus
 
 logger = logging.getLogger(__name__)
 from googleapiclient.errors import HttpError
@@ -199,34 +201,7 @@ def get_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         emails_per_user=campaign.emails_per_user or 0
     )
 
-@router.get("/drafts/{draft_id}", response_model=schemas.DraftCampaignResponse)
-def get_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
-    """
-    Get a specific draft campaign.
-    """
-    campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == draft_id).first()
-    
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Draft campaign not found")
-        
-    return schemas.DraftCampaignResponse(
-        id=campaign.id,
-        name=campaign.name,
-        subject=campaign.subject,
-        from_name=campaign.from_name,
-        body_html=campaign.body_html,
-        body_format=campaign.body_format,
-        body_template=campaign.body_template,
-        use_custom_headers=campaign.use_custom_headers,
-        custom_headers=campaign.custom_headers,
-        created_at=campaign.created_at,
-        total_drafts=0,
-        drafts_by_user={},
-        status=campaign.status or 'draft',
-        recipients_count=0,
-        users_count=0,
-        emails_per_user=campaign.emails_per_user or 0
-    )
+# Redundant get_draft_campaign removed (it was defined twice in original file)
 
 @router.patch("/drafts/{draft_id}", response_model=schemas.DraftCampaignResponse)
 def update_draft_campaign(draft_id: int, draft_data: schemas.DraftCampaignUpdate, db: Session = Depends(get_db)):
@@ -447,8 +422,12 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     print(f"DEBUG: Finished processing all users. Total drafts: {total_drafts_created}")
     
     # Update campaign status
-    campaign.status = 'uploaded'
-    db.commit()
+    transition_draft_status(
+        db, 
+        campaign.id, 
+        DraftStatus.UPLOADED, 
+        triggered_by="api:upload_drafts"
+    )
     
     logger.info(f"UPLOAD COMPLETE: Total drafts created: {total_drafts_created}")
     logger.info(f"Successful users: {successful_users}")
@@ -546,7 +525,7 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
             processed_headers = TemplateEngine.process_template(custom_headers, context)
             
             # Parse headers
-            header_lines = [line.strip() for line in processed_headers.split('\n') if line.strip()]
+            header_lines = [line.strip() for line in processed_headers.split('\\n') if line.strip()]
             parsed_headers = []
             for line in header_lines:
                 if ':' in line:
@@ -747,9 +726,12 @@ def launch_drafts(draft_id: int, db: Session = Depends(get_db)):
                 })
     
     # Update campaign status
-    campaign.status = 'launched'
-    
-    db.commit()
+    transition_draft_status(
+        db,
+        campaign.id,
+        DraftStatus.LAUNCHED,
+        triggered_by="api:launch_drafts"
+    )
     
     logger.info(f"🎯 Launch completed: {total_launched} sent, {total_failed} failed")
     

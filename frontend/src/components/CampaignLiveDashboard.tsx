@@ -31,7 +31,7 @@ export function CampaignLiveDashboard({ campaignId, onClose }: Props) {
     // Connect to SSE stream
     const url = `${API_URL}/api/v1/campaigns/${campaignId}/stream/`;
     const eventSource = new EventSource(url);
-    
+
     eventSource.onopen = () => {
       console.log('✅ SSE Connected');
       setConnected(true);
@@ -151,8 +151,8 @@ export function CampaignLiveDashboard({ campaignId, onClose }: Props) {
             <div className="space-y-3">
               {Object.entries(stats.accounts).map(([accountName, accountStats]) => {
                 const accountTotal = accountStats.sent + accountStats.failed + accountStats.pending;
-                const accountProgress = accountTotal > 0 
-                  ? ((accountStats.sent + accountStats.failed) / accountTotal) * 100 
+                const accountProgress = accountTotal > 0
+                  ? ((accountStats.sent + accountStats.failed) / accountTotal) * 100
                   : 0;
 
                 return (
@@ -182,14 +182,13 @@ export function CampaignLiveDashboard({ campaignId, onClose }: Props) {
       <Card>
         <CardContent className="p-4 flex items-center justify-between">
           <span className="text-sm font-medium">Campaign Status:</span>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold text-white ${
-            stats.status === 'completed' ? 'bg-green-500' :
-            stats.status === 'sending' ? 'bg-blue-500 animate-pulse' :
-            stats.status === 'ready' ? 'bg-cyan-500' :
-            stats.status === 'preparing' ? 'bg-yellow-500' :
-            stats.status === 'failed' ? 'bg-red-500' :
-            'bg-gray-500'
-          }`}>
+          <span className={`px-3 py-1 rounded-full text-xs font-bold text-white ${stats.status === 'completed' ? 'bg-green-500' :
+              stats.status === 'sending' ? 'bg-blue-500 animate-pulse' :
+                stats.status === 'ready' ? 'bg-cyan-500' :
+                  stats.status === 'preparing' ? 'bg-yellow-500' :
+                    stats.status === 'failed' ? 'bg-red-500' :
+                      'bg-gray-500'
+            }`}>
             {stats.status.toUpperCase()}
           </span>
         </CardContent>

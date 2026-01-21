@@ -5,6 +5,7 @@ from app.database import SessionLocal
 from app.models import Campaign, EmailLog, WorkspaceUser, ServiceAccount, CampaignStatus, EmailStatus
 from app.google_api import GoogleWorkspaceService, substitute_variables
 from app.encryption import encryption_service
+from app.state_machine import transition_campaign_status
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import time
@@ -56,8 +57,14 @@ def send_campaign_emails(self, campaign_id: int):
             raise Exception(f"Campaign {campaign_id} not found")
         
         # Update campaign status
-        campaign.status = CampaignStatus.SENDING
-        campaign.started_at = datetime.utcnow()
+        # Update campaign status
+        transition_campaign_status(
+            db,
+            campaign_id,
+            CampaignStatus.SENDING,
+            triggered_by="celery:send_campaign_emails",
+            celery_task_id=self.request.id
+        )
         campaign.celery_task_id = self.request.id
         db.commit()
         
@@ -230,19 +237,41 @@ def send_campaign_emails(self, campaign_id: int):
             campaign.pending_count = campaign.total_recipients - actual_sent - actual_failed
             
             # Determine final status
+            # Determine final status
             if actual_failed == 0:
-                campaign.status = CampaignStatus.COMPLETED
+                transition_campaign_status(
+                    db,
+                    campaign_id,
+                    CampaignStatus.COMPLETED,
+                    triggered_by="celery:send_campaign_emails:complete",
+                    celery_task_id=self.request.id
+                )
                 logger.info(f"✅ Campaign {campaign_id} COMPLETED: {actual_sent} sent, 0 failed")
             else:
                 success_rate = actual_sent / (actual_sent + actual_failed)
                 if success_rate >= 0.5:  # 50% success rate threshold
-                    campaign.status = CampaignStatus.COMPLETED
+                    transition_campaign_status(
+                        db,
+                        campaign_id,
+                        CampaignStatus.COMPLETED,
+                        triggered_by="celery:send_campaign_emails:complete_partial",
+                        celery_task_id=self.request.id
+                    )
                     logger.info(f"✅ Campaign {campaign_id} COMPLETED: {actual_sent} sent, {actual_failed} failed ({success_rate:.1%} success rate)")
                 else:
-                    campaign.status = CampaignStatus.FAILED
+                    try:
+                        transition_campaign_status(
+                            db,
+                            campaign_id,
+                            CampaignStatus.FAILED,
+                            triggered_by="celery:send_campaign_emails:failed_threshold",
+                            celery_task_id=self.request.id
+                        )
+                    except Exception:
+                        pass
                     logger.info(f"❌ Campaign {campaign_id} FAILED: {actual_sent} sent, {actual_failed} failed ({success_rate:.1%} success rate)")
             
-            campaign.completed_at = datetime.utcnow()
+            # campaign.completed_at = datetime.utcnow() # Handled by state machine
             db.commit()
         
         logger.info(f"📧 Final: {campaign.sent_count} sent, {campaign.failed_count} failed")
@@ -251,7 +280,17 @@ def send_campaign_emails(self, campaign_id: int):
         logger.error(f"Campaign {campaign_id} failed: {e}")
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
         if campaign:
-            campaign.status = CampaignStatus.FAILED
+            try:
+                transition_campaign_status(
+                    db,
+                    campaign_id,
+                    CampaignStatus.FAILED,
+                    triggered_by="celery:send_campaign_emails:exception",
+                    celery_task_id=self.request.id,
+                    metadata={"error": str(e)}
+                )
+            except Exception:
+                pass
             db.commit()
         raise
     

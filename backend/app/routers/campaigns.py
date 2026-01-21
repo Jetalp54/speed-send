@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 # Correctly import the updated functions
 from app.daily_limits import get_all_accounts_statistics, get_account_statistics
 from app.tasks_v2 import get_campaign_progress_key
+from app.state_machine import transition_campaign_status
 import redis
 import json
 
@@ -172,9 +173,16 @@ async def prepare_campaign_endpoint(
         raise HTTPException(status_code=400, detail=f"Can only prepare DRAFT/FAILED campaigns. Current: {campaign.status}")
     
     try:
+        # Use state machine for transition
+        transition_campaign_status(
+            db, 
+            campaign_id, 
+            CampaignStatus.PREPARING, 
+            triggered_by="api:prepare_campaign_endpoint"
+        )
+        
         task = prepare_campaign_redis.delay(campaign_id)
-        campaign.status = CampaignStatus.PREPARING
-        db.commit()
+        
         return {"message": "Campaign preparation started", "task_id": str(task.id)}
     except Exception as e:
         logger.error(f"Failed to start campaign preparation: {e}")
@@ -191,22 +199,23 @@ async def control_campaign_endpoint(
         raise HTTPException(status_code=404, detail="Campaign not found")
 
     if control.action == "pause":
-        if campaign.status not in [CampaignStatus.SENDING]:
-            raise HTTPException(status_code=400, detail=f"Cannot pause campaign in {campaign.status} status.")
-        campaign.status = CampaignStatus.PAUSED
-        campaign.paused_at = datetime.utcnow()
-        db.commit()
+        transition_campaign_status(
+            db, 
+            campaign_id, 
+            CampaignStatus.PAUSED, 
+            triggered_by="api:control:pause"
+        )
         logger.info(f"Campaign {campaign_id} paused.")
         return {"message": "Campaign paused successfully"}
 
     elif control.action == "resume":
-        if campaign.status not in [CampaignStatus.PAUSED, CampaignStatus.READY]:
-            raise HTTPException(status_code=400, detail=f"Cannot resume campaign in {campaign.status} status.")
-        
-        # If it was paused, set to sending and re-trigger the resume task
-        campaign.status = CampaignStatus.SENDING
-        campaign.paused_at = None # Clear paused_at
-        db.commit()
+        # Use state machine for transition
+        transition_campaign_status(
+            db, 
+            campaign_id, 
+            CampaignStatus.SENDING, 
+            triggered_by="api:control:resume"
+        )
         
         # Re-trigger the resume task to continue sending
         from app.tasks_v2 import resume_campaign_instant
@@ -218,12 +227,12 @@ async def control_campaign_endpoint(
         return {"message": "Campaign resumed successfully", "task_id": str(task.id)}
 
     elif control.action == "cancel":
-        if campaign.status in [CampaignStatus.COMPLETED, CampaignStatus.CANCELED]:
-            raise HTTPException(status_code=400, detail=f"Cannot cancel campaign in {campaign.status} status.")
-        
-        campaign.status = CampaignStatus.CANCELED
-        campaign.completed_at = datetime.utcnow() # Mark as completed for tracking purposes
-        db.commit()
+        transition_campaign_status(
+            db, 
+            campaign_id, 
+            CampaignStatus.CANCELED, 
+            triggered_by="api:control:cancel"
+        )
 
         # Clear Redis task queue for this campaign
         redis_key = f"campaign:{campaign_id}:tasks"
@@ -247,10 +256,18 @@ async def resume_campaign_endpoint(
         raise HTTPException(status_code=400, detail=f"Campaign must be READY or PAUSED. Current: {campaign.status}")
 
     try:
+        transition_campaign_status(
+            db, 
+            campaign_id, 
+            CampaignStatus.SENDING, 
+            triggered_by="api:resume_campaign_endpoint"
+        )
         task = resume_campaign_instant.delay(campaign_id)
-        campaign.status = CampaignStatus.SENDING
+        
+        # Update task ID
+        # Fetch fresh copy or update existing wrapped instance
+        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
         campaign.celery_task_id = str(task.id)
-        campaign.started_at = datetime.utcnow()
         db.commit()
         return {"message": "Campaign resumed", "task_id": str(task.id)}
     except Exception as e:
