@@ -92,7 +92,7 @@ def transition_campaign_status(
         to_status=str(new_status),
         triggered_by=triggered_by,
         celery_task_id=celery_task_id,
-        metadata=metadata
+        log_metadata=metadata
     )
     db.add(log_entry)
     

@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS state_transition_logs (
     triggered_by VARCHAR(100),  -- 'api', 'celery_task', etc.
     celery_task_id VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    metadata JSONB
+    log_metadata JSONB
 );
 
 CREATE INDEX IF NOT EXISTS idx_stl_entity ON state_transition_logs(entity_type, entity_id);

@@ -341,4 +341,4 @@ class StateTransitionLog(Base):
     triggered_by = Column(String(100))  # 'api', 'celery_task', etc.
     celery_task_id = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    metadata = Column(JSON)
+    log_metadata = Column(JSON)
