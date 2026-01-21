@@ -67,8 +67,8 @@ export async function healthCheck(): Promise<boolean> {
 
 // Service Accounts API (backend prefix is /api/v1)
 export const serviceAccountsApi = {
-  list: () => apiClient.request(`/api/v1/accounts/`),
-  create: (payload: any) => apiClient.request(`/api/v1/accounts/`, { method: 'POST', body: JSON.stringify(payload) }),
+  list: () => apiClient.request(`/api/v1/accounts`),
+  create: (payload: any) => apiClient.request(`/api/v1/accounts`, { method: 'POST', body: JSON.stringify(payload) }),
   delete: (id: number | string) => apiClient.request(`/api/v1/accounts/${id}`, { method: 'DELETE' }),
   // Note: backend sync endpoint may not exist yet; frontend expects it.
   sync: (id: number | string, admin_email: string) =>
@@ -84,38 +84,38 @@ export const usersApi = {
     if (params?.skip != null) q.set('skip', String(params.skip));
     if (params?.limit != null) q.set('limit', String(params.limit));
     const suffix = q.toString() ? `?${q.toString()}` : '';
-    return apiClient.request(`/api/v1/users/${suffix}`);
+    return apiClient.request(`/api/v1/users${suffix}`);
   },
 };
 
 // Campaigns API
 export const campaignsApi = {
-  list: () => apiClient.request(`/api/v1/campaigns/`),
-  create: (payload: any) => apiClient.request(`/api/v1/campaigns/`, { method: 'POST', body: JSON.stringify(payload) }),
+  list: () => apiClient.request(`/api/v1/campaigns`),
+  create: (payload: any) => apiClient.request(`/api/v1/campaigns`, { method: 'POST', body: JSON.stringify(payload) }),
   get: (id: number | string) => apiClient.request(`/api/v1/campaigns/${id}`),
   update: (id: number | string, payload: any) => apiClient.request(`/api/v1/campaigns/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
 };
 
 // Drafts API
 export const draftsApi = {
-  list: () => apiClient.request(`/api/v1/drafts/`),
-  create: (payload: any) => apiClient.request(`/api/v1/drafts/`, { method: 'POST', body: JSON.stringify(payload) }),
+  list: () => apiClient.request(`/api/v1/drafts`),
+  create: (payload: any) => apiClient.request(`/api/v1/drafts`, { method: 'POST', body: JSON.stringify(payload) }),
   get: (id: number | string) => apiClient.request(`/api/v1/drafts/${id}`),
   update: (id: number | string, payload: any) => apiClient.request(`/api/v1/drafts/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 };
 
 // Data Lists API
 export const dataListsApi = {
-  list: () => apiClient.request(`/api/v1/data-lists/`),
+  list: () => apiClient.request(`/api/v1/data-lists`),
   get: (id: number | string) => apiClient.request(`/api/v1/data-lists/${id}`),
-  create: (payload: any) => apiClient.request(`/api/v1/data-lists/`, { method: 'POST', body: JSON.stringify(payload) }),
+  create: (payload: any) => apiClient.request(`/api/v1/data-lists`, { method: 'POST', body: JSON.stringify(payload) }),
   update: (id: number | string, payload: any) => apiClient.request(`/api/v1/data-lists/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   delete: (id: number | string) => apiClient.request(`/api/v1/data-lists/${id}`, { method: 'DELETE' }),
 };
 
 // Contacts API
 export const contactsApi = {
-  list: () => apiClient.request(`/api/v1/contacts/`),
+  list: () => apiClient.request(`/api/v1/contacts`),
   upload: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
