@@ -75,6 +75,7 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
     redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
+    redirect_slashes=False  # Disable automatic trailing slash redirects
 )
 
 # Add performance middleware
