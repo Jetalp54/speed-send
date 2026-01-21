@@ -128,6 +128,14 @@ async def root():
     """
     Root endpoint
     """
+    return {"message": "Gmail SaaS API is running", "version": settings.VERSION}
+
+@app.get("/health")
+async def health():
+    """
+    Health check endpoint for Nginx/AWS validation
+    """
+    return {"status": "healthy", "database": "connected" if engine else "unknown"}
     return {
         "name": settings.PROJECT_NAME,
         "version": settings.VERSION,
