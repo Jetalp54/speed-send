@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 # Copy application code
 COPY . .
+COPY fix_db.py /app/fix_db.py
 
 # Create service accounts directory
 RUN mkdir -p /app/service_accounts
