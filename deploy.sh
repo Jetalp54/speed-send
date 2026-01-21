@@ -166,7 +166,7 @@ POSTGRES_DB=gmailsaas
 REDIS_URL=redis://redis:6379/0
 CELERY_BROKER_URL=redis://redis:6379/0
 CELERY_RESULT_BACKEND=redis://redis:6379/0
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://backend:8000
 EOF
     print_success ".env file created with secure keys."
 else
@@ -175,6 +175,13 @@ fi
 
 # Build and Start
 print_section "🚀 Build & Launch"
+
+# --- Critical Fix: Clean up zombie processes holding ports ---
+print_info "Cleaning up any zombie processes holding ports 8000 and 3000..."
+fuser -k 8000/tcp 2>/dev/null || true
+fuser -k 3000/tcp 2>/dev/null || true
+sleep 2
+print_success "Port cleanup completed."
 
 # --- Auto-Repair: Force Code Sync ---
 print_info "Synchronizing critical files..."
