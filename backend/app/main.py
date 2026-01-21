@@ -78,6 +78,12 @@ app = FastAPI(
     redirect_slashes=False  # Disable automatic trailing slash redirects
 )
 
+# Import redirect middleware
+from app.redirect_middleware import RelativeRedirectMiddleware
+
+# Add redirect middleware FIRST to intercept redirects
+app.add_middleware(RelativeRedirectMiddleware)
+
 # Add performance middleware
 app.add_middleware(PerformanceMiddleware)
 
