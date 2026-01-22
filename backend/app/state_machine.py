@@ -109,35 +109,71 @@ def transition_campaign_status(
         
     return campaign
 
+# Valid transitions map for Drafts
+DRAFT_TRANSITIONS = {
+    DraftStatus.CREATED: [DraftStatus.UPLOADING, DraftStatus.FAILED, DraftStatus.CANCELED],
+    DraftStatus.UPLOADING: [DraftStatus.READY, DraftStatus.FAILED, DraftStatus.CANCELED],
+    DraftStatus.READY: [DraftStatus.SENDING, DraftStatus.SCHEDULED, DraftStatus.CANCELED],
+    DraftStatus.SCHEDULED: [DraftStatus.SENDING, DraftStatus.PAUSED, DraftStatus.CANCELED],
+    DraftStatus.SENDING: [DraftStatus.PAUSED, DraftStatus.COMPLETED, DraftStatus.FAILED, DraftStatus.CANCELED],
+    DraftStatus.PAUSED: [DraftStatus.SENDING, DraftStatus.CANCELED],
+    DraftStatus.COMPLETED: [],
+    DraftStatus.FAILED: [DraftStatus.CREATED, DraftStatus.CANCELED],
+    DraftStatus.CANCELED: [DraftStatus.CREATED],
+}
+
 def transition_draft_status(
     db: Session,
     draft_id: int,
     new_status: DraftStatus,
-    triggered_by: str = "unknown"
+    triggered_by: str = "unknown",
+    celery_task_id: str = None
 ) -> DraftCampaign:
-    """Same pattern for DraftCampaigns"""
+    """
+    Transition a draft campaign to a new status with validation, locking, and auditing.
+    """
+    # 1. Lock and fetch
     draft = db.query(DraftCampaign).with_for_update().filter(DraftCampaign.id == draft_id).first()
     if not draft:
         raise HTTPException(status_code=404, detail="Draft Campaign not found")
         
     current_status = draft.status
+    
+    # 2. Idempotency check
     if current_status == new_status:
+        logger.info(f"Draft {draft_id} already in {new_status}, skipping transition.")
         return draft
         
-    # Simple validation for now
-    # DRAFT -> UPLOADED -> LAUNCHED/FAILED
-    # ... logic ...
+    # 3. Validate transition
+    allowed = DRAFT_TRANSITIONS.get(current_status, [])
+    allowed_strs = [str(s) for s in allowed]
     
+    if str(new_status) not in allowed_strs:
+        error_msg = f"Invalid transition for Draft {draft_id}: {current_status} -> {new_status}"
+        logger.error(error_msg)
+        raise HTTPException(status_code=400, detail=error_msg)
+    
+    # 4. Apply Change
+    logger.info(f"Transitioning Draft {draft_id}: {current_status} -> {new_status} (by {triggered_by})")
     draft.status = new_status
     
+    # 5. Create Audit Log
     log_entry = StateTransitionLog(
         entity_type="draft_campaign",
         entity_id=draft_id,
         from_status=str(current_status),
         to_status=str(new_status),
-        triggered_by=triggered_by
+        triggered_by=triggered_by,
+        celery_task_id=celery_task_id
     )
     db.add(log_entry)
-    db.commit()
-    db.refresh(draft)
+    
+    try:
+        db.commit()
+        db.refresh(draft)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to commit draft state transition: {e}")
+        raise e
+        
     return draft

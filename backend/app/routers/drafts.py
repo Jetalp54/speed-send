@@ -37,7 +37,7 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         subject=draft_data.subject,
         from_name=draft_data.from_name,
         body_html=draft_data.body_html,
-        status='draft',
+        status=DraftStatus.CREATED,
         emails_per_user=draft_data.emails_per_user,
         # Custom headers fields
         use_custom_headers=draft_data.use_custom_headers,
@@ -152,7 +152,7 @@ def get_draft_campaigns(db: Session = Depends(get_db)):
             created_at=campaign.created_at,
             total_drafts=total_drafts,
             drafts_by_user=drafts_by_user,
-            status=campaign.status or 'draft',
+            status=campaign.status or DraftStatus.CREATED.value,
             recipients_count=recipients_count,
             users_count=len(campaign.selected_users),
             emails_per_user=campaign.emails_per_user or 0
@@ -195,7 +195,7 @@ def get_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         created_at=campaign.created_at,
         total_drafts=total_drafts,
         drafts_by_user=drafts_by_user,
-        status=campaign.status or 'draft',
+        status=campaign.status or DraftStatus.CREATED.value,
         recipients_count=recipients_count,
         users_count=len(campaign.selected_users),
         emails_per_user=campaign.emails_per_user or 0
@@ -241,7 +241,7 @@ def update_draft_campaign(draft_id: int, draft_data: schemas.DraftCampaignUpdate
         created_at=campaign.created_at,
         total_drafts=0,
         drafts_by_user={},
-        status=campaign.status or 'draft',
+        status=campaign.status or DraftStatus.CREATED.value,
         recipients_count=0,
         users_count=0,
         emails_per_user=campaign.emails_per_user or 0
@@ -425,7 +425,7 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     transition_draft_status(
         db, 
         campaign.id, 
-        DraftStatus.UPLOADED, 
+        DraftStatus.READY, # Was UPLOADED
         triggered_by="api:upload_drafts"
     )
     
@@ -729,7 +729,7 @@ def launch_drafts(draft_id: int, db: Session = Depends(get_db)):
     transition_draft_status(
         db,
         campaign.id,
-        DraftStatus.LAUNCHED,
+        DraftStatus.SENDING, # Was LAUNCHED
         triggered_by="api:launch_drafts"
     )
     

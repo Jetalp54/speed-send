@@ -152,7 +152,7 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                     draft_campaign_id=campaign_id,
                     user_id=user_id,
                     gmail_draft_id=gmail_draft_id,
-                    status='created',
+                    status=models.DraftStatus.CREATED.value,
                     recipients=recipients
                 )
                 db.add(draft)
@@ -243,10 +243,19 @@ def launch_drafts_optimized_task(self, user_id, draft_ids, task_group_id):
             if exception:
                 logger.error(f"Failed to send draft {draft_id}: {str(exception)}")
                 if draft:
-                    draft.status = 'failed'
+                    draft.status = models.DraftStatus.FAILED.value
                 failed_count += 1
             else:
                 if draft:
+                    # GmailDraft model uses string status or could be mapped. 
+                    # Assuming we want 'sent' or 'completed' for individual drafts? 
+                    # The model definition has status as String currently. 
+                    # Let's use 'sent' to match previous logic logic or update model if needed.
+                    # Wait, DraftStatus is for Campaign. GmailDraft has its own status string? 
+                    # Checking models.py... GmailDraft status is String(50), default='created'. 
+                    # It does NOT use an Enum in the model definition I saw earlier (lines 313-321 of models.py).
+                    # 'status = Column(String(50), default='created')'
+                    # So 'sent' is fine here as a string.
                     draft.status = 'sent'
                     draft.sent_at = datetime.utcnow()
                     draft.gmail_message_id = response.get('id')
@@ -274,10 +283,29 @@ def launch_drafts_optimized_task(self, user_id, draft_ids, task_group_id):
                     )
             
             # Execute batch with rate limit check
-            if not rate_limiter.can_proceed(user.email):
+            from app.services.quota import QuotaManager
+            
+            # Check rate limit (per user)
+            if not QuotaManager.check_rate_limit(user.email, limit_per_sec=10):
                 time.sleep(0.1)
+                
+            # Check daily quota
+            batch_len = len(batch_draft_ids)
+            if not QuotaManager.check_and_reserve(user.service_account_id, batch_len):
+                logger.warning(f"Quota exceeded for SA {user.service_account_id} during launch. Skipping batch.")
+                # Mark these as failed
+                for draft_id in batch_draft_ids:
+                     draft = db.query(models.GmailDraft).filter(models.GmailDraft.id == draft_id).first()
+                     if draft:
+                         draft.status = 'failed'
+                         draft.error_message = "Daily Quota Exceeded"
+                db.commit()
+                continue # Skip this batch
             
             batch.execute()
+            
+            # Sync DB after batch
+            QuotaManager.sync_usage_to_db(user.service_account_id)
         
         db.commit()
         

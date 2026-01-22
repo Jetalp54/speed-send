@@ -600,6 +600,30 @@ def execute_sender_batch_v2(batch_data: Dict, campaign_id: int, request_id: str)
                         db.commit()
                         return # Exit the task
                 
+                # Check quota before sending
+                from app.services.quota import QuotaManager
+                
+                # Check rate limit (per user)
+                if not QuotaManager.check_rate_limit(sender_email, limit_per_sec=10):
+                    time.sleep(0.1) # Soft throttle
+                    
+                # Atomic Quota Reservation
+                # We reserve 1 email at a time here because we are inside the loop
+                # Ideally we reserve batch_size at start, but for now strict per-email check is safer
+                if not QuotaManager.check_and_reserve(sender['service_account_id'], 1):
+                    logger.warning(f"[{request_id}] 🛑 Quota exceeded for SA {sender['service_account_id']}. Stopping batch.")
+                    append_campaign_log(campaign_id, f"🛑 Quota exceeded for sender {sender_email}. Stopping.")
+                    # Mark remaining as FAILED (or could be PENDING for retry tomorrow)
+                    # For V2 "Speed Send", we fail them to stop the queue.
+                    for remaining_task in tasks[emails_processed_in_batch:]:
+                        email_log = db.query(EmailLog).filter(EmailLog.id == remaining_task['email_log_id']).first()
+                        if email_log and email_log.status == EmailStatus.PENDING:
+                            email_log.status = EmailStatus.FAILED
+                            email_log.error_message = "Daily User/SA Quota Exceeded"
+                            email_log.failed_at = datetime.utcnow()
+                    db.commit()
+                    return
+
                 future = executor.submit(
                     send_prerendered_email,
                     google_service,
@@ -614,12 +638,23 @@ def execute_sender_batch_v2(batch_data: Dict, campaign_id: int, request_id: str)
             # Collect results
             for future, task in futures:
                 success, message_id, error = future.result()
+                
+                # CIRCUIT BREAKER: Check for 403 User Rate Limit
+                if not success and "403" in str(error) and "limit" in str(error).lower():
+                    logger.error(f"[{request_id}] 🔌 Circuit Breaker tripped for {sender_email} (403 Rate Limit)")
+                    # We could pause the campaign or just this sender
+                    # For now, just log heavily
+                    pass
+                
                 results.append({
                     'email_log_id': task['email_log_id'],
                     'success': success,
                     'message_id': message_id,
                     'error': error
                 })
+
+        # Sync quota usage to DB after batch
+        QuotaManager.sync_usage_to_db(sender['service_account_id'])
         
         elapsed = time.time() - start_time
         

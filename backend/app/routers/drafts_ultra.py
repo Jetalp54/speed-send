@@ -115,7 +115,7 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
     drafts = db.query(models.GmailDraft).filter(models.GmailDraft.draft_campaign_id == draft_id).all()
     
     if not drafts:
-        raise HTTPException(status_code=400, detail="No drafts found")
+        raise HTTPException(status_code=400, detail="This campaign has 0 drafts to launch. Please upload drafts first.")
     
     # Group by user
     drafts_by_user = {}

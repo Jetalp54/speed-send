@@ -26,10 +26,14 @@ class EmailStatus(str, enum.Enum):
     BOUNCED = "bounced"
 
 class DraftStatus(str, enum.Enum):
-    DRAFT = "draft"
-    UPLOADED = "uploaded"
-    LAUNCHED = "launched"
-    FAILED = "failed"
+    CREATED = "created"       # Was 'draft'
+    UPLOADING = "uploading"   # Async upload in progress
+    READY = "ready"           # Was 'uploaded'
+    SCHEDULED = "scheduled"   # Waiting for scheduler
+    SENDING = "sending"       # Was 'launched' (partially)
+    PAUSED = "paused"         # Stopped by user/system
+    COMPLETED = "completed"   # All sent
+    FAILED = "failed"         # Critical error
 
 # Service Accounts
 class ServiceAccount(Base):
