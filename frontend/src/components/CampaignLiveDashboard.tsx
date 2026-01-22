@@ -17,6 +17,11 @@ interface LiveStats {
   accounts: Record<string, { sent: number; failed: number; pending: number }>;
 }
 
+interface AnalyticsStats {
+  unique_opens: number;
+  unique_clicks: number;
+}
+
 interface Props {
   campaignId: number;
   onClose?: () => void;
@@ -24,9 +29,11 @@ interface Props {
 
 export function CampaignLiveDashboard({ campaignId, onClose }: Props) {
   const [stats, setStats] = useState<LiveStats | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsStats | null>(null);
   const [connected, setConnected] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
+  // SSE Effect
   useEffect(() => {
     // Connect to SSE stream
     const url = `${API_URL}/api/v1/campaigns/${campaignId}/stream/`;
@@ -60,6 +67,27 @@ export function CampaignLiveDashboard({ campaignId, onClose }: Props) {
     };
   }, [campaignId]);
 
+  // Analytics Polling Effect (Every 5s)
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/analytics/campaign/${campaignId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setAnalytics(data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch analytics", e);
+      }
+    };
+
+    fetchAnalytics(); // Initial
+    const interval = setInterval(fetchAnalytics, 5000); // Poll
+
+    return () => clearInterval(interval);
+  }, [campaignId]);
+
+
   if (!stats) {
     return (
       <Card>
@@ -89,7 +117,8 @@ export function CampaignLiveDashboard({ campaignId, onClose }: Props) {
       </div>
 
       {/* Main Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle>
@@ -123,6 +152,31 @@ export function CampaignLiveDashboard({ campaignId, onClose }: Props) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">{stats.pending.toLocaleString()}</div>
+          </CardContent>
+        </Card>
+
+        {/* Analytics Cards */}
+        <Card className="border-purple-500 bg-purple-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-purple-700">👀 Opens</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-700">
+              {analytics ? analytics.unique_opens.toLocaleString() : '-'}
+            </div>
+            <p className="text-xs text-muted-foreground">Unique</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-orange-500 bg-orange-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-orange-700">🖱️ Clicks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-700">
+              {analytics ? analytics.unique_clicks.toLocaleString() : '-'}
+            </div>
+            <p className="text-xs text-muted-foreground">Unique</p>
           </CardContent>
         </Card>
       </div>
@@ -183,11 +237,11 @@ export function CampaignLiveDashboard({ campaignId, onClose }: Props) {
         <CardContent className="p-4 flex items-center justify-between">
           <span className="text-sm font-medium">Campaign Status:</span>
           <span className={`px-3 py-1 rounded-full text-xs font-bold text-white ${stats.status === 'completed' ? 'bg-green-500' :
-              stats.status === 'sending' ? 'bg-blue-500 animate-pulse' :
-                stats.status === 'ready' ? 'bg-cyan-500' :
-                  stats.status === 'preparing' ? 'bg-yellow-500' :
-                    stats.status === 'failed' ? 'bg-red-500' :
-                      'bg-gray-500'
+            stats.status === 'sending' ? 'bg-blue-500 animate-pulse' :
+              stats.status === 'ready' ? 'bg-cyan-500' :
+                stats.status === 'preparing' ? 'bg-yellow-500' :
+                  stats.status === 'failed' ? 'bg-red-500' :
+                    'bg-gray-500'
             }`}>
             {stats.status.toUpperCase()}
           </span>
@@ -214,4 +268,3 @@ export function CampaignLiveDashboard({ campaignId, onClose }: Props) {
     </div>
   );
 }
-

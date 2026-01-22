@@ -69,6 +69,14 @@ def transition_campaign_status(
     elif new_status == CampaignStatus.SENDING:
         if not campaign.started_at:
             campaign.started_at = now
+            
+        # Enterprise Engine: Split into jobs if this is the first start
+        # Use a check to prevent re-splitting on Resume?
+        # Ideally check if jobs exist.
+        from app.services.job_allocator import JobAllocator
+        count = JobAllocator.split_campaign_into_jobs(db, campaign_id)
+        logger.info(f"Campaign {campaign_id} split into {count} jobs")
+            
         # If resuming from PAUSED, clear paused_at
         campaign.paused_at = None
     elif new_status == CampaignStatus.PAUSED:

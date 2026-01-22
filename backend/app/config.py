@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     PROJECT_NAME: str = "Gmail Bulk Sender SaaS"
     VERSION: str = "1.0.0"
+    API_BASE_URL: str = "http://localhost:8000" # Base URL for tracking links
     
     # CORS
     BACKEND_CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:8000"]
