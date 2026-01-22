@@ -35,6 +35,13 @@ class DraftStatus(str, enum.Enum):
     COMPLETED = "completed"   # All sent
     FAILED = "failed"         # Critical error
 
+class JobStatus(str, enum.Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    RETRYING = "retrying"
+
 # Service Accounts
 class ServiceAccount(Base):
     __tablename__ = "service_accounts"
@@ -243,6 +250,10 @@ class EmailLog(Base):
     status = Column(Enum(EmailStatus), default=EmailStatus.PENDING)
     error_message = Column(Text)
     
+    # Enterprise fields
+    idempotency_key = Column(String(255), unique=True, index=True) # campaign_id + recipient_hash
+    message_id = Column(String(255)) # Gmail Message ID (Provider reference)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     sent_at = Column(DateTime(timezone=True))
@@ -346,3 +357,121 @@ class StateTransitionLog(Base):
     celery_task_id = Column(String(255))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     log_metadata = Column(JSON)
+
+# ==========================================
+# ENTERPRISE ENGINE MODELS (Phase 1 Upgrade)
+# ==========================================
+
+# 1. Sending Engine
+class SendJob(Base):
+    __tablename__ = "send_jobs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False)
+    service_account_id = Column(Integer, ForeignKey("service_accounts.id"), nullable=True) # Assigned worker SA
+    
+    status = Column(Enum(JobStatus), default=JobStatus.PENDING, index=True)
+    batch_size = Column(Integer, default=50)
+    retry_count = Column(Integer, default=0)
+    priority = Column(Integer, default=1) # 1=Low, 2=Normal, 3=High
+    
+    # Locking & Worker affinity
+    worker_node = Column(String(255)) 
+    locked_until = Column(DateTime(timezone=True))
+    
+    # Payload (IDs of recipients to process in this chunk)
+    recipient_ids = Column(JSON) # List of Contact IDs or Email hashes
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    campaign = relationship("Campaign")
+    service_account = relationship("ServiceAccount")
+
+# 2. Privacy-Safe Tracking
+class LinkMap(Base):
+    __tablename__ = "link_maps"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    original_url = Column(Text, nullable=False)
+    opaque_id = Column(String(64), unique=True, index=True) # The code in the URL
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class TrackingEvent(Base):
+    __tablename__ = "tracking_events"
+    
+    id = Column(Integer, primary_key=True, index=True) # BigInteger in Prod
+    event_type = Column(String(20), nullable=False) # 'open', 'click'
+    
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    email_log_id = Column(Integer, ForeignKey("email_logs.id"), nullable=True)
+    link_map_id = Column(Integer, ForeignKey("link_maps.id"), nullable=True)
+    
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Privacy-safe Metadata
+    user_agent = Column(Text) # Raw UA
+    user_agent_type = Column(String(50)) # 'mobile', 'desktop', 'bot'
+    geo_country = Column(String(2))
+    ip_hash = Column(String(64)) # Anonymized IP
+    
+    # Relationships
+    campaign = relationship("Campaign")
+    # email_log = relationship("EmailLog") # Optional to avoid heavy joins
+
+# 3. Enterprise Contacts (Scalable)
+class EnterpriseContact(Base):
+    __tablename__ = "contacts_enterprise"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    workspace_id = Column(Integer, default=0) # Tenant isolation
+    
+    email_hash = Column(String(64), unique=True, index=True, nullable=False) # SHA-256
+    email_encrypted = Column(Text) # Reversible if needed
+    
+    attributes = Column(JSON) # {name: "...", company: "..."}
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class ContactTag(Base):
+    __tablename__ = "contact_tags"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), unique=True, nullable=False)
+
+class ListMember(Base):
+    __tablename__ = "list_members"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    contact_list_id = Column(Integer, ForeignKey("contact_lists.id"), nullable=False, index=True)
+    contact_id = Column(Integer, ForeignKey("contacts_enterprise.id"), nullable=False, index=True)
+    
+    status = Column(String(20), default='active') # 'active', 'unsubscribed', 'bounced'
+    tags = Column(JSON) # List of tag strings
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Composite unique constraint would be added in SQL or __table_args__
+    # relationship triggers
+    enterprise_contact = relationship("EnterpriseContact")
+    contact_list = relationship("ContactList")
+
+# 4. Analytics Aggregation
+class DailyCampaignStats(Base):
+    __tablename__ = "stats_campaign_daily"
+    
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), primary_key=True)
+    date = Column(Date, primary_key=True)
+    
+    sent = Column(Integer, default=0)
+    delivered = Column(Integer, default=0)
+    opens_unique = Column(Integer, default=0)
+    clicks_unique = Column(Integer, default=0)
+    bounces = Column(Integer, default=0)
+    complaints = Column(Integer, default=0)
+    
+    last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
