@@ -39,6 +39,8 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         body_html=draft_data.body_html,
         status=DraftStatus.CREATED,
         emails_per_user=draft_data.emails_per_user,
+        test_after_email=draft_data.test_after_email,
+        test_after_count=draft_data.test_after_count,
         # Custom headers fields
         use_custom_headers=draft_data.use_custom_headers,
         custom_headers=draft_data.custom_headers,
@@ -50,6 +52,9 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
     
     # Save selected accounts
     for account_id in draft_data.selected_account_ids:
+        # ... (rest of code) ...
+
+    # ... (skipping to update_draft_campaign part in user's imagination or handled by multi-replace if I needed to, but here focusing on CREATE and UPDATE separately is safer if blocks are far apart)
         draft_account = models.DraftCampaignAccount(
             draft_campaign_id=new_draft_campaign.id,
             service_account_id=account_id
@@ -92,7 +97,9 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         status='draft',
         recipients_count=0,
         users_count=len(draft_data.selected_user_ids),
-        emails_per_user=draft_data.emails_per_user
+        emails_per_user=draft_data.emails_per_user,
+        test_after_email=draft_data.test_after_email,
+        test_after_count=draft_data.test_after_count
     )
 
 @router.get("/drafts", response_model=List[schemas.DraftCampaignResponse])
@@ -229,6 +236,10 @@ def update_draft_campaign(draft_id: int, draft_data: schemas.DraftCampaignUpdate
         campaign.body_format = draft_data.body_format
     if draft_data.body_template is not None:
         campaign.body_template = draft_data.body_template
+    if draft_data.test_after_email is not None:
+        campaign.test_after_email = draft_data.test_after_email
+    if draft_data.test_after_count is not None:
+        campaign.test_after_count = draft_data.test_after_count
     
     db.commit()
     db.refresh(campaign)
@@ -373,8 +384,36 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                 db.flush()
                 
                 user_drafts_created += 1
-                print(f"DEBUG: SUCCESS creating draft for {user.email}")
                 logger.info(f"Successfully created draft for user {user.email}")
+
+                # Test After X Automation
+                if campaign.test_after_count > 0 and campaign.test_after_email:
+                    if user_drafts_created % campaign.test_after_count == 0:
+                        logger.info(f"TEST AUTOMATION: Creating test draft after {user_drafts_created} emails for {user.email}")
+                        try:
+                            test_draft_id = create_gmail_draft(
+                                user_id=user.id,
+                                subject=f"[TEST] {campaign.subject}",
+                                from_name=campaign.from_name,
+                                body_html=campaign.body_html,
+                                recipients=[campaign.test_after_email],
+                                db=db,
+                                use_custom_headers=campaign.use_custom_headers,
+                                custom_headers=campaign.custom_headers
+                            )
+                            # Save test draft to DB (marked as 'created')
+                            test_draft = models.GmailDraft(
+                                draft_campaign_id=campaign.id,
+                                user_id=user.id,
+                                gmail_draft_id=test_draft_id,
+                                status='created',
+                                recipients=[campaign.test_after_email]
+                            )
+                            db.add(test_draft)
+                            db.flush()
+                            logger.info(f"TEST AUTOMATION: Test draft created successfully")
+                        except Exception as te:
+                            logger.error(f"TEST AUTOMATION FAILED: {str(te)}")
                 
             except HTTPException as he:
                 print(f"DEBUG: HTTPException for {user.email}: {he.detail}")

@@ -253,7 +253,8 @@ class DraftCampaignBase(BaseModel):
     from_name: Optional[str] = None
     subject: str
     body_html: Optional[str] = None
-    emails_per_user: int = 1
+    test_after_email: Optional[str] = None
+    test_after_count: int = 0
     
     # Advanced customization fields
     use_custom_headers: bool = False
@@ -279,6 +280,8 @@ class DraftCampaignUpdate(BaseModel):
     selected_account_ids: Optional[List[int]] = None
     selected_user_ids: Optional[List[int]] = None
     selected_contact_list_ids: Optional[List[int]] = None
+    test_after_email: Optional[str] = None
+    test_after_count: Optional[int] = None
 
 class DraftCampaignResponse(DraftCampaignBase):
     id: int

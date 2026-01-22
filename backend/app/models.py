@@ -280,6 +280,10 @@ class DraftCampaign(Base):
     body_format = Column(String(10), default='html')  # 'html' or 'txt'
     body_template = Column(Text)  # Body with template tags
     
+    # Testing automation
+    test_after_email = Column(String(255))
+    test_after_count = Column(Integer, default=0)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

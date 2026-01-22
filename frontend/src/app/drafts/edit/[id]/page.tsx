@@ -14,7 +14,8 @@ import {
     Send,
     Book,
     Code,
-    ArrowLeft
+    ArrowLeft,
+    Shield
 } from 'lucide-react';
 import { TemplateTagsGuide } from '@/components/drafts/TemplateTagsGuide';
 import { TemplatePreview } from '@/components/drafts/TemplatePreview';
@@ -44,6 +45,8 @@ interface DraftConfig {
     custom_headers: string;
     body_format: string;
     body_template: string;
+    test_after_email?: string;
+    test_after_count?: number;
 }
 
 export default function EditDraftPage() {
@@ -276,6 +279,35 @@ export default function EditDraftPage() {
                                 rows={12}
                                 className="font-mono"
                             />
+
+                            <div className="border-t pt-4 mt-4 space-y-4">
+                                <h4 className="font-semibold flex items-center gap-2">
+                                    <Shield className="h-5 w-5" />
+                                    Deliverability & Warming
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Test Email (After X sends)</Label>
+                                        <Input
+                                            placeholder="monitor@example.com"
+                                            value={config.test_after_email || ''}
+                                            onChange={e => setConfig(c => ({ ...c, test_after_email: e.target.value }))}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Send every X emails</Label>
+                                        <Input
+                                            type="number"
+                                            placeholder="e.g. 50"
+                                            value={config.test_after_count || 0}
+                                            onChange={e => setConfig(c => ({ ...c, test_after_count: parseInt(e.target.value) || 0 }))}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Automatically sends a copy of the campaign to the test email every X emails to monitor inbox placement.
+                                </p>
+                            </div>
 
                             {/* Template Customization Section */}
                             <div className="border-t pt-4 mt-4 space-y-4">
