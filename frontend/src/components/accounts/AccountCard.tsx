@@ -82,7 +82,7 @@ export function AccountCard({
                         </div>
                     </div>
 
-                    <div className="flex gap-1">
+                    <div className="flex gap-1 shrink-0 ml-4">
                         <Button
                             size="icon"
                             variant="outline"

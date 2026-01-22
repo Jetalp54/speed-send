@@ -255,6 +255,7 @@ class DraftCampaignBase(BaseModel):
     body_html: Optional[str] = None
     test_after_email: Optional[str] = None
     test_after_count: int = 0
+    emails_per_user: int = 1
     
     # Advanced customization fields
     use_custom_headers: bool = False
