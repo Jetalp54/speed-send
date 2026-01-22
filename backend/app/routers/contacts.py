@@ -93,10 +93,20 @@ async def delete_contact_list(list_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Contact list not found")
     
     try:
+        # Delete associations with draft campaigns first (avoid FK constraint error)
+        try:
+             # We need to import the association model or execute raw SQL
+             # Importing here to avoid circular imports if any
+             from app.models import DraftCampaignContact
+             db.query(DraftCampaignContact).filter(DraftCampaignContact.contact_list_id == list_id).delete()
+             db.flush()
+        except Exception as e:
+            logger.warning(f"Could not clear draft associations for list {list_id}: {e}")
+
         db.delete(contact_list)
         db.commit()
         
-        logger.info(f"Successfully deleted contact list: {contact_list.name}")
+        logger.info(f"Successfully deleted contact_list: {contact_list.name}")
         return {"message": "Contact list deleted successfully"}
         
     except Exception as e:
