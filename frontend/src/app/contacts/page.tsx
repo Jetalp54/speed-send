@@ -339,6 +339,18 @@ export default function ContactsPage() {
                       Paste emails separated by newlines. Valid emails only.
                     </p>
                   </div>
+                  <div className="space-y-2">
+                    <Label>Tags / Segment (ISP, Geo)</Label>
+                    <Input
+                      placeholder="e.g. Gmail, US, High-Value"
+                      onChange={(e) => {
+                        // Append tags to description for now as a simple solution
+                        const currentDesc = description.split(' | Tags:')[0];
+                        setDescription(e.target.value ? `${currentDesc} | Tags: ${e.target.value}` : currentDesc);
+                      }}
+                    />
+                    <p className="text-[10px] text-muted-foreground">Appended to list description.</p>
+                  </div>
                 </CardContent>
                 <CardFooter className="flex justify-between border-t pt-4 bg-slate-50 dark:bg-slate-800/50 rounded-b-xl">
                   <Button variant="ghost" onClick={() => setShowEditor(false)}>Cancel</Button>

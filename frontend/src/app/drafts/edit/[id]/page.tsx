@@ -77,13 +77,7 @@ export default function EditDraftPage() {
     const [showTestEmail, setShowTestEmail] = useState(false);
     const [testEmail, setTestEmail] = useState('');
 
-    useEffect(() => {
-        if (params.id) {
-            fetchDraftDetails(params.id as string);
-        }
-    }, [params.id]);
-
-    const fetchDraftDetails = async (id: string) => {
+    const fetchDraftDetails = React.useCallback(async (id: string) => {
         setLoading(true);
         try {
             const response = await apiClient.request(`/api/v1/drafts/${id}`);
@@ -96,7 +90,7 @@ export default function EditDraftPage() {
                 body_html: data.body_html || '',
                 from_name: data.from_name || '',
                 use_custom_headers: data.use_custom_headers || false,
-                custom_headers: data.custom_headers || config.custom_headers,
+                custom_headers: data.custom_headers || '',
                 body_format: data.body_format || 'html',
                 body_template: data.body_template || ''
             });
@@ -105,7 +99,13 @@ export default function EditDraftPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [params.id]); // Only re-create if ID changes (though usually ID comes from args, so empty dep array is fine if ID is arg)
+
+    useEffect(() => {
+        if (params.id) {
+            fetchDraftDetails(params.id as string);
+        }
+    }, [params.id, fetchDraftDetails]);
 
     const updateDraft = async () => {
         // Validate
