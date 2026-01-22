@@ -309,8 +309,11 @@ def delete_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to delete draft campaign {draft_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete draft: {str(e)}")
+        error_msg = str(e)
+        if hasattr(e, 'orig') and hasattr(e.orig, 'pgerror'):
+            error_msg += f" | DB Error: {e.orig.pgerror}"
+        logger.error(f"Failed to delete draft campaign {draft_id}: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete draft: {error_msg}")
     
     return {"detail": f"Draft campaign '{campaign.name}' and all its associated data have been deleted."}
 
