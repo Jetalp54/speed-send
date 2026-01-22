@@ -165,7 +165,7 @@ def get_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
     Get a specific draft campaign with its associations.
     """
     campaign = db.query(models.DraftCampaign).options(
-        joinedload(models.DraftCampaign.selected_accounts).joinedload(models.DraftCampaignAccount.account),
+        joinedload(models.DraftCampaign.selected_accounts).joinedload(models.DraftCampaignAccount.service_account),
         joinedload(models.DraftCampaign.selected_users).joinedload(models.DraftCampaignUser.user),
         joinedload(models.DraftCampaign.selected_contacts).joinedload(models.DraftCampaignContact.contact_list),
         joinedload(models.DraftCampaign.gmail_drafts).joinedload(models.GmailDraft.user)

@@ -39,8 +39,8 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
     
     emails_failed_today = db.query(func.count(EmailLog.id)).filter(
         EmailLog.status == EmailStatus.FAILED,
-        EmailLog.failed_at >= today,
-        EmailLog.failed_at < tomorrow
+        EmailLog.created_at >= today,
+        EmailLog.created_at < tomorrow
     ).scalar() or 0
     
     # Quota usage by account
