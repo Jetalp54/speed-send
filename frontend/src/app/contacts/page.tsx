@@ -170,15 +170,17 @@ export default function ContactsPage() {
   };
 
   // Async Upload
-  const handleUpload = async (file: File, listName: string) => {
+  const handleUpload = async (file: File, listName: string, metadata: { type: string, isp: string, geo: string }) => {
     try {
       setShowUpload(false);
       setLoading(true);
 
+      const desc = `Imported via CSV | Type: ${metadata.type} | ISP: ${metadata.isp} | Geo: ${metadata.geo}`;
+
       const listRes = await fetch(`${API_URL}/api/v1/contacts/lists`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: listName, description: "Imported via CSV" }),
+        body: JSON.stringify({ name: listName, description: desc }),
       });
       if (!listRes.ok) throw new Error("Failed to create list");
       const listData = await listRes.json();
