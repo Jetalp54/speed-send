@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { API_URL } from '@/lib/api';
 import { UploadModal } from '@/components/data-lists/UploadModal';
-import { toast } from '@/components/ui/use-toast';
+
 
 type Contact = {
   id: number;
@@ -146,7 +146,7 @@ export default function ContactsPage() {
 
       await loadLists();
       startNew();
-      toast({ title: "Success", description: "List saved successfully." });
+      alert("List saved successfully.");
     } catch (error) {
       console.error('Failed to save contact list:', error);
       alert('Failed to save contact list. Please try again.');
@@ -199,10 +199,7 @@ export default function ContactsPage() {
       if (!uploadRes.ok) throw new Error("Failed to upload file");
       const uploadData = await uploadRes.json();
 
-      toast({
-        title: "Import Started",
-        description: `Task ID: ${uploadData.task_id}. Check status in a few minutes.`
-      });
+      alert(`Import Started. Task ID: ${uploadData.task_id}. Check status in a few minutes.`);
 
       await loadLists();
     } catch (e: any) {
