@@ -293,8 +293,24 @@ def delete_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
     if not campaign:
         raise HTTPException(status_code=404, detail="Draft campaign not found")
 
-    db.delete(campaign)
-    db.commit()
+    try:
+        # Manual Cascade Deletion (Enterprise Reliability)
+        # 1. Delete associations
+        from sqlalchemy import text
+        db.execute(text("DELETE FROM draft_campaign_accounts WHERE draft_campaign_id = :id"), {"id": draft_id})
+        db.execute(text("DELETE FROM draft_campaign_users WHERE draft_campaign_id = :id"), {"id": draft_id})
+        db.execute(text("DELETE FROM draft_campaign_contacts WHERE draft_campaign_id = :id"), {"id": draft_id})
+        
+        # 2. Delete generated drafts
+        db.execute(text("DELETE FROM gmail_drafts WHERE draft_campaign_id = :id"), {"id": draft_id})
+        
+        # 3. Delete the campaign itself
+        db.delete(campaign)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete draft campaign {draft_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete draft: {str(e)}")
     
     return {"detail": f"Draft campaign '{campaign.name}' and all its associated data have been deleted."}
 
