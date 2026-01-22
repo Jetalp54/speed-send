@@ -98,8 +98,15 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         recipients_count=0,
         users_count=len(draft_data.selected_user_ids),
         emails_per_user=draft_data.emails_per_user,
-        test_after_email=draft_data.test_after_email,
-        test_after_count=draft_data.test_after_count
+        # Content fields
+        body_html=new_draft_campaign.body_html,
+        use_custom_headers=new_draft_campaign.use_custom_headers,
+        custom_headers=new_draft_campaign.custom_headers,
+        body_format=new_draft_campaign.body_format,
+        body_template=new_draft_campaign.body_template,
+        # Test fields
+        test_after_email=new_draft_campaign.test_after_email,
+        test_after_count=new_draft_campaign.test_after_count or 0
     )
 
 @router.get("/drafts", response_model=List[schemas.DraftCampaignResponse])
@@ -205,7 +212,16 @@ def get_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         status=campaign.status or DraftStatus.CREATED.value,
         recipients_count=recipients_count,
         users_count=len(campaign.selected_users),
-        emails_per_user=campaign.emails_per_user or 0
+        emails_per_user=campaign.emails_per_user or 0,
+        # Content fields
+        body_html=campaign.body_html,
+        use_custom_headers=campaign.use_custom_headers,
+        custom_headers=campaign.custom_headers,
+        body_format=campaign.body_format,
+        body_template=campaign.body_template,
+        # Test fields
+        test_after_email=campaign.test_after_email,
+        test_after_count=campaign.test_after_count or 0
     )
 
 # Redundant get_draft_campaign removed (it was defined twice in original file)
@@ -255,7 +271,16 @@ def update_draft_campaign(draft_id: int, draft_data: schemas.DraftCampaignUpdate
         status=campaign.status or DraftStatus.CREATED.value,
         recipients_count=0,
         users_count=0,
-        emails_per_user=campaign.emails_per_user or 0
+        emails_per_user=campaign.emails_per_user or 0,
+        # Content fields
+        body_html=campaign.body_html,
+        use_custom_headers=campaign.use_custom_headers,
+        custom_headers=campaign.custom_headers,
+        body_format=campaign.body_format,
+        body_template=campaign.body_template,
+        # Test fields
+        test_after_email=campaign.test_after_email,
+        test_after_count=campaign.test_after_count or 0
     )
 
 @router.delete("/drafts/{draft_id}")
