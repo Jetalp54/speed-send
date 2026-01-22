@@ -120,18 +120,50 @@ export default function ContactsPage() {
         listId_local = result.id;
       }
 
-      // Handle Manual Recipients
-      if (emailsText.trim()) {
-        const contacts = Array.from(new Set(
+      // Handle Manual Recipients (Sync Logic: Add & Remove)
+      if (emailsText.trim() || (editing && editing.contacts.length > 0)) {
+        // Parse current emails from text area
+        const currentEmails = new Set(
           emailsText.split(/\n|,|\s+/).map(s => s.trim()).filter(s => s.includes('@'))
-        )).map(email => {
-          const parts = email.split('@');
-          return { email, first_name: parts[0] };
+        );
+
+        // Parse existing emails (if editing)
+        const existingEmailsMap = new Map();
+        if (editing && editing.contacts) {
+          editing.contacts.forEach((c: any) => existingEmailsMap.set(c.email, c.id));
+        }
+
+        // Calculate Diff
+        const toAdd: { email: string; first_name: string }[] = [];
+        const toDeleteIds: number[] = [];
+
+        // Find emails to ADD (in text but not in existing)
+        currentEmails.forEach(email => {
+          if (!existingEmailsMap.has(email)) {
+            const parts = email.split('@');
+            toAdd.push({ email, first_name: parts[0] });
+          }
         });
 
-        if (contacts.length > 0) {
-          // Simplified bulk add loop
-          for (const contact of contacts) {
+        // Find emails to DELETE (in existing but not in text)
+        existingEmailsMap.forEach((id, email) => {
+          if (!currentEmails.has(email)) {
+            toDeleteIds.push(id);
+          }
+        });
+
+        console.log(`Syncing List: Adding ${toAdd.length}, Deleting ${toDeleteIds.length}`);
+
+        // Execute DELETES
+        for (const contactId of toDeleteIds) {
+          await fetch(`${API_URL}/api/v1/contacts/${contactId}`, {
+            method: 'DELETE',
+          });
+        }
+
+        // Execute ADDS
+        if (toAdd.length > 0) {
+          for (const contact of toAdd) {
             await fetch(`${API_URL}/api/v1/contacts/`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },

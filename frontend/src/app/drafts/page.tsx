@@ -130,16 +130,30 @@ const DraftsPage: React.FC = () => {
 
   const duplicateDraft = async (draftId: number) => {
     try {
-      const originalDraft = draftCampaigns.find(d => d.id === draftId);
-      if (!originalDraft) return;
+      // Fetch full details first to get all fields
+      const detailResponse = await apiClient.request(`/api/v1/drafts/${draftId}`);
+      if (detailResponse.error) throw new Error("Failed to fetch draft details for duplication");
+      const fullDraft = detailResponse.data;
 
       const response = await apiClient.request('/api/v1/drafts', {
         method: 'POST',
         body: JSON.stringify({
-          name: `${originalDraft.name} (Copy)`,
-          subject: originalDraft.subject,
-          from_name: originalDraft.from_name,
-          body_html: originalDraft.body_html
+          name: `${fullDraft.name} (Copy)`,
+          subject: fullDraft.subject,
+          from_name: fullDraft.from_name,
+          body_html: fullDraft.body_html,
+          // Include required fields (default to empty selection for safety, or copy if desired)
+          selected_account_ids: [],
+          selected_user_ids: [],
+          selected_contact_list_ids: [],
+          // Copy advanced config
+          use_custom_headers: fullDraft.use_custom_headers,
+          custom_headers: fullDraft.custom_headers,
+          body_format: fullDraft.body_format,
+          body_template: fullDraft.body_template,
+          test_after_email: fullDraft.test_after_email,
+          test_after_count: fullDraft.test_after_count,
+          emails_per_user: fullDraft.emails_per_user
         })
       });
       if (response.error) throw new Error(response.error);

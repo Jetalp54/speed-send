@@ -85,8 +85,8 @@ export function AccountCard({
                     <div className="flex gap-1">
                         <Button
                             size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-slate-500 hover:text-blue-600"
+                            variant="outline"
+                            className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 border-blue-200"
                             onClick={() => onSync(account.id)}
                             disabled={isSyncing || isDeleting}
                             title="Sync Users"
@@ -95,8 +95,8 @@ export function AccountCard({
                         </Button>
                         <Button
                             size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-slate-500 hover:text-red-600"
+                            variant="outline"
+                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                             onClick={() => onDelete(account.id)}
                             disabled={isSyncing || isDeleting}
                             title="Delete Account"
