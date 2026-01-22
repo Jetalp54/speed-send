@@ -31,15 +31,15 @@ export default function Dashboard() {
     }
   };
 
-  // Mock data for the chart if real data isn't available yet
-  const chartData = [
-    { name: 'Mon', sent: 4000 },
-    { name: 'Tue', sent: 3000 },
-    { name: 'Wed', sent: 2000 },
-    { name: 'Thu', sent: 2780 },
-    { name: 'Fri', sent: 1890 },
-    { name: 'Sat', sent: 2390 },
-    { name: 'Sun', sent: 3490 },
+  // Use real history data if available, otherwise mock for initial load
+  const chartData = stats?.history || [
+    { name: 'Mon', sent: 0 },
+    { name: 'Tue', sent: 0 },
+    { name: 'Wed', sent: 0 },
+    { name: 'Thu', sent: 0 },
+    { name: 'Fri', sent: 0 },
+    { name: 'Sat', sent: 0 },
+    { name: 'Sun', sent: 0 },
   ];
 
   if (loading) {
@@ -200,7 +200,7 @@ export default function Dashboard() {
                         <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all duration-500 ${usage.percentage > 90 ? 'bg-red-500' :
-                                usage.percentage > 70 ? 'bg-amber-500' : 'bg-blue-500'
+                              usage.percentage > 70 ? 'bg-amber-500' : 'bg-blue-500'
                               }`}
                             style={{ width: `${Math.min(usage.percentage, 100)}%` }}
                           />

@@ -62,6 +62,24 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
             "percentage": round((total_sent / total_quota * 100) if total_quota > 0 else 0, 2)
         }
     
+    # Calculate History (Last 7 Days)
+    history = []
+    for i in range(6, -1, -1):
+        date = today - timedelta(days=i)
+        next_date = date + timedelta(days=1)
+        
+        sent_count = db.query(func.count(EmailLog.id)).filter(
+            EmailLog.status == EmailStatus.SENT,
+            EmailLog.sent_at >= date,
+            EmailLog.sent_at < next_date
+        ).scalar() or 0
+        
+        history.append({
+            "name": date.strftime("%a"), # Mon, Tue...
+            "date": date.strftime("%Y-%m-%d"),
+            "sent": sent_count
+        })
+
     return DashboardStats(
         total_service_accounts=total_service_accounts,
         total_users=total_users,
@@ -70,7 +88,8 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
         completed_campaigns=completed_campaigns,
         emails_sent_today=emails_sent_today,
         emails_failed_today=emails_failed_today,
-        # quota_usage=quota_usage
+        quota_usage=quota_usage,
+        history=history
     )
 
 

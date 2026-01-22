@@ -361,6 +361,7 @@ class DashboardStats(BaseModel):
     emails_failed_today: int
     success_rate: float
     quota_usage: Dict[str, Any]
+    history: List[Dict[str, Any]] = []
 
 # Campaign Control Schemas
 class CampaignControl(BaseModel):

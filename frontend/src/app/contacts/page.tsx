@@ -2,50 +2,61 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { API_URL } from '@/lib/api';
 import { UploadModal } from '@/components/data-lists/UploadModal';
-
-
-type Contact = {
-  id: number;
-  first_name: string;
-  last_name: string;
-  email: string;
-  company?: string;
-  position?: string;
-  city?: string;
-  country?: string;
-};
+import {
+  Contact,
+  Search,
+  Plus,
+  Upload,
+  Trash2,
+  Edit2,
+  MoreVertical,
+  Download,
+  Users,
+  Copy,
+  RefreshCw
+} from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from '@/components/ui/badge';
 
 type ContactList = {
   id: number;
   name: string;
   description?: string;
-  contacts: Contact[];
+  contacts: any[]; // simplified for now
 };
 
 export default function ContactsPage() {
   const [lists, setLists] = useState<ContactList[]>([]);
   const [editing, setEditing] = useState<ContactList | null>(null);
+
+  // Form State
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [emailsText, setEmailsText] = useState('');
+
+  // View State
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
 
   const loadLists = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`${API_URL}/api/v1/contacts/lists`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch contact lists');
-      }
+      if (!response.ok) throw new Error('Failed to fetch contact lists');
       const data = await response.json();
       setLists(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -61,8 +72,7 @@ export default function ContactsPage() {
   }, [loadLists]);
 
   const filtered = useMemo(() => {
-    return lists
-      .filter(l => !search || l.name.toLowerCase().includes(search.toLowerCase()))
+    return lists.filter(l => !search || l.name.toLowerCase().includes(search.toLowerCase()));
   }, [lists, search]);
 
   const startNew = () => {
@@ -70,13 +80,15 @@ export default function ContactsPage() {
     setName('');
     setDescription('');
     setEmailsText('');
+    setShowEditor(true);
   };
 
   const startEdit = (list: ContactList) => {
     setEditing(list);
     setName(list.name);
     setDescription(list.description || '');
-    setEmailsText(list.contacts.map(c => c.email).join('\n'));
+    setEmailsText(list.contacts.map((c: any) => c.email).join('\n'));
+    setShowEditor(true);
   };
 
   const save = async () => {
@@ -84,7 +96,6 @@ export default function ContactsPage() {
 
     try {
       setLoading(true);
-
       const payload = {
         name: name.trim(),
         description: description.trim() || undefined,
@@ -93,7 +104,6 @@ export default function ContactsPage() {
       let listId_local;
 
       if (editing) {
-        // Update existing list
         await fetch(`${API_URL}/api/v1/contacts/lists/${editing.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -101,7 +111,6 @@ export default function ContactsPage() {
         });
         listId_local = editing.id;
       } else {
-        // Create new list
         const response = await fetch(`${API_URL}/api/v1/contacts/lists`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -116,40 +125,31 @@ export default function ContactsPage() {
         const contacts = Array.from(new Set(
           emailsText.split(/\n|,|\s+/).map(s => s.trim()).filter(s => s.includes('@'))
         )).map(email => {
-          const namePart = email.split('@')[0];
-          const nameParts = namePart.split('.');
-          const firstName = nameParts[0] || '';
-          const lastName = nameParts.slice(1).join('.') || '';
-          return {
-            first_name: firstName,
-            last_name: lastName,
-            email: email
-          };
+          const parts = email.split('@');
+          return { email, first_name: parts[0] };
         });
 
         if (contacts.length > 0) {
+          // Simplified bulk add loop
           for (const contact of contacts) {
-            const contactPayload = {
-              contact_list_id: listId_local,
-              email: contact.email,
-              first_name: contact.first_name,
-              last_name: contact.last_name
-            };
             await fetch(`${API_URL}/api/v1/contacts/`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(contactPayload),
+              body: JSON.stringify({
+                contact_list_id: listId_local,
+                email: contact.email,
+                first_name: contact.first_name
+              }),
             });
           }
         }
       }
 
       await loadLists();
-      startNew();
-      alert("List saved successfully.");
+      setShowEditor(false);
     } catch (error) {
-      console.error('Failed to save contact list:', error);
-      alert('Failed to save contact list. Please try again.');
+      console.error('Failed to save:', error);
+      alert('Failed to save list.');
     } finally {
       setLoading(false);
     }
@@ -159,10 +159,9 @@ export default function ContactsPage() {
     if (!confirm('Delete this list?')) return;
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/api/v1/contacts/lists/${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('Failed');
+      await fetch(`${API_URL}/api/v1/contacts/lists/${id}`, { method: 'DELETE' });
       await loadLists();
-      if (editing?.id === id) startNew();
+      if (editing?.id === id) setShowEditor(false);
     } catch (error) {
       console.error(error);
     } finally {
@@ -170,37 +169,30 @@ export default function ContactsPage() {
     }
   };
 
-  // Enterprise Async Upload
+  // Async Upload
   const handleUpload = async (file: File, listName: string) => {
     try {
       setShowUpload(false);
       setLoading(true);
 
-      // 1. Create List
-      const listPayload = { name: listName, description: "Imported via CSV" };
       const listRes = await fetch(`${API_URL}/api/v1/contacts/lists`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(listPayload),
+        body: JSON.stringify({ name: listName, description: "Imported via CSV" }),
       });
       if (!listRes.ok) throw new Error("Failed to create list");
       const listData = await listRes.json();
-      const listId = listData.id;
 
-      // 2. Upload CSV
       const formData = new FormData();
       formData.append('file', file);
-      // Backend expects query param `list_id`
-      const uploadRes = await fetch(`${API_URL}/api/v1/contacts-enterprise/import/async?list_id=${listId}`, {
+
+      const uploadRes = await fetch(`${API_URL}/api/v1/contacts-enterprise/import/async?list_id=${listData.id}`, {
         method: 'POST',
         body: formData,
       });
 
       if (!uploadRes.ok) throw new Error("Failed to upload file");
-      const uploadData = await uploadRes.json();
-
-      alert(`Import Started. Task ID: ${uploadData.task_id}. Check status in a few minutes.`);
-
+      alert(`Import Started. Check back in a few minutes.`);
       await loadLists();
     } catch (e: any) {
       console.error(e);
@@ -211,86 +203,162 @@ export default function ContactsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background font-sans">
       <Sidebar />
-      <div className="flex-1 overflow-auto p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">Contact Lists</h1>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={loadLists}>Refresh</Button>
-            <Button variant="secondary" onClick={() => setShowUpload(true)}>Import CSV (Bulk)</Button>
-            <Button onClick={startNew}>New List (Manual)</Button>
+      <div className="flex-1 overflow-auto bg-slate-50/50 dark:bg-slate-950/50">
+        <div className="p-8 max-w-7xl mx-auto space-y-8">
+
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">
+                Contact Lists
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Organize your recipients into segmented lists.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={loadLists} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+              <Button variant="secondary" onClick={() => setShowUpload(true)}>
+                <Upload className="h-4 w-4 mr-2" />
+                Bulk Import
+              </Button>
+              <Button onClick={startNew}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create List
+              </Button>
+            </div>
           </div>
-        </div>
 
-        {showUpload && (
-          <UploadModal
-            onClose={() => setShowUpload(false)}
-            onUpload={handleUpload}
-          />
-        )}
+          {/* Content Grid */}
+          <div className={`grid gap-6 ${showEditor ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}`}>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Editor */}
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle>{editing ? `Edit: ${editing.name}` : 'Create New List'}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label htmlFor="l-name">Name</Label>
-                <Input id="l-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Elite Buyers US" />
+            {/* Main List View */}
+            <div className={showEditor ? "lg:col-span-2" : "lg:col-span-1"}>
+              <div className="mb-4 flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search lists..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9 bg-white dark:bg-slate-900"
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="l-description">Description (optional)</Label>
-                <Input id="l-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of this list" />
-              </div>
-              <div>
-                <Label htmlFor="l-emails">Emails (one per line)</Label>
-                <Textarea id="l-emails" rows={12} value={emailsText} onChange={(e) => setEmailsText(e.target.value)} placeholder={'email1@example.com\nemail2@example.com'} />
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={save}>Save</Button>
-                {editing && <Button variant="outline" onClick={() => remove(editing.id)}>Delete</Button>}
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Lists & Filters */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Lists</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                <Input placeholder="Search by name..." value={search} onChange={(e) => setSearch(e.target.value)} />
-                <Button variant="outline" onClick={() => { setSearch(''); }}>Clear Filters</Button>
-              </div>
-              <div className="max-h-[60vh] overflow-auto divide-y border rounded">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {filtered.map(list => (
-                  <div key={list.id} className="p-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{list.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {list.contacts?.length || 0} contacts
-                        {list.description && ` • ${list.description}`}
+                  <Card key={list.id} className="group hover:shadow-md transition-all border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                    <CardHeader className="pb-3">
+                      <div className="flex justify-between items-start">
+                        <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                          <Users className="h-5 w-5" />
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => startEdit(list)}>
+                              <Edit2 className="h-4 w-4 mr-2" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              navigator.clipboard.writeText(list.contacts.map((c: any) => c.email).join('\n'));
+                            }}>
+                              <Copy className="h-4 w-4 mr-2" /> Copy Emails
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600" onClick={() => remove(list.id)}>
+                              <Trash2 className="h-4 w-4 mr-2" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" onClick={() => startEdit(list)}>Edit</Button>
-                      <Button size="sm" onClick={() => {
-                        // Quick copy to clipboard
-                        navigator.clipboard.writeText(list.contacts.map(c => c.email).join('\n'));
-                      }}>Copy Emails</Button>
-                    </div>
-                  </div>
+                      <CardTitle className="mt-3 text-base font-semibold">{list.name}</CardTitle>
+                      <CardDescription className="line-clamp-1 h-5 text-xs">
+                        {list.description || "No description"}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pb-4 pt-0">
+                      <div className="flex items-center justify-between text-sm mt-2">
+                        <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-normal">
+                          {list.contacts?.length || 0} contacts
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">ID: {list.id}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
-                {filtered.length === 0 && (
-                  <div className="p-6 text-center text-sm text-muted-foreground">No lists yet. Create one on the left.</div>
-                )}
               </div>
-            </CardContent>
-          </Card>
+
+              {filtered.length === 0 && (
+                <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                  <div className="mx-auto h-12 w-12 text-slate-300">
+                    <Users className="h-full w-full" />
+                  </div>
+                  <h3 className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">No lists found</h3>
+                  <p className="mt-1 text-sm text-slate-500">Get started by creating a new list.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Editor Panel (Slide Over / Sidebar style) */}
+            {showEditor && (
+              <Card className="h-fit bg-white dark:bg-slate-900 border-l-4 border-l-blue-500 shadow-xl">
+                <CardHeader>
+                  <CardTitle>{editing ? 'Edit List' : 'New List'}</CardTitle>
+                  <CardDescription>
+                    {editing ? `Updating ${editing.name}` : 'Create a new contact segment'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>List Name</Label>
+                    <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. VIP Customers" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Waitlist signups..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Quick Add Emails</Label>
+                    <Textarea
+                      value={emailsText}
+                      onChange={e => setEmailsText(e.target.value)}
+                      placeholder="paste@emails.com"
+                      rows={8}
+                      className="font-mono text-xs resize-none"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Paste emails separated by newlines. Valid emails only.
+                    </p>
+                  </div>
+                </CardContent>
+                <CardFooter className="flex justify-between border-t pt-4 bg-slate-50 dark:bg-slate-800/50 rounded-b-xl">
+                  <Button variant="ghost" onClick={() => setShowEditor(false)}>Cancel</Button>
+                  <Button onClick={save} disabled={loading}>
+                    {loading && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                    Save List
+                  </Button>
+                </CardFooter>
+              </Card>
+            )}
+
+          </div>
+
+          {showUpload && (
+            <UploadModal
+              onClose={() => setShowUpload(false)}
+              onUpload={handleUpload}
+            />
+          )}
+
         </div>
       </div>
     </div>
