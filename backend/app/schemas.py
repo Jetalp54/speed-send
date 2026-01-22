@@ -25,10 +25,18 @@ class EmailStatus(str, Enum):
     BOUNCED = "bounced"
 
 class DraftStatus(str, Enum):
-    DRAFT = "draft"
-    UPLOADED = "uploaded"
-    LAUNCHED = "launched"
+    DRAFT = "draft" # Legacy
+    CREATED = "created"
+    UPLOADING = "uploading"
+    READY = "ready"
+    SCHEDULED = "scheduled"
+    SENDING = "sending"
+    PAUSED = "paused"
+    COMPLETED = "completed"
     FAILED = "failed"
+    CANCELED = "canceled"
+    UPLOADED = "uploaded" # Legacy
+    LAUNCHED = "launched" # Legacy
 
 # Service Account Schemas
 class ServiceAccountBase(BaseModel):

@@ -34,6 +34,7 @@ class DraftStatus(str, enum.Enum):
     PAUSED = "paused"         # Stopped by user/system
     COMPLETED = "completed"   # All sent
     FAILED = "failed"         # Critical error
+    CANCELED = "canceled"     # Stopped by user
 
 class JobStatus(str, enum.Enum):
     PENDING = "pending"
