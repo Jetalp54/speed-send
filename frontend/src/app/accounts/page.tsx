@@ -7,6 +7,7 @@ import { serviceAccountsApi, healthCheck, API_URL } from '@/lib/api';
 import { Plus, Wifi, WifiOff, ShieldCheck } from 'lucide-react';
 import { AccountCard, ServiceAccount } from '@/components/accounts/AccountCard';
 import { UploadAccountDialog } from '@/components/accounts/UploadAccountDialog';
+import { EditAccountDialog } from '@/components/accounts/EditAccountDialog';
 import { Toast } from '@/components/ui/toast';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -15,6 +16,23 @@ export default function AccountsPage() {
   const [loading, setLoading] = useState(true);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [backendStatus, setBackendStatus] = useState<boolean | null>(null);
+
+  // Edit state
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<ServiceAccount | null>(null);
+
+  const handleUpdate = async (id: number, data: any) => {
+    try {
+      const response = await serviceAccountsApi.update(id, data);
+      if (response.error) throw response.error;
+      showToast(`Account "${data.name}" updated successfully`, 'success');
+      loadAccounts();
+      setIsEditOpen(false);
+    } catch (error: any) {
+      console.error("Update failed:", error);
+      showToast(`Failed to update: ${formatError(error)}`, 'error');
+    }
+  };
 
   // Action states
   const [syncingIds, setSyncingIds] = useState<number[]>([]);
@@ -141,8 +159,8 @@ export default function AccountsPage() {
 
               {backendStatus !== null && (
                 <div className={`mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${backendStatus
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800'
-                    : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800'
+                  : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
                   }`}>
                   {backendStatus ? (
                     <>
@@ -200,6 +218,10 @@ export default function AccountsPage() {
                   account={account}
                   onSync={handleSync}
                   onDelete={handleDelete}
+                  onEdit={(acc) => {
+                    setEditingAccount(acc);
+                    setIsEditOpen(true);
+                  }}
                   isSyncing={syncingIds.includes(account.id)}
                   isDeleting={deletingIds.includes(account.id)}
                 />
@@ -211,6 +233,13 @@ export default function AccountsPage() {
             open={isUploadOpen}
             onOpenChange={setIsUploadOpen}
             onUpload={handleUpload}
+          />
+
+          <EditAccountDialog
+            open={isEditOpen}
+            onOpenChange={setIsEditOpen}
+            account={editingAccount}
+            onSave={handleUpdate}
           />
 
           {toast && (

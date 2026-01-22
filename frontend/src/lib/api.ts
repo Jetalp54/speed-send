@@ -70,6 +70,7 @@ export const serviceAccountsApi = {
   list: () => apiClient.request(`/api/v1/accounts`),
   create: (payload: any) => apiClient.request(`/api/v1/accounts`, { method: 'POST', body: JSON.stringify(payload) }),
   delete: (id: number | string) => apiClient.request(`/api/v1/accounts/${id}`, { method: 'DELETE' }),
+  update: (id: number | string, payload: any) => apiClient.request(`/api/v1/accounts/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   // Note: backend sync endpoint may not exist yet; frontend expects it.
   sync: (id: number | string, admin_email: string) =>
     apiClient.request(`/api/v1/accounts/${id}/sync`, { method: 'POST', body: JSON.stringify({ admin_email }) }),

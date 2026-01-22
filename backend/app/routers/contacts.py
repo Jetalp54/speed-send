@@ -95,13 +95,14 @@ async def delete_contact_list(list_id: int, db: Session = Depends(get_db)):
     try:
         # Delete associations with draft campaigns first (avoid FK constraint error)
         try:
-             # We need to import the association model or execute raw SQL
-             # Importing here to avoid circular imports if any
              from app.models import DraftCampaignContact
-             db.query(DraftCampaignContact).filter(DraftCampaignContact.contact_list_id == list_id).delete()
+             # Use synchronize_session=False for bulk delete
+             db.query(DraftCampaignContact).filter(DraftCampaignContact.contact_list_id == list_id).delete(synchronize_session=False)
              db.flush()
         except Exception as e:
-            logger.warning(f"Could not clear draft associations for list {list_id}: {e}")
+            logger.error(f"Could not clear draft associations for list {list_id}: {e}")
+            # Do not suppress, let it fail so we know
+            raise 
 
         db.delete(contact_list)
         db.commit()

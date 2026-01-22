@@ -13,7 +13,8 @@ import {
     CheckCircle2,
     XCircle,
     AlertTriangle,
-    Shield
+    Shield,
+    Pencil
 } from 'lucide-react';
 
 export interface ServiceAccount {
@@ -33,6 +34,7 @@ interface AccountCardProps {
     account: ServiceAccount;
     onSync: (id: number) => void;
     onDelete: (id: number) => void;
+    onEdit?: (account: ServiceAccount) => void;
     isSyncing?: boolean;
     isDeleting?: boolean;
 }
@@ -41,6 +43,7 @@ export function AccountCard({
     account,
     onSync,
     onDelete,
+    onEdit,
     isSyncing = false,
     isDeleting = false
 }: AccountCardProps) {
@@ -92,6 +95,16 @@ export function AccountCard({
                             title="Sync Users"
                         >
                             <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                        </Button>
+                        <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 border-amber-200"
+                            onClick={() => onEdit && onEdit(account)}
+                            disabled={isSyncing || isDeleting}
+                            title="Edit Account"
+                        >
+                            <Pencil className="h-4 w-4" />
                         </Button>
                         <Button
                             size="icon"

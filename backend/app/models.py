@@ -322,8 +322,8 @@ class DraftCampaignContact(Base):
     __tablename__ = "draft_campaign_contacts"
     
     id = Column(Integer, primary_key=True, index=True)
-    draft_campaign_id = Column(Integer, ForeignKey("draft_campaigns.id"), nullable=False)
-    contact_list_id = Column(Integer, ForeignKey("contact_lists.id"), nullable=False)
+    draft_campaign_id = Column(Integer, ForeignKey("draft_campaigns.id", ondelete="CASCADE"), nullable=False)
+    contact_list_id = Column(Integer, ForeignKey("contact_lists.id", ondelete="CASCADE"), nullable=False)
     
     # Relationships
     draft_campaign = relationship("DraftCampaign", back_populates="selected_contacts")

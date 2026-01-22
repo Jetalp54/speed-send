@@ -61,6 +61,8 @@ interface DraftConfig {
   custom_headers: string;
   body_format: string;
   body_template: string;
+  test_after_email: string;
+  test_after_count: number;
 }
 
 export default function NewDraftPage() {
@@ -79,9 +81,11 @@ export default function NewDraftPage() {
     body_html: '',
     from_name: '',
     use_custom_headers: false,
-    custom_headers: '', // Initialize empty!
+    custom_headers: '',
     body_format: 'html',
-    body_template: ''
+    body_template: '',
+    test_after_email: '',
+    test_after_count: 0
   });
 
   const DEFAULT_HEADERS = `MIME-version: 1.0\nContent-type: text/html\nTo: [to]\nfrom: [from] <[smtp]>\nSubject: [subject]\nDate: [date]\nMessage-ID: [Message-ID]`;
@@ -472,6 +476,36 @@ export default function NewDraftPage() {
                         }}
                       />
                     )}
+                  </div>
+
+                  {/* Deliverability & Warming Section */}
+                  <div className="border-t pt-4 mt-4 space-y-4">
+                    <h4 className="font-semibold flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      Deliverability & Warming
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Test Email (After X sends)</Label>
+                        <Input
+                          placeholder="monitor@example.com"
+                          value={config.test_after_email}
+                          onChange={e => setConfig(c => ({ ...c, test_after_email: e.target.value }))}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Send a copy here periodically.</p>
+                      </div>
+                      <div>
+                        <Label>Send every X emails</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0 (Disabled)"
+                          value={config.test_after_count}
+                          onChange={e => setConfig(c => ({ ...c, test_after_count: parseInt(e.target.value) || 0 }))}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">E.g. 50 = Send test email every 50 drafts.</p>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
