@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
-import { serviceAccountsApi, usersApi, dataListsApi, API_URL, apiClient } from '@/lib/api';
+import { serviceAccountsApi, usersApi, dataListsApi, draftsApi, API_URL, apiClient } from '@/lib/api';
 
 interface DraftCampaign {
   id: number;
@@ -168,7 +168,7 @@ const DraftsPage: React.FC = () => {
     if (!confirm('Are you sure you want to delete this draft?')) return;
 
     try {
-      const response = await apiClient.request(`/api/v1/drafts/${draftId}`, { method: 'DELETE' });
+      const response = await draftsApi.delete(draftId);
       if (response.error) throw new Error(response.error);
       setDraftCampaigns(prev => prev.filter(d => d.id !== draftId));
     } catch (err: any) {

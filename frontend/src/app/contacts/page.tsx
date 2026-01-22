@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { API_URL } from '@/lib/api';
+import { API_URL, contactsApi } from '@/lib/api';
 import { UploadModal } from '@/components/data-lists/UploadModal';
 import {
   Contact,
@@ -191,11 +191,12 @@ export default function ContactsPage() {
     if (!confirm('Delete this list?')) return;
     try {
       setLoading(true);
-      await fetch(`${API_URL}/api/v1/contacts/lists/${id}`, { method: 'DELETE' });
+      const response = await contactsApi.deleteList(id);
+      if (response.error) throw new Error(response.error);
       await loadLists();
       if (editing?.id === id) setShowEditor(false);
     } catch (error) {
-      console.error(error);
+      console.error("Delete failed", error);
     } finally {
       setLoading(false);
     }

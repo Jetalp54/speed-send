@@ -103,6 +103,7 @@ export const draftsApi = {
   create: (payload: any) => apiClient.request(`/api/v1/drafts`, { method: 'POST', body: JSON.stringify(payload) }),
   get: (id: number | string) => apiClient.request(`/api/v1/drafts/${id}`),
   update: (id: number | string, payload: any) => apiClient.request(`/api/v1/drafts/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  delete: (id: number | string) => apiClient.request(`/api/v1/drafts/${id}`, { method: 'DELETE' }),
 };
 
 // Data Lists API
@@ -122,6 +123,11 @@ export const contactsApi = {
     formData.append('file', file);
     return apiClient.request(`/api/v1/contacts/upload`, { method: 'POST', body: formData });
   },
+  delete: (id: number | string) => apiClient.request(`/api/v1/contacts/${id}`, { method: 'DELETE' }),
+  // Lists
+  getLists: () => apiClient.request(`/api/v1/contacts/lists`),
+  createList: (payload: any) => apiClient.request(`/api/v1/contacts/lists`, { method: 'POST', body: JSON.stringify(payload) }),
+  deleteList: (id: number | string) => apiClient.request(`/api/v1/contacts/lists/${id}`, { method: 'DELETE' }),
 };
 
 // Dashboard API
