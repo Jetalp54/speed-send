@@ -377,6 +377,14 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     # Calculate recipients per user
     recipients_per_user = math.ceil(len(all_recipients) / len(users))
     logger.info(f"Recipients per user: {recipients_per_user}")
+
+    # Transition to UPLOADING state
+    transition_draft_status(
+        db, 
+        campaign.id, 
+        DraftStatus.UPLOADING, 
+        triggered_by="api:upload_drafts"
+    )
     
     # Create Gmail drafts for each user
     total_drafts_created = 0
