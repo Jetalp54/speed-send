@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
+  Globe,
 } from 'lucide-react';
 import { Button } from './ui/button';
 
@@ -29,6 +30,7 @@ const navigation = [
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Users', href: '/users', icon: Users },
   { name: 'System Reports', href: '/reports', icon: Activity },
+  { name: 'Tracking Domains', href: '/settings/domains', icon: Globe },
 ];
 
 export function Sidebar() {

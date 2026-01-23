@@ -33,7 +33,7 @@ interface DraftCampaign {
   created_at: string;
   total_drafts: number;
   drafts_by_user: { [key: string]: number };
-  status: 'draft' | 'uploaded' | 'launched';
+  status: 'created' | 'uploading' | 'ready' | 'scheduled' | 'sending' | 'paused' | 'completed' | 'failed' | 'canceled';
   recipients_count: number;
   users_count: number;
   emails_per_user: number;
@@ -177,12 +177,21 @@ const DraftsPage: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      draft: { color: 'bg-gray-100 text-gray-800', label: 'Draft' },
-      uploaded: { color: 'bg-blue-100 text-blue-800', label: 'Uploaded' },
-      launched: { color: 'bg-green-100 text-green-800', label: 'Launched' }
+    const statusConfig: { [key: string]: { color: string, label: string } } = {
+      created: { color: 'bg-gray-100 text-gray-800', label: 'Draft' }, // Was 'draft'
+      draft: { color: 'bg-gray-100 text-gray-800', label: 'Draft' },   // Legacy
+      uploading: { color: 'bg-yellow-100 text-yellow-800', label: 'Uploading' },
+      ready: { color: 'bg-blue-100 text-blue-800', label: 'Ready' }, // Was 'uploaded'
+      uploaded: { color: 'bg-blue-100 text-blue-800', label: 'Uploaded' }, // Legacy
+      scheduled: { color: 'bg-purple-100 text-purple-800', label: 'Scheduled' },
+      sending: { color: 'bg-green-100 text-green-800', label: 'Sending' }, // Was 'launched'
+      launched: { color: 'bg-green-100 text-green-800', label: 'Launched' }, // Legacy
+      paused: { color: 'bg-orange-100 text-orange-800', label: 'Paused' },
+      completed: { color: 'bg-green-800 text-green-100', label: 'Completed' },
+      failed: { color: 'bg-red-100 text-red-800', label: 'Failed' },
+      canceled: { color: 'bg-gray-500 text-white', label: 'Canceled' }
     };
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.draft;
+    const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800', label: status };
     return <Badge className={config.color}>{config.label}</Badge>;
   };
 
@@ -249,13 +258,13 @@ const DraftsPage: React.FC = () => {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => launchDrafts(campaign.id)}
-                      disabled={loading || campaign.status !== 'uploaded'}
+                      disabled={loading || (campaign.status !== 'ready' && campaign.status !== 'uploaded')}
                       className="text-green-600"
                     >
                       <Play className="h-4 w-4 mr-2" />
                       Launch
                     </DropdownMenuItem>
-                    {campaign.status === 'uploaded' && (
+                    {(campaign.status === 'ready' || campaign.status === 'uploaded') && (
                       <>
                         <DropdownMenuItem
                           onClick={() => resumeNow(campaign.id)}

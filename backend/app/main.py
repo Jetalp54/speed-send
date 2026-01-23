@@ -115,10 +115,11 @@ app.include_router(drafts_resume.router_resume, prefix=settings.API_V1_PREFIX, t
 app.include_router(drafts_preview.router_preview, prefix=settings.API_V1_PREFIX, tags=["Drafts-Preview-Test"])
 app.include_router(send_router.router, prefix=settings.API_V1_PREFIX)
 app.include_router(accounts_sync_stub.router, prefix=settings.API_V1_PREFIX)
-from app.routers import tracking, contacts_enterprise, analytics
+from app.routers import tracking, contacts_enterprise, analytics, tracking_domains
 app.include_router(tracking.router, prefix="") 
 app.include_router(contacts_enterprise.router, prefix=settings.API_V1_PREFIX)
 app.include_router(analytics.router, prefix=settings.API_V1_PREFIX)
+app.include_router(tracking_domains.router, prefix=settings.API_V1_PREFIX, tags=["tracking-domains"])
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

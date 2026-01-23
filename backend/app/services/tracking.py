@@ -17,7 +17,20 @@ def inject_tracking_links(db, html_content: str, campaign_id: int, email_log_id:
     Scans HTML for <a> tags, replaces hrefs with tracking links,
     and appends the open tracking pixel.
     """
+    from app.models import Campaign, TrackingDomain # Lazy import to avoid circular dep
+    
+    # Defaults
     base_url = settings.API_BASE_URL.rstrip('/')
+    
+    # Check for Custom Domain
+    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+    if campaign and campaign.tracking_domain_id:
+        domain = db.query(TrackingDomain).filter(TrackingDomain.id == campaign.tracking_domain_id).first()
+        if domain and domain.status == 'active' and domain.ssl_active:
+            # Use custom domain
+            base_url = f"https://{domain.domain}"
+    
+    # 1. Open Pixel
     
     # 1. Open Pixel
     open_token = OpaqueSigner.sign(email_log_id)

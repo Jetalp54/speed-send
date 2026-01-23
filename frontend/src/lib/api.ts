@@ -134,3 +134,10 @@ export const contactsApi = {
 export const dashboardApi = {
   stats: () => apiClient.request(`/api/v1/dashboard/stats`),
 };
+
+// Tracking Domains API
+export const trackingDomainsApi = {
+  list: () => apiClient.request(`/api/v1/tracking-domains`),
+  create: (payload: { domain: string, ip_address: string, root_password: string }) => apiClient.request(`/api/v1/tracking-domains`, { method: 'POST', body: JSON.stringify(payload) }),
+  delete: (id: number | string) => apiClient.request(`/api/v1/tracking-domains/${id}`, { method: 'DELETE' }),
+};

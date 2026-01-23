@@ -480,3 +480,20 @@ class DailyCampaignStats(Base):
     complaints = Column(Integer, default=0)
     
     last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+# 5. Custom Tracking Domains
+class TrackingDomain(Base):
+    __tablename__ = "tracking_domains"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    domain = Column(String(255), unique=True, index=True, nullable=False)
+    ip_address = Column(String(50))
+    status = Column(String(50), default='pending') # pending, provisioning, active, failed
+    ssl_active = Column(Boolean, default=False)
+    provisioning_log = Column(Text) # Store recent logs
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_checked_at = Column(DateTime(timezone=True))
+    
+    # Relationships could be added to Campaigns if strict enforcement is needed
+    # campaigns = relationship("Campaign", back_populates="tracking_domain")
