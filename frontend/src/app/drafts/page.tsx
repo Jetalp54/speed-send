@@ -128,7 +128,26 @@ const DraftsPage: React.FC = () => {
     setShowScheduleModal(true);
   };
 
+  // RETRY UPLOAD: Trigger upload again for failed/created campaigns
+  const retryUpload = async (draftId: number) => {
+    setLoading(true);
+    try {
+      const response = await apiClient.request(`/api/v1/drafts/${draftId}/upload`, { method: 'POST' });
+      if (response.error) throw new Error(response.error);
+      setDraftCampaigns(prev => prev.map(d =>
+        d.id === draftId ? { ...d, status: 'ready', total_drafts: (response as any).total_drafts } : d
+      ));
+      setError(null);
+      alert(`✅ Upload successful: ${(response as any).total_drafts} drafts created!`);
+    } catch (err: any) {
+      setError(`Failed to upload drafts: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const duplicateDraft = async (draftId: number) => {
+    // ... duplicateDraft implementation remains ...
     try {
       // Fetch full details first to get all fields
       const detailResponse = await apiClient.request(`/api/v1/drafts/${draftId}`);
@@ -252,6 +271,18 @@ const DraftsPage: React.FC = () => {
                       <Edit className="h-4 w-4 mr-2" />
                       Edit
                     </DropdownMenuItem>
+
+                    {(campaign.status === 'failed' || campaign.status === 'created' || campaign.status === 'draft') && (
+                      <DropdownMenuItem
+                        onClick={() => retryUpload(campaign.id)}
+                        disabled={loading}
+                        className="text-orange-600"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        {campaign.status === 'failed' ? 'Retry Upload' : 'Upload Drafts'}
+                      </DropdownMenuItem>
+                    )}
+
                     <DropdownMenuItem onClick={() => duplicateDraft(campaign.id)}>
                       <Copy className="h-4 w-4 mr-2" />
                       Duplicate

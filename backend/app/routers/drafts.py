@@ -536,13 +536,22 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     else:
         # If ZERO drafts were created, do not set to READY.
         # This prevents "Launch" from appearing and trying to launch 0 drafts.
-        logger.error("Upload resulted in 0 drafts created. Setting status to FAILED.")
+        # Capture the first error to show to the user
+        error_detail = "Unknown error"
+        if failed_users:
+            # failed_users is a list of dicts: {'email': ..., 'error': ...}
+            first_fail = failed_users[0]
+            error_detail = f"Failed to create drafts. Error for {first_fail.get('email', 'user')}: {first_fail.get('error', 'Unknown')}"
+        
+        logger.error(f"Upload resulted in 0 drafts created. Setting status to FAILED. Detail: {error_detail}")
         transition_draft_status(
             db, 
             campaign.id, 
             DraftStatus.FAILED,
             triggered_by="api:upload_drafts_failed"
         )
+        # Raise exception so frontend sees the error immediately
+        raise HTTPException(status_code=400, detail=error_detail)
     
     logger.info(f"UPLOAD COMPLETE: Total drafts created: {total_drafts_created}")
     logger.info(f"Successful users: {successful_users}")
