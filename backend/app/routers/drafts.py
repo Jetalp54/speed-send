@@ -900,3 +900,90 @@ def launch_all_drafts(db: Session = Depends(get_db)):
         total_failed=failed_count,
         details=details
     )
+
+
+@router.post("/drafts/{draft_id}/duplicate")
+def duplicate_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
+    """
+    Duplicate a draft campaign with all its associations (users, accounts, contacts).
+    This is a SERVER-SIDE duplication that copies everything.
+    """
+    # Get original campaign with all associations
+    original = db.query(models.DraftCampaign).options(
+        joinedload(models.DraftCampaign.selected_accounts),
+        joinedload(models.DraftCampaign.selected_users),
+        joinedload(models.DraftCampaign.selected_contacts)
+    ).filter(models.DraftCampaign.id == draft_id).first()
+    
+    if not original:
+        raise HTTPException(status_code=404, detail="Draft campaign not found")
+    
+    # Create new campaign with copied content
+    new_campaign = models.DraftCampaign(
+        name=f"{original.name} (Copy)",
+        from_name=original.from_name,
+        subject=original.subject,
+        body_html=original.body_html,
+        status=DraftStatus.CREATED,
+        emails_per_user=original.emails_per_user,
+        test_after_email=original.test_after_email,
+        test_after_count=original.test_after_count,
+        use_custom_headers=original.use_custom_headers,
+        custom_headers=original.custom_headers,
+        body_format=original.body_format,
+        body_template=original.body_template
+    )
+    db.add(new_campaign)
+    db.flush()  # Get ID
+    
+    # Copy account associations
+    for assoc in original.selected_accounts:
+        new_assoc = models.DraftCampaignAccount(
+            draft_campaign_id=new_campaign.id,
+            service_account_id=assoc.service_account_id
+        )
+        db.add(new_assoc)
+    
+    # Copy user associations
+    for assoc in original.selected_users:
+        new_assoc = models.DraftCampaignUser(
+            draft_campaign_id=new_campaign.id,
+            user_id=assoc.user_id
+        )
+        db.add(new_assoc)
+    
+    # Copy contact list associations
+    for assoc in original.selected_contacts:
+        new_assoc = models.DraftCampaignContact(
+            draft_campaign_id=new_campaign.id,
+            contact_list_id=assoc.contact_list_id
+        )
+        db.add(new_assoc)
+    
+    db.commit()
+    db.refresh(new_campaign)
+    
+    logger.info(f"Duplicated campaign {draft_id} -> {new_campaign.id}")
+    logger.info(f"Copied {len(original.selected_accounts)} accounts, {len(original.selected_users)} users, {len(original.selected_contacts)} contacts")
+    
+    # Return full response
+    return schemas.DraftCampaignResponse(
+        id=new_campaign.id,
+        name=new_campaign.name,
+        subject=new_campaign.subject,
+        from_name=new_campaign.from_name,
+        created_at=new_campaign.created_at,
+        total_drafts=0,
+        drafts_by_user={},
+        status=new_campaign.status or DraftStatus.CREATED.value,
+        recipients_count=0,
+        users_count=len(original.selected_users),
+        emails_per_user=new_campaign.emails_per_user or 0,
+        body_html=new_campaign.body_html,
+        use_custom_headers=new_campaign.use_custom_headers,
+        custom_headers=new_campaign.custom_headers,
+        body_format=new_campaign.body_format,
+        body_template=new_campaign.body_template,
+        test_after_email=new_campaign.test_after_email,
+        test_after_count=new_campaign.test_after_count or 0
+    )

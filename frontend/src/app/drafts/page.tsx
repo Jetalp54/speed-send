@@ -147,43 +147,16 @@ const DraftsPage: React.FC = () => {
   };
 
   const duplicateDraft = async (draftId: number) => {
-    // ... duplicateDraft implementation remains ...
     try {
-      // Fetch full details first to get all fields
-      const detailResponse = await apiClient.request(`/api/v1/drafts/${draftId}`);
-      if (detailResponse.error) throw new Error("Failed to fetch draft details for duplication");
-      const fullDraft = detailResponse.data;
-
-      // Extract IDs from the nested objects
-      const selected_account_ids = fullDraft.selected_accounts?.map((acc: any) => acc.id) || [];
-      const selected_user_ids = fullDraft.selected_users?.map((user: any) => user.id) || [];
-      const selected_contact_list_ids = fullDraft.selected_contacts?.map((contact: any) => contact.id) || [];
-
-      const response = await apiClient.request('/api/v1/drafts', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: `${fullDraft.name} (Copy)`,
-          subject: fullDraft.subject,
-          from_name: fullDraft.from_name,
-          body_html: fullDraft.body_html,
-          // Copy selections from original draft
-          selected_account_ids,
-          selected_user_ids,
-          selected_contact_list_ids,
-          // Copy advanced config
-          use_custom_headers: fullDraft.use_custom_headers,
-          custom_headers: fullDraft.custom_headers,
-          body_format: fullDraft.body_format,
-          body_template: fullDraft.body_template,
-          test_after_email: fullDraft.test_after_email,
-          test_after_count: fullDraft.test_after_count,
-          emails_per_user: fullDraft.emails_per_user
-        })
+      // Call server-side duplicate endpoint that copies everything
+      const response = await apiClient.request(`/api/v1/drafts/${draftId}/duplicate`, {
+        method: 'POST'
       });
+
       if (response.error) throw new Error(response.error);
 
       setDraftCampaigns(prev => [...prev, response.data]);
-      alert(`✅ Draft duplicated successfully!`);
+      alert(`✅ Draft duplicated successfully with all users, accounts, and contacts!`);
     } catch (err: any) {
       setError(`Failed to duplicate draft: ${err.response?.data?.detail || err.message}`);
     }
