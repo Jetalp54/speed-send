@@ -99,13 +99,8 @@ def upload_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
 @router_v2.post("/drafts/{draft_id}/launch-ultra")
 def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
     """
-    ULTRA-OPTIMIZED launch with:
-    - Connection pooling (reuse API clients)
-    - Gmail Batch API (100 drafts/request)
-    - Real-time progress tracking
-    - Smart rate limiting
-    
-    Performance: 12,000 emails in 15-20 seconds (was 30 seconds)
+    Launch drafts by sending them via Gmail API.
+    EXECUTES SYNCHRONOUSLY - No Celery dependency.
     """
     campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == draft_id).first()
     
@@ -133,98 +128,90 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
         logger.info(f"Successfully transitioned Campaign {campaign.id} to SENDING")
     except Exception as e:
         logger.error(f"Failed to transition status to SENDING: {e}")
-        # Proceed anyway as the task will handle things, but this is risky for UI consistency
+        raise HTTPException(status_code=500, detail=f"Failed to update campaign status: {str(e)}")
     
-    # TRY CELERY FIRST, FALLBACK TO SYNC IF CELERY NOT AVAILABLE
-    try:
-        # Queue OPTIMIZED tasks
-        result, progress_id = queue_optimized_launch(drafts_by_user)
-        
-        if result is None:
-            raise Exception("Celery task queueing returned None - likely no workers running")
-        
-        return {
-            "success": True,
-            "message": f"Queued ULTRA-OPTIMIZED launch for {len(drafts_by_user)} users",
-            "task_id": result.id if hasattr(result, 'id') else None,
-            "progress_id": progress_id,
-            "users_count": len(drafts_by_user),
-            "total_drafts": len(drafts),
-            "optimization": "enabled",
-            "features": [
-                "Connection pooling",
-                "Gmail Batch API",
-                "Smart rate limiting",
-                "Real-time progress"
-            ]
-        }
-    except Exception as celery_error:
-        # CELERY FAILED - EXECUTE SYNCHRONOUSLY
-        logger.warning(f"Celery unavailable ({str(celery_error)}), executing synchronously")
-        
-        total_sent = 0
-        total_failed = 0
-        
-        # Execute synchronously for each user
-        for user_id, user_drafts in drafts_by_user.items():
-            try:
-                user = db.query(models.WorkspaceUser).filter(models.WorkspaceUser.id == user_id).first()
-                if not user:
-                    logger.error(f"User {user_id} not found")
-                    total_failed += len(user_drafts)
-                    continue
-                
-                # Setup Gmail API
-                from app.encryption import EncryptionService
-                from app.google_api import GoogleWorkspaceService
-                from app.config import settings
-                from googleapiclient.discovery import build
-                
-                encryption_service = EncryptionService()
-                service_account_json = encryption_service.decrypt(user.service_account.encrypted_json)
-                google_service = GoogleWorkspaceService(service_account_json)
-                credentials = google_service.get_delegated_credentials(user.email, settings.GMAIL_SCOPES)
-                gmail_service = build('gmail', 'v1', credentials=credentials)
-                
-                # Send each draft
-                for draft in user_drafts:
-                    try:
-                        gmail_service.users().drafts().send(
-                            userId='me',
-                            body={'id': draft.gmail_draft_id}
-                        ).execute()
-                        
-                        draft.status = 'sent'
-                        draft.sent_at = datetime.utcnow()
-                        total_sent += 1
-                        logger.info(f"✅ Sent draft {draft.id} for {user.email}")
-                    except Exception as e:
-                        logger.error(f"Failed to send draft {draft.id}: {e}")
-                        draft.status = 'failed'
-                        total_failed += 1
-                
-                db.commit()
-                
-            except Exception as user_error:
-                logger.error(f"Failed to process user {user_id}: {user_error}")
+    # EXECUTE SYNCHRONOUSLY (No Celery)
+    logger.info(f"🚀 EXECUTING SYNCHRONOUS LAUNCH for {len(drafts_by_user)} users, {len(drafts)} total drafts")
+    
+    total_sent = 0
+    total_failed = 0
+    
+    # Execute synchronously for each user
+    for user_id, user_drafts in drafts_by_user.items():
+        try:
+            user = db.query(models.WorkspaceUser).filter(models.WorkspaceUser.id == user_id).first()
+            if not user:
+                logger.error(f"User {user_id} not found")
                 total_failed += len(user_drafts)
-        
-        # Mark campaign as completed
-        if total_sent > 0:
-            campaign.status = DraftStatus.COMPLETED
-        else:
-            campaign.status = DraftStatus.FAILED
-        db.commit()
-        
-        return {
-            "success": True,
-            "message": f"SYNC EXECUTION: Sent {total_sent} drafts",
-            "mode": "synchronous (Celery unavailable)",
-            "total_sent": total_sent,
-            "total_failed": total_failed,
-            "users_count": len(drafts_by_user),
-            "total_drafts": len(drafts)
-        }
+                continue
+            
+            logger.info(f"📧 Processing {len(user_drafts)} drafts for user: {user.email}")
+            
+            # Setup Gmail API
+            from app.encryption import EncryptionService
+            from app.google_api import GoogleWorkspaceService
+            from app.config import settings
+            from googleapiclient.discovery import build
+            
+            encryption_service = EncryptionService()
+            service_account_json = encryption_service.decrypt(user.service_account.encrypted_json)
+            google_service = GoogleWorkspaceService(service_account_json)
+            credentials = google_service.get_delegated_credentials(user.email, settings.GMAIL_SCOPES)
+            gmail_service = build('gmail', 'v1', credentials=credentials)
+            
+            # Send each draft
+            for draft in user_drafts:
+                try:
+                    logger.info(f"Sending draft {draft.id} (Gmail ID: {draft.gmail_draft_id}) for {user.email}")
+                    
+                    response = gmail_service.users().drafts().send(
+                        userId='me',
+                        body={'id': draft.gmail_draft_id}
+                    ).execute()
+                    
+                    draft.status = 'sent'
+                    draft.sent_at = datetime.utcnow()
+                    draft.gmail_message_id = response.get('id')
+                    total_sent += 1
+                    logger.info(f"✅ Successfully sent draft {draft.id} for {user.email}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to send draft {draft.id}: {e}")
+                    draft.status = 'failed'
+                    draft.error_message = str(e)
+                    total_failed += 1
+            
+            db.commit()
+            logger.info(f"Completed sending for user {user.email}: {total_sent} sent so far")
+            
+        except Exception as user_error:
+            logger.error(f"❌ Failed to process user {user_id}: {user_error}")
+            # Mark all user's drafts as failed
+            for draft in user_drafts:
+                draft.status = 'failed'
+                draft.error_message = str(user_error)
+            total_failed += len(user_drafts)
+            db.commit()
+    
+    # Mark campaign as completed
+    if total_sent > 0:
+        campaign.status = DraftStatus.COMPLETED
+        logger.info(f"✅ Campaign {campaign.id} marked as COMPLETED ({total_sent} sent)")
+    else:
+        campaign.status = DraftStatus.FAILED
+        logger.error(f"❌ Campaign {campaign.id} marked as FAILED (0 sent)")
+    
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": f"SYNCHRONOUS EXECUTION: Sent {total_sent}/{len(drafts)} drafts",
+        "mode": "synchronous",
+        "total_sent": total_sent,
+        "total_failed": total_failed,
+        "users_count": len(drafts_by_user),
+        "total_drafts": len(drafts),
+        "status": "completed" if total_sent > 0 else "failed"
+    }
 
 
 @router_v2.post("/drafts/{draft_id}/resume-now")
