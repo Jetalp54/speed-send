@@ -353,19 +353,94 @@ def queue_optimized_upload(campaign_id, users, subject, from_name, body_html, re
 def queue_optimized_launch(drafts_by_user):
     """Queue optimized launch tasks with progress tracking"""
     import uuid
+    from celery import chord
     task_group_id = str(uuid.uuid4())
     
-    tasks = [
-        launch_drafts_optimized_task.s(user_id, [d.id for d in drafts], task_group_id)
-        for user_id, drafts in drafts_by_user.items()
-    ]
+    # Get campaign ID from the first draft (assuming all are from same campaign)
+    # We need to pass campaign_id to finalize task
+    # drafts_by_user is {user_id: [draft objects]}
+    # We can't access draft objects here easily if they are detached, 
+    # but we can assume the caller passed valid drafts. 
+    # Actually, the caller passed ORM objects.
     
-    job = group(tasks)
-    result = job.apply_async()
+    campaign_id = None
+    total_drafts = 0
+    header_tasks = []
     
+    for user_id, drafts in drafts_by_user.items():
+        if not campaign_id and drafts:
+            campaign_id = drafts[0].draft_campaign_id
+        
+        total_drafts += len(drafts)
+        header_tasks.append(
+            launch_drafts_optimized_task.s(user_id, [d.id for d in drafts], task_group_id)
+        )
+    
+    if not header_tasks:
+        return None, task_group_id
+
     # Initialize progress
     cache = get_performance_cache()
-    total_drafts = sum(len(drafts) for drafts in drafts_by_user.values())
     cache.update_progress(task_group_id, 0, total_drafts, "queued")
     
-    return result, task_group_id
+    # Use chord: Header tasks -> Finalize task
+    callback = finalize_launch_task.s(campaign_id, task_group_id)
+    job = chord(header_tasks)(callback)
+    
+    return job, task_group_id
+
+
+@celery_app.task(bind=True)
+def finalize_launch_task(self, results, campaign_id, task_group_id):
+    """
+    Finalize the launch process:
+    1. Aggregate results
+    2. Update Campaign status to COMPLETED (or FAILED)
+    3. Update progress cache
+    """
+    db = SessionLocal()
+    try:
+        logger.info(f"Finalizing launch for campaign {campaign_id}")
+        
+        total_sent = 0
+        total_failed = 0
+        
+        # Aggregate results from list of dicts
+        if isinstance(results, list):
+            for res in results:
+                if isinstance(res, dict) and res.get('success'):
+                    total_sent += res.get('sent', 0)
+                    total_failed += res.get('failed', 0)
+        
+        logger.info(f"Launch Totals: {total_sent} sent, {total_failed} failed")
+        
+        # Update Campaign Status
+        campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == campaign_id).first()
+        if campaign:
+            if total_sent > 0:
+                campaign.status = models.DraftStatus.COMPLETED
+                logger.info(f"Campaign {campaign_id} marked as COMPLETED")
+            else:
+                 # If everything failed, mark as FAILED (or could be COMPLETED with 0 sent?)
+                 # Use FAILED to alert user
+                 campaign.status = models.DraftStatus.FAILED
+                 logger.info(f"Campaign {campaign_id} marked as FAILED (0 sent)")
+            
+            db.commit()
+            
+        # Update progress to 100%
+        cache = get_performance_cache()
+        cache.update_progress(task_group_id, total_sent + total_failed, total_sent + total_failed, "completed")
+        
+        return {
+            "campaign_id": campaign_id,
+            "status": "completed" if total_sent > 0 else "failed",
+            "total_sent": total_sent,
+            "total_failed": total_failed
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to finalize launch for campaign {campaign_id}: {str(e)}")
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()

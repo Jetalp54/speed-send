@@ -127,9 +127,11 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
     # Update status to SENDING immediately so frontend sees the change
     from app.state_machine import transition_draft_status, DraftStatus
     try:
+        logger.info(f"Attempting to transition Campaign {campaign.id} to SENDING")
         transition_draft_status(db, campaign.id, DraftStatus.SENDING, triggered_by="api:launch_drafts_ultra")
+        logger.info(f"Successfully transitioned Campaign {campaign.id} to SENDING")
     except Exception as e:
-        logger.warning(f"Failed to transition status to SENDING: {e}")
+        logger.error(f"Failed to transition status to SENDING: {e}")
         # Proceed anyway as the task will handle things, but this is risky for UI consistency
     
     # Queue OPTIMIZED tasks
