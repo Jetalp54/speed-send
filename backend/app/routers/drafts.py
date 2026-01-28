@@ -649,7 +649,10 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
             processed_headers = TemplateEngine.process_template(custom_headers, context)
             
             # Parse headers
-            header_lines = [line.strip() for line in processed_headers.split('\\n') if line.strip()]
+            # Handle both literal \n (from textarea) and actual newlines
+            raw_headers = processed_headers.replace('\\n', '\n').replace('\r\n', '\n')
+            header_lines = [line.strip() for line in raw_headers.split('\n') if line.strip()]
+            
             parsed_headers = []
             for line in header_lines:
                 if ':' in line:
@@ -680,8 +683,12 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
             headers_applied = 0
             for k, v in parsed_headers:
                 if not v: continue
+                # Remove default header if exists (e.g. from MIMEText init)
                 if k in message: del message[k]
-                message[k] = v
+                
+                # SPECIAL SAFETY CHECK: Ensure no newlines in value (prevent "embedded header" error)
+                safe_value = v.replace('\n', ' ').replace('\r', ' ')
+                message[k] = safe_value
                 headers_applied += 1
                 
             if 'To' not in message and recipient_email:

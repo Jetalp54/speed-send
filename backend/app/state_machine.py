@@ -126,7 +126,7 @@ DRAFT_TRANSITIONS = {
     DraftStatus.SENDING: [DraftStatus.PAUSED, DraftStatus.COMPLETED, DraftStatus.FAILED, DraftStatus.CANCELED],
     DraftStatus.PAUSED: [DraftStatus.SENDING, DraftStatus.CANCELED],
     DraftStatus.COMPLETED: [],
-    DraftStatus.FAILED: [DraftStatus.CREATED, DraftStatus.CANCELED],
+    DraftStatus.FAILED: [DraftStatus.CREATED, DraftStatus.CANCELED, DraftStatus.UPLOADING], # Added UPLOADING for retry
     DraftStatus.CANCELED: [DraftStatus.CREATED],
 }
 
