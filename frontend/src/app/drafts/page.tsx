@@ -154,6 +154,11 @@ const DraftsPage: React.FC = () => {
       if (detailResponse.error) throw new Error("Failed to fetch draft details for duplication");
       const fullDraft = detailResponse.data;
 
+      // Extract IDs from the nested objects
+      const selected_account_ids = fullDraft.selected_accounts?.map((acc: any) => acc.id) || [];
+      const selected_user_ids = fullDraft.selected_users?.map((user: any) => user.id) || [];
+      const selected_contact_list_ids = fullDraft.selected_contacts?.map((contact: any) => contact.id) || [];
+
       const response = await apiClient.request('/api/v1/drafts', {
         method: 'POST',
         body: JSON.stringify({
@@ -161,10 +166,10 @@ const DraftsPage: React.FC = () => {
           subject: fullDraft.subject,
           from_name: fullDraft.from_name,
           body_html: fullDraft.body_html,
-          // Include required fields (default to empty selection for safety, or copy if desired)
-          selected_account_ids: [],
-          selected_user_ids: [],
-          selected_contact_list_ids: [],
+          // Copy selections from original draft
+          selected_account_ids,
+          selected_user_ids,
+          selected_contact_list_ids,
           // Copy advanced config
           use_custom_headers: fullDraft.use_custom_headers,
           custom_headers: fullDraft.custom_headers,
@@ -178,6 +183,7 @@ const DraftsPage: React.FC = () => {
       if (response.error) throw new Error(response.error);
 
       setDraftCampaigns(prev => [...prev, response.data]);
+      alert(`✅ Draft duplicated successfully!`);
     } catch (err: any) {
       setError(`Failed to duplicate draft: ${err.response?.data?.detail || err.message}`);
     }
