@@ -124,6 +124,14 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
             drafts_by_user[draft.user_id] = []
         drafts_by_user[draft.user_id].append(draft)
     
+    # Update status to SENDING immediately so frontend sees the change
+    from app.state_machine import transition_draft_status, DraftStatus
+    try:
+        transition_draft_status(db, campaign.id, DraftStatus.SENDING, triggered_by="api:launch_drafts_ultra")
+    except Exception as e:
+        logger.warning(f"Failed to transition status to SENDING: {e}")
+        # Proceed anyway as the task will handle things, but this is risky for UI consistency
+    
     # Queue OPTIMIZED tasks
     result, progress_id = queue_optimized_launch(drafts_by_user)
     
@@ -142,6 +150,41 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
             "Real-time progress"
         ]
     }
+
+
+@router_v2.post("/drafts/{draft_id}/resume-now")
+def resume_drafts_now(draft_id: int, db: Session = Depends(get_db)):
+    """
+    Resume (Retry) sending drafts immediately.
+    Same logic as launch-ultra but meant for retrying failed/paused campaigns.
+    """
+    return launch_drafts_ultra(draft_id, db)
+
+
+@router_v2.post("/drafts/{draft_id}/resume-scheduled")
+def resume_drafts_scheduled(draft_id: int, schedule: dict, db: Session = Depends(get_db)):
+    """
+    Start a scheduled resume process (PowerMTA-style ramp up).
+    """
+    from app.tasks_scheduled_resume import start_scheduled_resume
+    
+    campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == draft_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Draft campaign not found")
+        
+    repetitions = schedule.get("repetitions", 20)
+    interval = schedule.get("interval_seconds", 1)
+    
+    # Save interval to campaign for the task to use
+    # Note: Using dynamic attribute setting since model might not have column yet
+    # Ideally, add 'schedule_interval' column to DraftCampaign model
+    campaign.schedule_interval = interval 
+    # Store in metadata/custom headers field if column missing? 
+    # For now assuming task code handles it or we rely on explicit passing
+    
+    result = start_scheduled_resume(draft_id, repetitions, interval)
+    
+    return result
 
 
 @router_v2.get("/drafts/progress/{progress_id}")

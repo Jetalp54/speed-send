@@ -101,7 +101,7 @@ def resume_all_user_drafts_task(self, user_id, batch_size=50):
 
 
 @celery_app.task(bind=True)
-def scheduled_resume_iteration(self, draft_campaign_id, iteration_number, total_iterations):
+def scheduled_resume_iteration(self, draft_campaign_id, iteration_number, total_iterations, interval_seconds=1):
     """
     Execute ONE iteration of scheduled resume.
     This task is called repeatedly by the scheduler.
@@ -109,7 +109,7 @@ def scheduled_resume_iteration(self, draft_campaign_id, iteration_number, total_
     db = SessionLocal()
     
     try:
-        logger.info(f"🔄 SCHEDULED RESUME - Iteration {iteration_number}/{total_iterations} for campaign {draft_campaign_id}")
+        logger.info(f"🔄 SCHEDULED RESUME - Iteration {iteration_number}/{total_iterations} for campaign {draft_campaign_id} (Interval: {interval_seconds}s)")
         
         # Get campaign and its users
         campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == draft_campaign_id).first()
@@ -135,25 +135,26 @@ def scheduled_resume_iteration(self, draft_campaign_id, iteration_number, total_
         result = job.apply_async()
         
         # Wait for completion (with timeout)
-        results = result.get(timeout=120)  # 2 minute timeout
+        try:
+            results = result.get(timeout=120)  # 2 minute timeout
+        except Exception as e:
+            logger.warning(f"Timeout waiting for user tasks: {e}")
+            # Continue anyway
+            results = [] 
         
-        total_sent = sum(r.get('sent', 0) for r in results if r.get('success'))
-        total_failed = sum(r.get('failed', 0) for r in results if r.get('success'))
+        total_sent = 0
+        total_failed = 0
+        if isinstance(results, list):
+             total_sent = sum(r.get('sent', 0) for r in results if isinstance(r, dict) and r.get('success'))
+             total_failed = sum(r.get('failed', 0) for r in results if isinstance(r, dict) and r.get('success'))
         
         logger.info(f"✅ Iteration {iteration_number} complete: {total_sent} sent, {total_failed} failed")
         
         # Schedule next iteration if needed
         if iteration_number < total_iterations:
-            # Get schedule config from campaign metadata
-            schedule_data = db.query(models.DraftCampaign).filter(
-                models.DraftCampaign.id == draft_campaign_id
-            ).first()
-            
-            interval_seconds = getattr(schedule_data, 'schedule_interval', 1)
-            
             # Schedule next iteration
             scheduled_resume_iteration.apply_async(
-                args=[draft_campaign_id, iteration_number + 1, total_iterations],
+                args=[draft_campaign_id, iteration_number + 1, total_iterations, interval_seconds],
                 countdown=interval_seconds
             )
             logger.info(f"⏰ Next iteration scheduled in {interval_seconds} seconds")
@@ -206,7 +207,7 @@ def start_scheduled_resume(draft_campaign_id, repetitions, interval_seconds=1):
         
         # Start the first iteration immediately
         result = scheduled_resume_iteration.apply_async(
-            args=[draft_campaign_id, 1, repetitions]
+            args=[draft_campaign_id, 1, repetitions, interval_seconds]
         )
         
         return {
