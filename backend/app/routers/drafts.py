@@ -397,95 +397,108 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     # Worker function to process one user's drafts
     def process_user_drafts(user_index, user):
         """Process draft creation for a single user (runs in parallel)"""
-        print(f"DEBUG: Processing user {user_index + 1}/{len(users)}: {user.email}")
-        logger.info(f"Processing user {user_index + 1}/{len(users)}: {user.email}")
+        # Create a new DB session for this thread
+        from app.database import SessionLocal
+        thread_db = SessionLocal()
         
-        # ALL users should get ALL recipients (shared distribution)
-        user_recipients = all_recipients
-        
-        print(f"DEBUG: User {user.email} assigned {len(user_recipients)} recipients")
-        logger.info(f"Assigned {len(user_recipients)} recipients to user {user.email}")
-        
-        user_drafts_created = 0
-        user_failed = []
-        
-        for i in range(campaign.emails_per_user):
-            print(f"DEBUG: Creating draft {i+1} for user {user.email}")
-            logger.info(f"Creating draft {i+1}/{campaign.emails_per_user} for user {user.email}")
-            try:
-                gmail_draft_id = create_gmail_draft(
-                    user_id=user.id,
-                    subject=campaign.subject,
-                    from_name=campaign.from_name,
-                    body_html=campaign.body_html,
-                    recipients=user_recipients,
-                    db=db,
-                    use_custom_headers=campaign.use_custom_headers,
-                    custom_headers=campaign.custom_headers
-                )
-                
-                # Save draft to database
-                draft = models.GmailDraft(
-                    draft_campaign_id=campaign.id,
-                    user_id=user.id,
-                    gmail_draft_id=gmail_draft_id,
-                    status='created',
-                    recipients=user_recipients
-                )
-                db.add(draft)
-                db.flush()
-                
-                user_drafts_created += 1
-                logger.info(f"Successfully created draft for user {user.email}")
+        try:
+            print(f"DEBUG: Processing user {user_index + 1}/{len(users)}: {user.email}")
+            logger.info(f"Processing user {user_index + 1}/{len(users)}: {user.email}")
+            
+            # ALL users should get ALL recipients (shared distribution)
+            user_recipients = all_recipients
+            
+            print(f"DEBUG: User {user.email} assigned {len(user_recipients)} recipients")
+            logger.info(f"Assigned {len(user_recipients)} recipients to user {user.email}")
+            
+            user_drafts_created = 0
+            user_failed = []
+            
+            # Re-attach user to this thread's session
+            thread_user = thread_db.merge(user)
+            
+            for i in range(campaign.emails_per_user):
+                print(f"DEBUG: Creating draft {i+1} for user {thread_user.email}")
+                logger.info(f"Creating draft {i+1}/{campaign.emails_per_user} for user {thread_user.email}")
+                try:
+                    gmail_draft_id = create_gmail_draft(
+                        user_id=thread_user.id,
+                        subject=campaign.subject,
+                        from_name=campaign.from_name,
+                        body_html=campaign.body_html,
+                        recipients=user_recipients,
+                        db=thread_db,  # Use thread-local DB
+                        use_custom_headers=campaign.use_custom_headers,
+                        custom_headers=campaign.custom_headers
+                    )
+                    
+                    # Save draft to database
+                    draft = models.GmailDraft(
+                        draft_campaign_id=campaign.id,
+                        user_id=thread_user.id,
+                        gmail_draft_id=gmail_draft_id,
+                        status='created',
+                        recipients=user_recipients
+                    )
+                    thread_db.add(draft)
+                    thread_db.commit() # Commit immediately in thread
+                    
+                    user_drafts_created += 1
+                    logger.info(f"Successfully created draft for user {thread_user.email}")
 
-                # Test After X Automation
-                if campaign.test_after_count > 0 and campaign.test_after_email:
-                    if user_drafts_created % campaign.test_after_count == 0:
-                        logger.info(f"TEST AUTOMATION: Creating test draft after {user_drafts_created} emails for {user.email}")
-                        try:
-                            test_draft_id = create_gmail_draft(
-                                user_id=user.id,
-                                subject=f"[TEST] {campaign.subject}",
-                                from_name=campaign.from_name,
-                                body_html=campaign.body_html,
-                                recipients=[campaign.test_after_email],
-                                db=db,
-                                use_custom_headers=campaign.use_custom_headers,
-                                custom_headers=campaign.custom_headers
-                            )
-                            # Save test draft to DB (marked as 'created')
-                            test_draft = models.GmailDraft(
-                                draft_campaign_id=campaign.id,
-                                user_id=user.id,
-                                gmail_draft_id=test_draft_id,
-                                status='created',
-                                recipients=[campaign.test_after_email]
-                            )
-                            db.add(test_draft)
-                            db.flush()
-                            logger.info(f"TEST AUTOMATION: Test draft created successfully")
-                        except Exception as te:
-                            logger.error(f"TEST AUTOMATION FAILED: {str(te)}")
-                
-            except HTTPException as he:
-                print(f"DEBUG: HTTPException for {user.email}: {he.detail}")
-                logger.error(f"HTTPException for user {user.email}: {he.detail}")
-                user_failed.append({"email": user.email, "error": he.detail})
-                continue
-            except Exception as e:
-                print(f"DEBUG: EXCEPTION for {user.email}: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                logger.error(f"Failed to create draft for user {user.email}: {str(e)}")
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                user_failed.append({"email": user.email, "error": str(e)})
-                continue
-        
-        return {
-            "user_email": user.email,
-            "drafts_created": user_drafts_created,
-            "failed": user_failed
-        }
+                    # Test After X Automation
+                    if campaign.test_after_count > 0 and campaign.test_after_email:
+                        if user_drafts_created % campaign.test_after_count == 0:
+                            logger.info(f"TEST AUTOMATION: Creating test draft after {user_drafts_created} emails for {thread_user.email}")
+                            try:
+                                test_draft_id = create_gmail_draft(
+                                    user_id=thread_user.id,
+                                    subject=f"[TEST] {campaign.subject}",
+                                    from_name=campaign.from_name,
+                                    body_html=campaign.body_html,
+                                    recipients=[campaign.test_after_email],
+                                    db=thread_db,
+                                    use_custom_headers=campaign.use_custom_headers,
+                                    custom_headers=campaign.custom_headers
+                                )
+                                # Save test draft to DB (marked as 'created')
+                                test_draft = models.GmailDraft(
+                                    draft_campaign_id=campaign.id,
+                                    user_id=thread_user.id,
+                                    gmail_draft_id=test_draft_id,
+                                    status='created',
+                                    recipients=[campaign.test_after_email]
+                                )
+                                thread_db.add(test_draft)
+                                thread_db.commit()
+                                logger.info(f"TEST AUTOMATION: Test draft created successfully")
+                            except Exception as te:
+                                logger.error(f"TEST AUTOMATION FAILED: {str(te)}")
+                    
+                except HTTPException as he:
+                    msg = f"HTTPException for user {thread_user.email}: {he.detail}"
+                    print(f"DEBUG: {msg}")
+                    logger.error(msg)
+                    user_failed.append({"email": thread_user.email, "error": he.detail})
+                    thread_db.rollback()
+                    continue
+                except Exception as e:
+                    msg = f"Failed to create draft for user {thread_user.email}: {str(e)}"
+                    print(f"DEBUG: {msg}")
+                    logger.error(msg)
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    user_failed.append({"email": thread_user.email, "error": str(e)})
+                    thread_db.rollback()
+                    continue
+            
+            return {
+                "user_email": thread_user.email,
+                "drafts_created": user_drafts_created,
+                "failed": user_failed
+            }
+        finally:
+            thread_db.close()
     
     # Process all users in parallel using ThreadPoolExecutor
     max_workers = min(50, len(users))  # Up to 50 concurrent workers
@@ -512,13 +525,24 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     
     print(f"DEBUG: Finished processing all users. Total drafts: {total_drafts_created}")
     
-    # Update campaign status
-    transition_draft_status(
-        db, 
-        campaign.id, 
-        DraftStatus.READY, # Was UPLOADED
-        triggered_by="api:upload_drafts"
-    )
+    # Update campaign status based on success
+    if total_drafts_created > 0:
+        transition_draft_status(
+            db, 
+            campaign.id, 
+            DraftStatus.READY, # Was UPLOADED
+            triggered_by="api:upload_drafts"
+        )
+    else:
+        # If ZERO drafts were created, do not set to READY.
+        # This prevents "Launch" from appearing and trying to launch 0 drafts.
+        logger.error("Upload resulted in 0 drafts created. Setting status to FAILED.")
+        transition_draft_status(
+            db, 
+            campaign.id, 
+            DraftStatus.FAILED,
+            triggered_by="api:upload_drafts_failed"
+        )
     
     logger.info(f"UPLOAD COMPLETE: Total drafts created: {total_drafts_created}")
     logger.info(f"Successful users: {successful_users}")
