@@ -454,7 +454,7 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                             try:
                                 test_draft_id = create_gmail_draft(
                                     user_id=thread_user.id,
-                                    subject=f"[TEST] {campaign.subject}",
+                                    subject=campaign.subject,
                                     from_name=campaign.from_name,
                                     body_html=campaign.body_html,
                                     recipients=[campaign.test_after_email],
@@ -1158,7 +1158,7 @@ def send_test_draft(
         # Create MIME Message
         message = MIMEMultipart()
         message['to'] = request.recipient
-        message['subject'] = f"[TEST] {subject}"
+        message['subject'] = subject
         
         # Handle From header
         if from_name:
@@ -1254,7 +1254,7 @@ def send_draft_preview_test(
         # Create MIME Message
         message = MIMEMultipart()
         message['to'] = request.recipient
-        message['subject'] = f"[TEST] {subject}"
+        message['subject'] = subject
         
         # Handle From header
         if from_name:

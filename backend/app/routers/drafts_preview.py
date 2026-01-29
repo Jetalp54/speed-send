@@ -142,7 +142,7 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
         message = MIMEMultipart('alternative')
         message['To'] = request.test_recipient
         message['From'] = f"{context['from']} <{test_user.email}>"
-        message['Subject'] = f"[TEST] {context['subject']}"
+        message['Subject'] = context['subject']
         
         # Add custom headers if enabled
         if request.use_custom_headers:
