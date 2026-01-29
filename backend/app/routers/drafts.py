@@ -1253,23 +1253,54 @@ def send_draft_preview_test(
         
         # Create MIME Message
         message = MIMEMultipart()
-        message['to'] = request.recipient
-        message['subject'] = subject
         
-        # Handle From header
-        if from_name:
-            message['from'] = f"{from_name} <{user.email}>"
-        else:
-            message['from'] = user.email
-            
-        # Add Custom Headers if enabled
+        # Parse custom headers first to check for From/Subject overrides
+        custom_from = None
+        custom_subject = None
+        other_custom_headers = []
+        
         if request.use_custom_headers and request.custom_headers:
-            for line in request.custom_headers.split('\n'):
+            # Process custom headers with template engine for tag replacement
+            from app.template_engine import TemplateEngine
+            context = {
+                'smtp': user.email,
+                'from': from_name or '',
+                'subject': subject or '',
+                'to': request.recipient,
+                'domain': user.email.split('@')[1] if '@' in user.email else 'localhost'
+            }
+            processed_custom_headers = TemplateEngine.process_template(request.custom_headers, context)
+            
+            for line in processed_custom_headers.split('\n'):
                 line = line.strip()
                 if line and ':' in line:
                     key, value = line.split(':', 1)
-                    if key.lower().strip() not in ['to', 'from', 'subject']:
-                        message[key.strip()] = value.strip()
+                    key = key.strip()
+                    value = value.strip()
+                    
+                    # Check for From/Subject overrides
+                    if key.lower() == 'from':
+                        custom_from = value
+                    elif key.lower() == 'subject':
+                        custom_subject = value
+                    elif key.lower() != 'to':  # Don't override To
+                        other_custom_headers.append((key, value))
+        
+        # Set headers - use custom if provided, otherwise use defaults
+        message['to'] = request.recipient
+        
+        if custom_from:
+            message['from'] = custom_from
+        elif from_name:
+            message['from'] = f"{from_name} <{user.email}>"
+        else:
+            message['from'] = user.email
+        
+        message['subject'] = custom_subject if custom_subject else subject
+        
+        # Add remaining custom headers
+        for key, value in other_custom_headers:
+            message[key] = value
 
         # Attach Body
         msg = MIMEText(rendered_body, 'html')
