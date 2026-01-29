@@ -284,6 +284,10 @@ class DraftCampaign(Base):
     test_after_email = Column(String(255))
     test_after_count = Column(Integer, default=0)
     
+    # Saved test recipients (Auto-suggestion)
+    # Stored as JSON list of strings: ["a@b.com", "c@d.com"]
+    saved_test_recipients = Column(JSON, default=list)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     

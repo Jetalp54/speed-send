@@ -18,10 +18,12 @@ import {
   Eye,
   Rocket,
   Clock,
-  X
+  X,
+  Mail
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
+import { TestDraftDialog } from '@/components/drafts/TestDraftDialog';
 import { serviceAccountsApi, usersApi, dataListsApi, draftsApi, API_URL, apiClient } from '@/lib/api';
 
 interface DraftCampaign {
@@ -33,7 +35,7 @@ interface DraftCampaign {
   created_at: string;
   total_drafts: number;
   drafts_by_user: { [key: string]: number };
-  status: 'created' | 'uploading' | 'ready' | 'scheduled' | 'sending' | 'paused' | 'completed' | 'failed' | 'canceled';
+  status: string;
   recipients_count: number;
   users_count: number;
   emails_per_user: number;
@@ -46,6 +48,7 @@ const DraftsPage: React.FC = () => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedDraftForSchedule, setSelectedDraftForSchedule] = useState<number | null>(null);
   const [scheduleConfig, setScheduleConfig] = useState({ repetitions: 20, interval_seconds: 1 });
+  const [testDraftId, setTestDraftId] = useState<number | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -277,6 +280,13 @@ const DraftsPage: React.FC = () => {
                     {(campaign.status === 'ready' || campaign.status === 'uploaded') && (
                       <>
                         <DropdownMenuItem
+                          onClick={() => setTestDraftId(campaign.id)}
+                          className="text-indigo-600"
+                        >
+                          <Mail className="h-4 w-4 mr-2" />
+                          Test
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           onClick={() => resumeNow(campaign.id)}
                           disabled={loading}
                           className="text-blue-600"
@@ -436,6 +446,12 @@ const DraftsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <TestDraftDialog
+        open={!!testDraftId}
+        draftId={testDraftId}
+        onClose={() => setTestDraftId(null)}
+      />
     </div>
   );
 };

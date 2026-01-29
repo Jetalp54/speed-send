@@ -46,6 +46,22 @@ def fix_schema():
             except Exception as e:
                 print(f"- Error adding body_template: {e}")
 
+            # Add saved_test_recipients
+            try:
+                # Use JSONB for Postgres, or JSON if supported.
+                # Since we don't know exact DB version, we'll try standard JSON/JSONB.
+                # For safety in migration script, we use text casting or conditional.
+                conn.execute(text("ALTER TABLE draft_campaigns ADD COLUMN IF NOT EXISTS saved_test_recipients JSONB DEFAULT '[]'"))
+                print("- Added saved_test_recipients")
+            except Exception as e:
+                print(f"- Error adding saved_test_recipients (trying fallback): {e}")
+                try:
+                     # Fallback for older Postgres or other DBs (though project uses Postgres)
+                     conn.execute(text("ALTER TABLE draft_campaigns ADD COLUMN IF NOT EXISTS saved_test_recipients JSON DEFAULT '[]'"))
+                     print("- Added saved_test_recipients (fallback JSON)")
+                except Exception as e2:
+                     print(f"- Critical error adding saved_test_recipients: {e2}")
+
             conn.commit()
             print("Schema update completed successfully.")
     except Exception as e:

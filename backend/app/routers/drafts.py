@@ -1087,3 +1087,115 @@ def duplicate_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         test_after_email=new_campaign.test_after_email,
         test_after_count=new_campaign.test_after_count or 0
     )
+
+
+class DraftTestRequest(BaseModel):
+    recipient: str
+    sender_user_id: int
+    save_recipient: bool = True
+
+@router.post("/drafts/{draft_id}/test-send")
+def send_test_draft(
+    draft_id: int, 
+    request: DraftTestRequest, 
+    db: Session = Depends(get_db)
+):
+    """
+    Send a test email for a draft campaign using a specific sender and recipient.
+    Also saves the recipient to the campaign's saved list.
+    """
+    # 1. Get Campaign
+    campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == draft_id).first()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Draft campaign not found")
+        
+    # 2. Get User/Sender
+    user = db.query(models.WorkspaceUser).filter(models.WorkspaceUser.id == request.sender_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Sender user not found")
+        
+    # 3. Save recipient if requested
+    if request.save_recipient:
+        current_saved = campaign.saved_test_recipients or []
+        if request.recipient not in current_saved:
+            # Create new list to ensure change tracking
+            updated_list = list(current_saved)
+            updated_list.append(request.recipient)
+            campaign.saved_test_recipients = updated_list
+            db.add(campaign)
+            db.commit() # Commit the saved recipient
+            
+    try:
+        # 4. Prepare Email Content (Render Template)
+        # We use the same rendering logic as actual campaigns
+        template_body = campaign.body_html
+        subject = campaign.subject
+        from_name = campaign.from_name
+        
+        # Simple tag replacement (same as in create_gmail_draft usually)
+        rendered_body = template_body.replace("[First Name]", "Test User").replace("[Email]", request.recipient)
+        
+        # 5. Send via Gmail API
+        service_account = user.service_account
+        if not service_account:
+            raise HTTPException(status_code=400, detail="User has no service account")
+            
+        from app.encryption import EncryptionService
+        from app.google_api import GoogleWorkspaceService
+        from app.config import settings
+        from googleapiclient.discovery import build
+        import base64
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
+        encryption_service = EncryptionService()
+        service_account_json = encryption_service.decrypt(service_account.encrypted_json)
+        google_service = GoogleWorkspaceService(service_account_json)
+        credentials = google_service.get_delegated_credentials(user.email, settings.GMAIL_SCOPES)
+        gmail_service = build('gmail', 'v1', credentials=credentials)
+        
+        # Create MIME Message
+        message = MIMEMultipart()
+        message['to'] = request.recipient
+        message['subject'] = f"[TEST] {subject}"
+        
+        # Handle From header
+        if from_name:
+            message['from'] = f"{from_name} <{user.email}>"
+        else:
+            message['from'] = user.email
+            
+        # Add Custom Headers if enabled
+        if campaign.use_custom_headers and campaign.custom_headers:
+            # Parse custom headers (simple line-by-line)
+            for line in campaign.custom_headers.split('\\n'):
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    # Don't overwrite essential headers unless intentional
+                    if key.lower().strip() not in ['to', 'from', 'subject']:
+                        message[key.strip()] = value.strip()
+
+        # Attach Body
+        msg = MIMEText(rendered_body, 'html')
+        message.attach(msg)
+        
+        # Encode
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+        
+        # Send
+        sent_message = gmail_service.users().messages().send(
+            userId='me',
+            body={'raw': raw_message}
+        ).execute()
+        
+        logger.info(f"✅ Test email sent to {request.recipient} via {user.email}")
+        
+        return {
+            "success": True,
+            "message": f"Test email sent to {request.recipient}",
+            "message_id": sent_message.get('id')
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Test send failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send test email: {str(e)}")
