@@ -15,10 +15,21 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Send, Mail, User } from "lucide-react";
 import { apiClient } from "@/lib/api";
 
+interface DraftConfig {
+    subject: string;
+    body_html: string;
+    from_name: string;
+    use_custom_headers: boolean;
+    custom_headers: string;
+}
+
 interface TestDraftDialogProps {
     draftId: number | null;
     open: boolean;
     onClose: () => void;
+    // New optional props for Preview Mode
+    config?: DraftConfig;
+    availableUsers?: Array<{ id: number; email: string }>;
 }
 
 interface DraftDetails {
@@ -30,7 +41,7 @@ interface DraftDetails {
     selected_users: Array<{ id: number, email: string }>;
 }
 
-export function TestDraftDialog({ draftId, open, onClose }: TestDraftDialogProps) {
+export function TestDraftDialog({ draftId, open, onClose, config, availableUsers }: TestDraftDialogProps) {
     const [loading, setLoading] = useState(false);
     const [sending, setSending] = useState(false);
     const [draft, setDraft] = useState<DraftDetails | null>(null);
@@ -43,14 +54,31 @@ export function TestDraftDialog({ draftId, open, onClose }: TestDraftDialogProps
 
     // Fetch Details when opened
     useEffect(() => {
-        if (open && draftId) {
-            fetchDraftDetails(draftId);
+        if (open) {
             setRecipient('');
             setSenderUserId('');
             setError(null);
             setSuccess(null);
+
+            if (draftId) {
+                fetchDraftDetails(draftId);
+            } else if (config && availableUsers) {
+                // Preview Mode: Use provided config and users
+                // Mock a draft object for UI consistency
+                setDraft({
+                    id: 0,
+                    name: 'Preview Draft',
+                    subject: config.subject,
+                    from_name: config.from_name,
+                    saved_test_recipients: [], // TODO: Maybe fetch global saved recipients? For now empty.
+                    selected_users: availableUsers
+                });
+                if (availableUsers.length > 0) {
+                    setSenderUserId(availableUsers[0].id.toString());
+                }
+            }
         }
-    }, [open, draftId]);
+    }, [open, draftId, config, availableUsers]);
 
     const fetchDraftDetails = async (id: number) => {
         setLoading(true);
@@ -76,28 +104,50 @@ export function TestDraftDialog({ draftId, open, onClose }: TestDraftDialogProps
     };
 
     const handleSend = async () => {
-        if (!recipient || !senderUserId || !draftId) return;
+        if (!recipient || !senderUserId) return;
 
         setSending(true);
         setError(null);
         setSuccess(null);
 
         try {
-            const response = await apiClient.request(`/api/v1/drafts/${draftId}/test-send`, {
-                method: 'POST',
-                body: JSON.stringify({
+            let endpoint = '';
+            let body = {};
+
+            if (draftId) {
+                // Existing Draft Mode
+                endpoint = `/api/v1/drafts/${draftId}/test-send`;
+                body = {
                     recipient,
                     sender_user_id: parseInt(senderUserId),
                     save_recipient: true
-                })
+                };
+            } else if (config) {
+                // Preview Mode
+                endpoint = '/api/v1/drafts/test-preview';
+                body = {
+                    recipient,
+                    sender_user_id: parseInt(senderUserId),
+                    save_recipient: true,
+                    subject: config.subject,
+                    body_html: config.body_html,
+                    from_name: config.from_name,
+                    use_custom_headers: config.use_custom_headers,
+                    custom_headers: config.custom_headers
+                };
+            }
+
+            const response = await apiClient.request(endpoint, {
+                method: 'POST',
+                body: JSON.stringify(body)
             });
 
             if (response.error) throw new Error(response.error);
 
             setSuccess(`Test email sent to ${recipient}`);
 
-            // Update local saved list if successful
-            if (draft && !draft.saved_test_recipients?.includes(recipient)) {
+            // Update local saved list if successful (Only for existing draft mode currently persisted)
+            if (draft && draftId && !draft.saved_test_recipients?.includes(recipient)) {
                 setDraft({
                     ...draft,
                     saved_test_recipients: [...(draft.saved_test_recipients || []), recipient]
@@ -187,8 +237,8 @@ export function TestDraftDialog({ draftId, open, onClose }: TestDraftDialogProps
                                     ))}
                                     {(!draft.selected_users || draft.selected_users.length === 0) && (
                                         <div className="p-2 text-sm text-gray-500 text-center">
-                                            No users selected in this draft.
-                                            <br />Please edit the draft to select users.
+                                            No users selected.
+                                            <br />Please select Accounts/Users first.
                                         </div>
                                     )}
                                 </SelectContent>
@@ -199,8 +249,8 @@ export function TestDraftDialog({ draftId, open, onClose }: TestDraftDialogProps
                         </div>
 
                         <div className="bg-gray-50 p-3 rounded-md border text-xs text-gray-600 space-y-1 mt-2">
-                            <p><strong>Subject:</strong> {draft.subject}</p>
-                            <p><strong>From Name:</strong> {draft.from_name || '(Default)'}</p>
+                            <p><strong>Subject:</strong> {config ? config.subject : draft.subject}</p>
+                            <p><strong>From Name:</strong> {config ? config.from_name : draft.from_name || '(Default)'}</p>
                         </div>
                     </div>
                 )}

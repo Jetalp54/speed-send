@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { TemplateTagsGuide } from '@/components/drafts/TemplateTagsGuide';
 import { TemplatePreview } from '@/components/drafts/TemplatePreview';
+import { TestDraftDialog } from '@/components/drafts/TestDraftDialog';
 
 // API Configuration - Use imported API URL from centralized config
 
@@ -97,8 +98,7 @@ export default function NewDraftPage() {
   const [showTagsGuide, setShowTagsGuide] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState({ headers: '', body: '' });
-  const [showTestEmail, setShowTestEmail] = useState(false);
-  const [testEmail, setTestEmail] = useState('');
+  const [showTestDialog, setShowTestDialog] = useState(false);
 
   const filteredSelectedUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
@@ -465,6 +465,15 @@ export default function NewDraftPage() {
                         <Eye className="h-4 w-4" />
                         Preview Template
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowTestDialog(true)}
+                        className="flex items-center gap-2"
+                      >
+                        <Send className="h-4 w-4" />
+                        Send Test Email
+                      </Button>
                     </div>
 
                     {/* Template Tags Guide */}
@@ -782,6 +791,14 @@ export default function NewDraftPage() {
           body={previewData.body}
         />
       </div>
+
+      <TestDraftDialog
+        open={showTestDialog}
+        draftId={null}
+        config={config}
+        availableUsers={users.filter(u => selectedAccounts.includes(u.service_account_id))}
+        onClose={() => setShowTestDialog(false)}
+      />
     </div>
   );
 }

@@ -1200,3 +1200,97 @@ def send_test_draft(
     except Exception as e:
         logger.error(f"❌ Test send failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to send test email: {str(e)}")
+
+
+class DraftPreviewTestRequest(DraftTestRequest):
+    subject: str
+    body_html: str
+    from_name: Optional[str] = None
+    use_custom_headers: bool = False
+    custom_headers: Optional[str] = None
+
+@router.post("/drafts/test-preview")
+def send_draft_preview_test(
+    request: DraftPreviewTestRequest, 
+    db: Session = Depends(get_db)
+):
+    """
+    Send a test email for a draft that hasn't been saved yet (Preview Mode).
+    Takes content from request body.
+    """
+    # 1. Get User/Sender
+    user = db.query(models.WorkspaceUser).filter(models.WorkspaceUser.id == request.sender_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Sender user not found")
+            
+    try:
+        # 2. Prepare Email Content
+        template_body = request.body_html
+        subject = request.subject
+        from_name = request.from_name
+        
+        # Simple tag replacement
+        rendered_body = template_body.replace("[First Name]", "Test User").replace("[Email]", request.recipient)
+        
+        # 3. Send via Gmail API
+        service_account = user.service_account
+        if not service_account:
+            raise HTTPException(status_code=400, detail="User has no service account")
+            
+        from app.encryption import EncryptionService
+        from app.google_api import GoogleWorkspaceService
+        from app.config import settings
+        from googleapiclient.discovery import build
+        import base64
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
+        encryption_service = EncryptionService()
+        service_account_json = encryption_service.decrypt(service_account.encrypted_json)
+        google_service = GoogleWorkspaceService(service_account_json)
+        credentials = google_service.get_delegated_credentials(user.email, settings.GMAIL_SCOPES)
+        gmail_service = build('gmail', 'v1', credentials=credentials)
+        
+        # Create MIME Message
+        message = MIMEMultipart()
+        message['to'] = request.recipient
+        message['subject'] = f"[TEST] {subject}"
+        
+        # Handle From header
+        if from_name:
+            message['from'] = f"{from_name} <{user.email}>"
+        else:
+            message['from'] = user.email
+            
+        # Add Custom Headers if enabled
+        if request.use_custom_headers and request.custom_headers:
+            for line in request.custom_headers.split('\\n'):
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    if key.lower().strip() not in ['to', 'from', 'subject']:
+                        message[key.strip()] = value.strip()
+
+        # Attach Body
+        msg = MIMEText(rendered_body, 'html')
+        message.attach(msg)
+        
+        # Encode
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+        
+        # Send
+        sent_message = gmail_service.users().messages().send(
+            userId='me',
+            body={'raw': raw_message}
+        ).execute()
+        
+        logger.info(f"✅ Preview Test email sent to {request.recipient} via {user.email}")
+        
+        return {
+            "success": True,
+            "message": f"Test email sent to {request.recipient}",
+            "message_id": sent_message.get('id')
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Preview Test send failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send test email: {str(e)}")
