@@ -26,7 +26,7 @@ class TestEmailRequest(BaseModel):
     custom_headers: Optional[str] = None
     body_template: Optional[str] = None
     from_name: Optional[str] = None
-    subject: str
+    subject: Optional[str] = None  # Optional - use campaign subject if not provided
 
 @router_preview.post("/drafts/preview")
 def preview_template(request: TemplatePreviewRequest):
@@ -103,7 +103,7 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
         context = {
             'smtp': test_user.email,
             'from': request.from_name or campaign.from_name or "Test Sender",
-            'subject': request.subject,
+            'subject': request.subject or campaign.subject,  # Use campaign subject if not provided
             'to': request.test_recipient,
             'domain': test_user.email.split('@')[1] if '@' in test_user.email else 'localhost'
         }
