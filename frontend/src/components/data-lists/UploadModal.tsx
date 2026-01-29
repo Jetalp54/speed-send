@@ -162,14 +162,41 @@ export function UploadModal({ onClose, onUpload }: UploadModalProps) {
               <SelectTrigger>
                 <SelectValue placeholder="Select Geo" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="US">United States (US)</SelectItem>
-                <SelectItem value="UK">United Kingdom (UK)</SelectItem>
-                <SelectItem value="CA">Canada (CA)</SelectItem>
-                <SelectItem value="AU">Australia (AU)</SelectItem>
-                <SelectItem value="EU">Europe (EU)</SelectItem>
-                <SelectItem value="T1">Tier 1</SelectItem>
-                <SelectItem value="Mixed">Mixed</SelectItem>
+              <SelectContent className="max-h-[300px]">
+                {/* North America */}
+                <SelectItem value="US">🇺🇸 United States (US)</SelectItem>
+                <SelectItem value="CA">🇨🇦 Canada (CA)</SelectItem>
+
+                {/* UK & Oceania */}
+                <SelectItem value="UK">🇬🇧 United Kingdom (UK)</SelectItem>
+                <SelectItem value="AU">🇦🇺 Australia (AU)</SelectItem>
+                <SelectItem value="NZ">🇳🇿 New Zealand (NZ)</SelectItem>
+
+                {/* Major European Countries */}
+                <SelectItem value="DE">🇩🇪 Germany (DE)</SelectItem>
+                <SelectItem value="FR">🇫🇷 France (FR)</SelectItem>
+                <SelectItem value="IT">🇮🇹 Italy (IT)</SelectItem>
+                <SelectItem value="ES">🇪🇸 Spain (ES)</SelectItem>
+                <SelectItem value="NL">🇳🇱 Netherlands (NL)</SelectItem>
+                <SelectItem value="BE">🇧🇪 Belgium (BE)</SelectItem>
+                <SelectItem value="CH">🇨🇭 Switzerland (CH)</SelectItem>
+                <SelectItem value="AT">🇦🇹 Austria (AT)</SelectItem>
+                <SelectItem value="SE">🇸🇪 Sweden (SE)</SelectItem>
+                <SelectItem value="NO">🇳🇴 Norway (NO)</SelectItem>
+                <SelectItem value="DK">🇩🇰 Denmark (DK)</SelectItem>
+                <SelectItem value="FI">🇫🇮 Finland (FI)</SelectItem>
+                <SelectItem value="PL">🇵🇱 Poland (PL)</SelectItem>
+                <SelectItem value="IE">🇮🇪 Ireland (IE)</SelectItem>
+                <SelectItem value="PT">🇵🇹 Portugal (PT)</SelectItem>
+                <SelectItem value="GR">🇬🇷 Greece (GR)</SelectItem>
+                <SelectItem value="CZ">🇨🇿 Czech Republic (CZ)</SelectItem>
+                <SelectItem value="RO">🇷🇴 Romania (RO)</SelectItem>
+                <SelectItem value="HU">🇭🇺 Hungary (HU)</SelectItem>
+
+                {/* Regions */}
+                <SelectItem value="EU">🇪🇺 Europe (EU)</SelectItem>
+                <SelectItem value="T1">⭐ Tier 1 (All)</SelectItem>
+                <SelectItem value="Mixed">🌍 Mixed/Global</SelectItem>
               </SelectContent>
             </Select>
           </div>
