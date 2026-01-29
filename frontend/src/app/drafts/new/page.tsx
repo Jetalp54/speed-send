@@ -465,15 +465,6 @@ export default function NewDraftPage() {
                         <Eye className="h-4 w-4" />
                         Preview Template
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setShowTestDialog(true)}
-                        className="flex items-center gap-2"
-                      >
-                        <Send className="h-4 w-4" />
-                        Send Test Email
-                      </Button>
                     </div>
 
                     {/* Template Tags Guide */}
@@ -514,6 +505,28 @@ export default function NewDraftPage() {
                         />
                         <p className="text-xs text-muted-foreground mt-1">E.g. 50 = Send test email every 50 drafts.</p>
                       </div>
+                    </div>
+
+                    {/* Manual Testing Section */}
+                    <div className="border-t pt-4 mt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold flex items-center gap-2">
+                          <Mail className="h-5 w-5 text-indigo-600" />
+                          Manual Test Email
+                        </h4>
+                        <Button
+                          type="button"
+                          onClick={() => setShowTestDialog(true)}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                        >
+                          <Send className="h-4 w-4 mr-2" />
+                          Send Test Email
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Send a test email to verify formatting and deliverability before creating the draft.
+                        Choose a sender account and recipient in the popup.
+                      </p>
                     </div>
                   </div>
                 </CardContent>
