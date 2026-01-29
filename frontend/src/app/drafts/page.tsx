@@ -270,6 +270,13 @@ const DraftsPage: React.FC = () => {
                       Duplicate
                     </DropdownMenuItem>
                     <DropdownMenuItem
+                      onClick={() => setTestDraftId(campaign.id)}
+                      className="text-indigo-600"
+                    >
+                      <Mail className="h-4 w-4 mr-2" />
+                      Test
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
                       onClick={() => launchDrafts(campaign.id)}
                       disabled={loading || (campaign.status !== 'ready' && campaign.status !== 'uploaded')}
                       className="text-green-600"
@@ -279,13 +286,6 @@ const DraftsPage: React.FC = () => {
                     </DropdownMenuItem>
                     {(campaign.status === 'ready' || campaign.status === 'uploaded') && (
                       <>
-                        <DropdownMenuItem
-                          onClick={() => setTestDraftId(campaign.id)}
-                          className="text-indigo-600"
-                        >
-                          <Mail className="h-4 w-4 mr-2" />
-                          Test
-                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => resumeNow(campaign.id)}
                           disabled={loading}

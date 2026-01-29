@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { TemplateTagsGuide } from '@/components/drafts/TemplateTagsGuide';
 import { TemplatePreview } from '@/components/drafts/TemplatePreview';
+import { TestDraftDialog } from '@/components/drafts/TestDraftDialog';
 import { serviceAccountsApi, usersApi, dataListsApi, apiClient } from '@/lib/api';
 
 import { Button } from '@/components/ui/button';
@@ -109,8 +110,8 @@ export default function EditDraftPage() {
     const [showTagsGuide, setShowTagsGuide] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState({ headers: '', body: '' });
-    const [showTestEmail, setShowTestEmail] = useState(false);
-    const [testEmail, setTestEmail] = useState('');
+
+    const [showTestDialog, setShowTestDialog] = useState(false);
 
     const filteredSelectedUsers = useMemo(() => {
         const q = userSearch.trim().toLowerCase();
@@ -283,32 +284,7 @@ export default function EditDraftPage() {
         }
     };
 
-    const handleSendTest = async () => {
-        if (!testEmail || !config.body_html) return;
 
-        try {
-            const response = await apiClient.request('/api/v1/drafts/test-email', {
-                method: 'POST',
-                body: JSON.stringify({
-                    recipient: testEmail,
-                    template_body: config.body_html,
-                    template_headers: config.use_custom_headers ? config.custom_headers : undefined,
-                    use_custom_headers: config.use_custom_headers,
-                    dummy_context: {
-                        subject: config.subject,
-                        from_name: config.from_name
-                    }
-                })
-            });
-
-            if (response.error) throw new Error(response.error);
-
-            setSuccess(`Test Email Sent to ${testEmail}`);
-            setShowTestEmail(false);
-        } catch (err: any) {
-            setError(`Test Failed: ${err.message}`);
-        }
-    };
 
     if (loading) {
         return (
@@ -471,7 +447,7 @@ export default function EditDraftPage() {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        onClick={() => setShowTestEmail(true)}
+                                        onClick={() => setShowTestDialog(true)}
                                     >
                                         <Send className="h-4 w-4 mr-2" />
                                         Send Test Email
