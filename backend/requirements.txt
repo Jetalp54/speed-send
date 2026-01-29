@@ -30,6 +30,7 @@ passlib[bcrypt]==1.7.4
 aiofiles==23.2.1
 python-dotenv==1.0.0
 httpx==0.25.2
+openpyxl==3.1.2
 
 # High-performance async
 gevent==24.2.1
