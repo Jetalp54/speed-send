@@ -1264,8 +1264,9 @@ def send_draft_preview_test(
             
         # Add Custom Headers if enabled
         if request.use_custom_headers and request.custom_headers:
-            for line in request.custom_headers.split('\\n'):
-                if ':' in line:
+            for line in request.custom_headers.split('\n'):
+                line = line.strip()
+                if line and ':' in line:
                     key, value = line.split(':', 1)
                     if key.lower().strip() not in ['to', 'from', 'subject']:
                         message[key.strip()] = value.strip()
