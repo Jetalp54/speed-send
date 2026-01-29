@@ -877,27 +877,127 @@ def launch_all_drafts(db: Session = Depends(get_db)):
     """
     Launch all uploaded drafts across all campaigns.
     """
+    # 1. Fetch all drafts that are in 'created' status (meaning uploaded to Gmail but not sent)
     drafts_to_launch = db.query(models.GmailDraft).filter(models.GmailDraft.status == 'created').all()
     
-    launched_count = 0
-    failed_count = 0
+    if not drafts_to_launch:
+        return {
+            "total_launched": 0,
+            "total_failed": 0,
+            "details": []
+        }
+
+    total_launched = 0
+    total_failed = 0
     details = []
 
+    # 2. Group drafts by user_id to avoid initializing Google Service repeatedly
+    drafts_by_user = {}
     for draft in drafts_to_launch:
-        try:
-            draft.status = 'sent'
-            draft.sent_at = datetime.utcnow()
-            launched_count += 1
-            details.append({"draft_id": str(draft.id), "status": "sent"})
-        except Exception as e:
-            failed_count += 1
-            details.append({"draft_id": str(draft.id), "status": "failed", "error": str(e)})
+        if draft.user_id not in drafts_by_user:
+            drafts_by_user[draft.user_id] = []
+        drafts_by_user[draft.user_id].append(draft)
 
-    db.commit()
+    # 3. Iterate through each user and their drafts
+    for user_id, user_drafts in drafts_by_user.items():
+        try:
+            # Get user and service account
+            user = db.query(models.WorkspaceUser).filter(models.WorkspaceUser.id == user_id).first()
+            if not user:
+                logger.error(f"User with ID {user_id} not found")
+                continue
+                
+            service_account = user.service_account
+            if not service_account:
+                logger.error(f"No service account found for user {user.email}")
+                continue
+            
+            # Decrypt service account credentials
+            from app.encryption import EncryptionService
+            encryption_service = EncryptionService()
+            service_account_json = encryption_service.decrypt(service_account.encrypted_json)
+            
+            # Initialize Google Workspace Service
+            from app.google_api import GoogleWorkspaceService
+            google_service = GoogleWorkspaceService(service_account_json)
+            
+            # Get delegated credentials for the user
+            from app.config import settings
+            credentials = google_service.get_delegated_credentials(
+                user.email, 
+                settings.GMAIL_SCOPES
+            )
+            
+            # Build Gmail service
+            from googleapiclient.discovery import build
+            gmail_service = build('gmail', 'v1', credentials=credentials)
+            
+            logger.info(f"🚀 Launching {len(user_drafts)} drafts for user {user.email}")
+            
+            # Send each draft
+            for draft in user_drafts:
+                try:
+                    # Send the draft
+                    result = gmail_service.users().drafts().send(
+                        userId='me',
+                        body={'id': draft.gmail_draft_id}
+                    ).execute()
+                    
+                    # Update draft status
+                    draft.status = 'sent'
+                    draft.sent_at = datetime.utcnow()
+                    draft.gmail_message_id = result.get('id')
+                    
+                    total_launched += 1
+                    details.append({
+                        "draft_id": str(draft.id),
+                        "gmail_draft_id": draft.gmail_draft_id,
+                        "user_email": user.email,
+                        "status": "sent",
+                        "message_id": result.get('id')
+                    })
+                    
+                    # Log success
+                    logger.info(f"✅ Draft {draft.id} sent successfully for user {user.email}")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Failed to send draft {draft.id} for user {user.email}: {str(e)}")
+                    draft.status = 'failed'
+                    total_failed += 1
+                    details.append({
+                        "draft_id": str(draft.id),
+                        "gmail_draft_id": draft.gmail_draft_id,
+                        "user_email": user.email,
+                        "status": "failed",
+                        "error": str(e)
+                    })
+        
+        except Exception as e:
+            logger.error(f"❌ Failed to process drafts for user {user_id}: {str(e)}")
+            # Mark all drafts for this user as failed
+            for draft in user_drafts:
+                draft.status = 'failed'
+                total_failed += 1
+                details.append({
+                    "draft_id": str(draft.id),
+                    "gmail_draft_id": draft.gmail_draft_id,
+                    "user_email": user.email if 'user' in locals() else f"user_{user_id}",
+                    "status": "failed",
+                    "error": str(e)
+                })
+
+    # 4. Commit all changes to DB
+    try:
+        db.commit()
+    except Exception as e:
+        logger.error(f"Failed to commit transaction: {e}")
+        db.rollback()
+
+    logger.info(f"🎯 Launch All completed: {total_launched} sent, {total_failed} failed")
 
     return schemas.DraftLaunchResponse(
-        total_launched=launched_count,
-        total_failed=failed_count,
+        total_launched=total_launched,
+        total_failed=total_failed,
         details=details
     )
 
