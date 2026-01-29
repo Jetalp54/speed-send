@@ -21,7 +21,9 @@ class TemplatePreviewRequest(BaseModel):
     sample_to: str = "recipient@example.com"
 
 class TestEmailRequest(BaseModel):
-    test_recipient: str
+    recipient: str  # Frontend sends 'recipient', not 'test_recipient'
+    sender_user_id: Optional[int] = None  # Specific user to send from
+    save_recipient: bool = False  # Whether to save this recipient to campaign
     use_custom_headers: bool = False
     custom_headers: Optional[str] = None
     body_template: Optional[str] = None
@@ -91,11 +93,22 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
         if not campaign:
             raise HTTPException(status_code=404, detail="Campaign not found")
         
-        # Get first user for testing
+        # Get first user for testing (or specific user if sender_user_id provided)
         if not campaign.selected_users:
             raise HTTPException(status_code=400, detail="No users selected")
         
-        test_user = campaign.selected_users[0].user
+        # Find the requested user or use the first one
+        test_user = None
+        if request.sender_user_id:
+            for user_assoc in campaign.selected_users:
+                if user_assoc.user and user_assoc.user.id == request.sender_user_id:
+                    test_user = user_assoc.user
+                    break
+            if not test_user:
+                raise HTTPException(status_code=400, detail=f"User with ID {request.sender_user_id} not found in campaign")
+        else:
+            test_user = campaign.selected_users[0].user
+            
         if not test_user:
             raise HTTPException(status_code=400, detail="User not found")
         
@@ -104,7 +117,7 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
             'smtp': test_user.email,
             'from': request.from_name or campaign.from_name or "Test Sender",
             'subject': request.subject or campaign.subject,  # Use campaign subject if not provided
-            'to': request.test_recipient,
+            'to': request.recipient,
             'domain': test_user.email.split('@')[1] if '@' in test_user.email else 'localhost'
         }
         
@@ -140,7 +153,7 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
         
         # Create email message
         message = MIMEMultipart('alternative')
-        message['To'] = request.test_recipient
+        message['To'] = request.recipient
         message['From'] = f"{context['from']} <{test_user.email}>"
         message['Subject'] = context['subject']
         
@@ -166,11 +179,19 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
             body={'raw': raw_message}
         ).execute()
         
-        logger.info(f"Test email sent to {request.test_recipient}")
+        logger.info(f"Test email sent to {request.recipient}")
+        
+        # Save recipient to campaign if requested
+        if request.save_recipient:
+            saved_recipients = campaign.saved_test_recipients or []
+            if request.recipient not in saved_recipients:
+                saved_recipients.append(request.recipient)
+                campaign.saved_test_recipients = saved_recipients
+                db.commit()
         
         return {
             "success": True,
-            "message": f"Test email sent to {request.test_recipient}",
+            "message": f"Test email sent to {request.recipient}",
             "message_id": result.get('id'),
             "preview": {
                 "headers": processed_headers,
