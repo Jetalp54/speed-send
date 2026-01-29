@@ -12,6 +12,7 @@ from googleapiclient.discovery import build
 import logging
 from app.state_machine import transition_draft_status
 from app.models import DraftStatus
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 from googleapiclient.errors import HttpError
