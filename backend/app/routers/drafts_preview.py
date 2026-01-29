@@ -153,20 +153,36 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
         
         # Create email message
         message = MIMEMultipart('alternative')
-        message['To'] = request.recipient
-        message['From'] = f"{context['from']} <{test_user.email}>"
-        message['Subject'] = context['subject']
         
-        # Add custom headers if enabled
-        if request.use_custom_headers:
-            # Parse custom headers and add to message
+        # Parse custom headers first to check for From/Subject overrides
+        custom_from = None
+        custom_subject = None
+        other_custom_headers = []
+        
+        if request.use_custom_headers and request.custom_headers:
+            # Parse custom headers
             for line in processed_headers.split('\n'):
                 if ':' in line:
                     key, value = line.split(':', 1)
                     key = key.strip()
                     value = value.strip()
-                    if key.lower() not in ['to', 'from', 'subject']:  # Don't override main headers
-                        message[key] = value
+                    
+                    # Check for From/Subject overrides
+                    if key.lower() == 'from':
+                        custom_from = value
+                    elif key.lower() == 'subject':
+                        custom_subject = value
+                    elif key.lower() != 'to':  # Don't override To (always use recipient)
+                        other_custom_headers.append((key, value))
+        
+        # Set headers - use custom if provided, otherwise use defaults
+        message['To'] = request.recipient
+        message['From'] = custom_from if custom_from else f"{context['from']} <{test_user.email}>"
+        message['Subject'] = custom_subject if custom_subject else context['subject']
+        
+        # Add remaining custom headers
+        for key, value in other_custom_headers:
+            message[key] = value
         
         html_part = MIMEText(processed_body, 'html')
         message.attach(html_part)
