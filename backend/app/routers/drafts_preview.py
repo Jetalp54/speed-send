@@ -112,6 +112,15 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
         if not test_user:
             raise HTTPException(status_code=400, detail="User not found")
         
+        # Use campaign's custom headers if not provided in request
+        use_custom_headers = request.use_custom_headers if request.use_custom_headers is not None else campaign.use_custom_headers
+        custom_headers = request.custom_headers if request.custom_headers is not None else campaign.custom_headers
+        
+        logger.info(f"TEST EMAIL DEBUG - use_custom_headers: {use_custom_headers}")
+        logger.info(f"TEST EMAIL DEBUG - custom_headers present: {bool(custom_headers)}")
+        if custom_headers:
+            logger.info(f"TEST EMAIL DEBUG - custom_headers preview: {custom_headers[:200] if len(custom_headers) > 200 else custom_headers}")
+        
         # Setup context
         context = {
             'smtp': test_user.email,
@@ -122,8 +131,8 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
         }
         
         # Process templates
-        if request.use_custom_headers and request.custom_headers:
-            processed_headers = TemplateEngine.process_template(request.custom_headers, context)
+        if use_custom_headers and custom_headers:
+            processed_headers = TemplateEngine.process_template(custom_headers, context)
         else:
             processed_headers = TemplateEngine.process_template(TemplateEngine.get_default_headers(), context)
         
@@ -159,7 +168,7 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
         custom_subject = None
         other_custom_headers = []
         
-        if request.use_custom_headers and request.custom_headers:
+        if use_custom_headers and custom_headers:
             # Parse custom headers
             for line in processed_headers.split('\n'):
                 if ':' in line:
