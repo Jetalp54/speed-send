@@ -19,6 +19,8 @@ from googleapiclient.errors import HttpError
 import json
 
 router = APIRouter()
+from app.routers.live_logs import emit_log
+
 
 @router.post("/drafts", response_model=schemas.DraftCampaignResponse)
 def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session = Depends(get_db)):
@@ -405,6 +407,13 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
         try:
             print(f"DEBUG: Processing user {user_index + 1}/{len(users)}: {user.email}")
             logger.info(f"Processing user {user_index + 1}/{len(users)}: {user.email}")
+            emit_log({
+                "level": "info",
+                "message": f"Processing user {user.email} ({user_index + 1}/{len(users)})",
+                "campaign_id": campaign.id,
+                "data": {"user_email": user.email, "progress": f"{user_index + 1}/{len(users)}"}
+            })
+
             
             # ALL users should get ALL recipients (shared distribution)
             user_recipients = all_recipients
@@ -447,6 +456,13 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                     
                     user_drafts_created += 1
                     logger.info(f"Successfully created draft for user {thread_user.email}")
+                    if user_drafts_created % 5 == 0: # Log every 5 drafts to avoid spamming
+                         emit_log({
+                            "level": "info",
+                            "message": f"User {thread_user.email}: Created {user_drafts_created} drafts",
+                            "campaign_id": campaign.id
+                        })
+
 
                     # Test After X Automation
                     if campaign.test_after_count > 0 and campaign.test_after_email:
@@ -520,6 +536,12 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                     successful_users.append(result["user_email"])
                     total_drafts_created += result["drafts_created"]
                     logger.info(f"Completed {result['drafts_created']} drafts for user {result['user_email']}")
+                    emit_log({
+                        "level": "success",
+                        "message": f"User {result['user_email']} finished. Drafts: {result['drafts_created']}",
+                        "campaign_id": campaign.id
+                    })
+
                 if result["failed"]:
                     failed_users.extend(result["failed"])
             except Exception as e:
