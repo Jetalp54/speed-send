@@ -46,15 +46,27 @@ set -e
 
 # Wait for apt lock to be released (handles unattended-upgrades)
 echo "Waiting for apt lock to be released..."
+MAX_WAIT=300  # 5 minutes max
+WAITED=0
 while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+    if [ $WAITED -ge $MAX_WAIT ]; then
+        echo "Timeout waiting for package manager lock"
+        exit 1
+    fi
     echo "Waiting for other package managers to finish..."
     sleep 5
+    WAITED=$((WAITED + 5))
 done
 
 # Also wait for dpkg lock
 while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+    if [ $WAITED -ge $MAX_WAIT ]; then
+        echo "Timeout waiting for dpkg lock"
+        exit 1
+    fi
     echo "Waiting for dpkg lock..."
     sleep 5
+    WAITED=$((WAITED + 5))
 done
 
 echo "Locks released, proceeding with installation..."
@@ -62,9 +74,40 @@ echo "Locks released, proceeding with installation..."
 # 1. Install Dependencies
 echo "Installing Nginx and Certbot..."
 apt-get update
-apt-get install -y nginx certbot python3-certbot-nginx
+apt-get install -y nginx certbot python3-certbot-nginx dnsutils
 
-# 2. Configure Nginx
+# 2. Verify DNS before proceeding
+echo "Verifying DNS configuration for {domain_name}..."
+DNS_RETRIES=0
+MAX_DNS_RETRIES=12  # 2 minutes with 10 second intervals
+DNS_OK=false
+
+while [ $DNS_RETRIES -lt $MAX_DNS_RETRIES ]; do
+    # Get current server IP
+    SERVER_IP=$(hostname -I | awk '{{print $1}}')
+    
+    # Check DNS resolution
+    RESOLVED_IP=$(dig +short {domain_name} @8.8.8.8 | tail -n1)
+    
+    if [ "$RESOLVED_IP" = "$SERVER_IP" ]; then
+        echo "DNS verified: {domain_name} points to $SERVER_IP"
+        DNS_OK=true
+        break
+    else
+        echo "DNS not ready yet. {domain_name} resolves to '$RESOLVED_IP' but should be '$SERVER_IP'"
+        echo "Waiting 10 seconds before retry... ($DNS_RETRIES/$MAX_DNS_RETRIES)"
+        sleep 10
+        DNS_RETRIES=$((DNS_RETRIES + 1))
+    fi
+done
+
+if [ "$DNS_OK" = false ]; then
+    echo "ERROR: DNS verification failed after $MAX_DNS_RETRIES attempts"
+    echo "Please ensure DNS A record for {domain_name} points to this server's IP"
+    exit 1
+fi
+
+# 3. Configure Nginx
 echo "Configuring Nginx for {domain_name}..."
 
 cat > /etc/nginx/sites-available/{domain_name} <<EOF
@@ -84,19 +127,45 @@ server {{
 }}
 EOF
 
-# 3. Enable Site
+# 4. Enable Site
 ln -sf /etc/nginx/sites-available/{domain_name} /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 
-# 4. Test & Reload
+# 5. Test & Reload
 nginx -t
 systemctl reload nginx
 
-# 5. SSL with Certbot
-# Only run if not already valid to avoid limits? 
-# For now, we assume fresh or force renewal
+# 6. Verify HTTP is accessible
+echo "Verifying HTTP accessibility..."
+sleep 2
+HTTP_CODE=$(curl -s -o /dev/null -w "%{{http_code}}" http://{domain_name}/ || echo "000")
+if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "301" ] && [ "$HTTP_CODE" != "302" ]; then
+    echo "WARNING: HTTP request returned code $HTTP_CODE. Proceeding anyway..."
+fi
+
+# 7. SSL with Certbot
 echo "Requesting SSL Certificate..."
-certbot --nginx -d {domain_name} --non-interactive --agree-tos --email admin@{domain_name} --redirect
+SSL_RETRIES=0
+MAX_SSL_RETRIES=3
+SSL_OK=false
+
+while [ $SSL_RETRIES -lt $MAX_SSL_RETRIES ]; do
+    if certbot --nginx -d {domain_name} --non-interactive --agree-tos --email admin@{domain_name} --redirect; then
+        echo "SSL Certificate obtained successfully!"
+        SSL_OK=true
+        break
+    else
+        echo "SSL attempt failed. Retrying... ($SSL_RETRIES/$MAX_SSL_RETRIES)"
+        sleep 10
+        SSL_RETRIES=$((SSL_RETRIES + 1))
+    fi
+done
+
+if [ "$SSL_OK" = false ]; then
+    echo "WARNING: SSL certificate could not be obtained after $MAX_SSL_RETRIES attempts"
+    echo "Domain is configured and accessible via HTTP, but HTTPS may not work"
+    exit 2  # Non-fatal exit code
+fi
 
 echo "Provisioning Complete!"
 """
@@ -147,11 +216,15 @@ echo "Provisioning Complete!"
             exit_status = stdout.channel.recv_exit_status()
             
             if exit_status == 0:
-                self.log("Provisioning successful!")
+                self.log("✅ Provisioning successful! Domain configured with HTTPS")
                 self.update_status('active', ssl=True)
+            elif exit_status == 2:
+                # Partial success: HTTP works but SSL failed
+                self.log("⚠️ Partial success: Domain configured with HTTP only (SSL failed)")
+                self.update_status('active', ssl=False)
             else:
                 error_msg = stderr.read().decode()
-                self.log(f"Provisioning failed with status {exit_status}: {error_msg}")
+                self.log(f"❌ Provisioning failed with status {exit_status}: {error_msg}")
                 self.update_status('failed')
                 
         except Exception as e:
