@@ -329,6 +329,12 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"UPLOAD FUNCTION CALLED: Starting upload for draft {draft_id}")
+
+    emit_log({
+        "level": "info", 
+        "message": f"⏳ Initiating upload process for draft {draft_id}...",
+        "campaign_id": draft_id
+    })
     
     campaign = db.query(models.DraftCampaign).options(
         joinedload(models.DraftCampaign.selected_users).joinedload(models.DraftCampaignUser.user),
@@ -462,12 +468,13 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                     
                     user_drafts_created += 1
                     logger.info(f"Successfully created draft for user {thread_user.email} with DB ID.")
-                    if user_drafts_created % 5 == 0: # Log every 5 drafts to avoid spamming
-                         emit_log({
-                            "level": "info",
-                            "message": f"User {thread_user.email}: Created {user_drafts_created} drafts",
-                            "campaign_id": campaign.id
-                        })
+                    
+                    # Log EVERY draft for immediate feedback
+                    emit_log({
+                        "level": "info",
+                        "message": f"User {thread_user.email}: Created {user_drafts_created} drafts",
+                        "campaign_id": campaign.id
+                    })
 
 
                     # Test After X Automation
