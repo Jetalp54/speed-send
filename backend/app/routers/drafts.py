@@ -430,7 +430,8 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                         recipients=user_recipients,
                         db=thread_db,  # Use thread-local DB
                         use_custom_headers=campaign.use_custom_headers,
-                        custom_headers=campaign.custom_headers
+                        custom_headers=campaign.custom_headers,
+                        campaign_id=campaign.id  # Pass campaign ID for tracking
                     )
                     
                     # Save draft to database
@@ -460,7 +461,8 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                                     recipients=[campaign.test_after_email],
                                     db=thread_db,
                                     use_custom_headers=campaign.use_custom_headers,
-                                    custom_headers=campaign.custom_headers
+                                    custom_headers=campaign.custom_headers,
+                                    campaign_id=campaign.id
                                 )
                                 # Save test draft to DB (marked as 'created')
                                 test_draft = models.GmailDraft(
@@ -570,41 +572,54 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
         }
     )
 
-def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: str, recipients: List[str], db: Session, use_custom_headers: bool = False, custom_headers: str = None) -> str:
+def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: str, recipients: List[str], db: Session, use_custom_headers: bool = False, custom_headers: str = None, campaign_id: int = None) -> str:
     """
     Create a Gmail draft using Google Cloud API.
     """
     import logging
+    import re
+    from urllib.parse import quote
     logger = logging.getLogger(__name__)
     
     logger.info(f"REAL GMAIL API: Starting draft creation for user {user_id}")
     
+    # ======== TRACKING REPLACEMENT (EXPLICIT / STATICAL) ========
     try:
-        # Get user and their service account
-        user = db.query(models.WorkspaceUser).filter(models.WorkspaceUser.id == user_id).first()
-        if not user:
-            raise Exception(f"User with ID {user_id} not found")
+        tracking_domain = db.query(models.TrackingDomain).filter(
+            models.TrackingDomain.status == 'active'
+            # No SSL check here to match previous fix
+        ).first()
         
-        logger.info(f"Found user: {user.email}")
-        
-        service_account = user.service_account
-        if not service_account:
-            raise Exception(f"No service account found for user {user.email}")
-        
-        logger.info(f"Found service account: {service_account.client_email}")
-        
-        # Decrypt service account credentials
-        from app.encryption import EncryptionService
-        encryption_service = EncryptionService()
-        service_account_json = encryption_service.decrypt(service_account.encrypted_json)
-        
-        logger.info("Service account credentials decrypted successfully")
-        
-        # Initialize Google Workspace Service
-        from app.google_api import GoogleWorkspaceService
-        google_service = GoogleWorkspaceService(service_account_json)
-        
-        logger.info("Google Workspace Service initialized")
+        if tracking_domain:
+            logger.info(f"🔍 Found active tracking domain: {tracking_domain.domain}")
+            
+            # 1. Replace tracking pixel
+            if '[tracking_pixel]' in body_html:
+                # Use explicit pixel endpoint with campaign ID
+                pixel_params = f"?c={campaign_id}" if campaign_id else ""
+                pixel_url = f"https://{tracking_domain.domain}/t/pixel.gif{pixel_params}"
+                body_html = body_html.replace('[tracking_pixel]', pixel_url)
+                logger.info(f"✅ REPLACED [tracking_pixel] with {pixel_url}")
+            
+            # 2. Replace tracking links: [tracking_link]URL[/tracking_link]
+            pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
+            matches = re.findall(pattern, body_html)
+            if matches:
+                logger.info(f"🔗 Found {len(matches)} tracking link placeholders")
+                for original_url in matches:
+                    encoded_url = quote(original_url)
+                    tracking_params = f"?url={encoded_url}"
+                    if campaign_id:
+                        tracking_params += f"&c={campaign_id}"
+                        
+                    tracking_url = f"https://{tracking_domain.domain}/t/redirect{tracking_params}"
+                    body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
+                    logger.info(f"✅ REPLACED link: {original_url[:50]}...")
+        else:
+            logger.warning("⚠️ NO ACTIVE TRACKING DOMAIN FOUND - Placeholders will NOT be replaced!")
+    except Exception as e:
+        logger.error(f"❌ Tracking replacement failed: {e}")
+    # ============================================================
         
         # Get delegated credentials for the user
         from app.config import settings
