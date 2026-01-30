@@ -10,7 +10,8 @@ from app.config import settings
 from app.database import engine, Base
 from app.routers import accounts, users, campaigns, dashboard, test_email, drafts, contacts, data_lists, live_logs
 from app.routers import send as send_router
-from app.routers import accounts_sync_stub, drafts_celery, drafts_ultra, drafts_resume, drafts_preview
+# drafts_resume REMOVED - conflicts with drafts_ultra /resume-scheduled endpoint
+from app.routers import accounts_sync_stub, drafts_celery, drafts_ultra, drafts_preview
 from app.middleware import PerformanceMiddleware
 
 # Configure logging
@@ -111,7 +112,7 @@ app.include_router(data_lists.router, prefix=settings.API_V1_PREFIX)
 app.include_router(drafts.router, prefix=settings.API_V1_PREFIX)
 app.include_router(drafts_celery.router_celery, prefix=settings.API_V1_PREFIX, tags=["Drafts-UltraSpeed"])
 app.include_router(drafts_ultra.router_v2, prefix=settings.API_V1_PREFIX, tags=["Drafts-Maximum-Performance"])
-app.include_router(drafts_resume.router_resume, prefix=settings.API_V1_PREFIX, tags=["Drafts-Scheduled-Resume"])
+# app.include_router(drafts_resume.router_resume, prefix=settings.API_V1_PREFIX, tags=["Drafts-Scheduled-Resume"])  # REMOVED - conflicts with drafts_ultra
 app.include_router(drafts_preview.router_preview, prefix=settings.API_V1_PREFIX, tags=["Drafts-Preview-Test"])
 app.include_router(send_router.router, prefix=settings.API_V1_PREFIX)
 app.include_router(accounts_sync_stub.router, prefix=settings.API_V1_PREFIX)
