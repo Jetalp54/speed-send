@@ -239,19 +239,7 @@ async def sync_service_account(
             WHERE user_id IN (SELECT id FROM workspace_users WHERE service_account_id = :id)
         """), {"id": account_id})
         
-        # 3. Delete campaign_senders using these users
-        db.execute(text("""
-            DELETE FROM campaign_senders
-            WHERE user_id IN (SELECT id FROM workspace_users WHERE service_account_id = :id)
-        """), {"id": account_id})
-        
-        # 4. Delete email_logs for these users
-        db.execute(text("""
-            DELETE FROM email_logs
-            WHERE user_id IN (SELECT id FROM workspace_users WHERE service_account_id = :id)
-        """), {"id": account_id})
-        
-        # 5. Now safe to delete the workspace users
+        # 3. Now safe to delete the workspace users
         db.execute(text("DELETE FROM workspace_users WHERE service_account_id = :id"), {"id": account_id})
         
         logger.info(f"Successfully cleaned up existing users for account {account_id}")
