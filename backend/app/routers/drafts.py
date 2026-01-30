@@ -709,6 +709,54 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
             html_part = MIMEText(body_html, 'html')
             message.attach(html_part)
         
+        # === REPLACE TRACKING PLACEHOLDERS ===
+        # Get tracking domain to use
+        tracking_domain = None
+        try:
+            tracking_domain = db.query(models.TrackingDomain).filter(
+                models.TrackingDomain.status == 'active',
+                models.TrackingDomain.ssl_active == True
+            ).first()
+        except:
+            logger.warning("No active tracking domain found, skipping tracking replacement")
+        
+        if tracking_domain:
+            # Get the message body to process
+            if use_custom_headers and custom_headers:
+                # For custom headers, body is in payload
+                current_body = message.get_payload() if hasattr(message, 'get_payload') else body_html
+            else:
+                # For multipart, get HTML part
+                current_body = body_html
+            
+            # Replace [tracking_pixel] placeholder
+            if '[tracking_pixel]' in str(current_body):
+                pixel_url = f"https://{tracking_domain.domain}/t/p/placeholder.png"
+                current_body = str(current_body).replace('[tracking_pixel]', pixel_url)
+                logger.info(f"Replaced [tracking_pixel] with {pixel_url}")
+            
+            # Replace [tracking_link]URL[/tracking_link] placeholders
+            import re
+            pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
+            def replace_link(match):
+                original_url = match.group(1)
+                # Create tracking redirect URL
+                # For drafts, we use a simple passthrough since we don't have email_log_id yet
+                return f"https://{tracking_domain.domain}/t/r?url={original_url}"
+            
+            current_body = re.sub(pattern, replace_link, str(current_body))
+            
+            # Update message with replaced body
+            if use_custom_headers and custom_headers:
+                if hasattr(message, 'set_payload'):
+                    message.set_payload(current_body)
+            else:
+                # For multipart, recreate HTML part
+                for i, part in enumerate(message.get_payload()):
+                    if part.get_content_type() == 'text/html':
+                        message.get_payload()[i] = MIMEText(current_body, 'html')
+                        break
+        
         # Encode message
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
         
