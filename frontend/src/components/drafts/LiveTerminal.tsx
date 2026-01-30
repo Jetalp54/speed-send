@@ -43,10 +43,19 @@ export const LiveTerminal: React.FC = () => {
 
                 eventSource.onmessage = (event) => {
                     console.log('📨 SSE MESSAGE RECEIVED:', event.data);
+
+                    // Skip ping messages
+                    if (event.data.trim().startsWith(':')) {
+                        console.log('⏭️ Skipping ping message');
+                        return;
+                    }
+
                     try {
                         const log: LogEntry = JSON.parse(event.data);
                         console.log('✅ Parsed log:', log);
+                        console.log('🔢 Current logs.length before add:', logs.length);
                         addLog(log);
+                        console.log('➕ Log added to state');
                     } catch (err) {
                         console.error('❌ Failed to parse log:', err, 'Raw data:', event.data);
                     }
@@ -87,10 +96,15 @@ export const LiveTerminal: React.FC = () => {
     }, []);
 
     const addLog = (log: LogEntry) => {
+        console.log('🎯 addLog called with:', log);
         setLogs(prev => {
+            console.log('📊 Previous logs:', prev.length);
             const newLogs = [...prev, log];
+            console.log('📊 New logs array:', newLogs.length);
             // Keep only last 200 logs
-            return newLogs.slice(-200);
+            const trimmed = newLogs.slice(-200);
+            console.log('📊 After trim:', trimmed.length);
+            return trimmed;
         });
     };
 
