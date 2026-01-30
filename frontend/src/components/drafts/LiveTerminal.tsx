@@ -109,9 +109,7 @@ export const LiveTerminal: React.FC = () => {
 
     const getLevelColor = (level: string) => {
         switch (level.toLowerCase()) {
-            case 'success
-
-':
+            case 'success':
                 return 'text-green-400';
             case 'error':
                 return 'text-red-400';
