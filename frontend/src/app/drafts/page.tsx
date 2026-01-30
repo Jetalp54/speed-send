@@ -47,7 +47,7 @@ const DraftsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedDraftForSchedule, setSelectedDraftForSchedule] = useState<number | null>(null);
-  const [scheduleConfig, setScheduleConfig] = useState({ repetitions: 20, interval_seconds: 1 });
+  const [scheduleConfig, setScheduleConfig] = useState({ repetitions: 20, interval_ms: 1000 });
   const [testDraftId, setTestDraftId] = useState<number | null>(null);
   const router = useRouter();
 
@@ -118,7 +118,7 @@ const DraftsPage: React.FC = () => {
       if (response.error) throw new Error(response.error);
       setError(null);
       setShowScheduleModal(false);
-      alert(`✅ Scheduled resume started: ${scheduleConfig.repetitions} iterations, ${scheduleConfig.interval_seconds}s interval`);
+      alert(`✅ Scheduled resume started: ${scheduleConfig.repetitions} iterations, ${scheduleConfig.interval_ms}ms (${scheduleConfig.interval_ms / 1000}s) interval`);
     } catch (err: any) {
       setError(`Failed to start scheduled resume: ${err.response?.data?.detail || err.message}`);
     } finally {
@@ -402,25 +402,26 @@ const DraftsPage: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Interval (seconds)
+                  Interval (milliseconds)
                 </label>
                 <input
                   type="number"
-                  min="1"
-                  max="3600"
-                  value={scheduleConfig.interval_seconds}
-                  onChange={(e) => setScheduleConfig(prev => ({ ...prev, interval_seconds: parseInt(e.target.value) || 1 }))}
+                  min="100"
+                  max="60000"
+                  step="100"
+                  value={scheduleConfig.interval_ms}
+                  onChange={(e) => setScheduleConfig(prev => ({ ...prev, interval_ms: parseInt(e.target.value) || 1000 }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="1"
+                  placeholder="1000"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Seconds between each repetition (1-3600)
+                  Milliseconds between each repetition (100-60000). Example: 1000ms = 1 sec, 500ms = 0.5 sec
                 </p>
               </div>
 
               <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
                 <p className="text-sm text-blue-700">
-                  <strong>Total duration:</strong> ~{scheduleConfig.repetitions * scheduleConfig.interval_seconds} seconds
+                  <strong>Total duration:</strong> ~{(scheduleConfig.repetitions * scheduleConfig.interval_ms / 1000).toFixed(1)} seconds
                   <br />
                   <strong>Example:</strong> 20 reps × 1s = launches all drafts 20 times over 20 seconds
                 </p>
