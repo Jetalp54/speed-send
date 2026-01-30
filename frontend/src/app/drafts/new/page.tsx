@@ -256,32 +256,8 @@ export default function NewDraftPage() {
 
     setLoading(true);
     try {
-      // Process HTML body to add tracking if enabled
-      let processedBodyHtml = config.body_html;
-
-      if (autoInsertTracking) {
-        // Add tracking pixel before closing </body> tag or at end
-        const trackingPixel = '<img src="[tracking_pixel]" width="1" height="1" style="display:none" alt="" />';
-
-        if (processedBodyHtml.includes('</body>')) {
-          processedBodyHtml = processedBodyHtml.replace('</body>', `${trackingPixel}</body>`);
-        } else {
-          processedBodyHtml += trackingPixel;
-        }
-
-        // Convert all http/https links to use tracking
-        // Match href="http..." or href='http...'
-        processedBodyHtml = processedBodyHtml.replace(
-          /href=["'](https?:\/\/[^"']+)["']/gi,
-          'href="[tracking_link]$1[/tracking_link]"'
-        );
-
-        console.log('✅ Tracking injected into HTML body');
-      }
-
       const payload = {
         ...config,
-        body_html: processedBodyHtml, // Use processed HTML
         selected_account_ids: selectedAccounts,
         selected_user_ids: selectedUsers,
         selected_contact_list_ids: selectedContacts,
@@ -291,7 +267,6 @@ export default function NewDraftPage() {
       console.log('🚀 Creating draft with payload:', payload);
       console.log('✅ use_custom_headers:', payload.use_custom_headers);
       console.log('✅ custom_headers length:', payload.custom_headers?.length || 0);
-      console.log('✅ autoInsertTracking:', autoInsertTracking);
 
       const response = await apiClient.request('/api/v1/drafts', {
         method: 'POST',
@@ -429,7 +404,49 @@ export default function NewDraftPage() {
                     <Checkbox
                       id="auto-tracking"
                       checked={autoInsertTracking}
-                      onCheckedChange={(checked) => setAutoInsertTracking(!!checked)}
+                      onCheckedChange={async (checked) => {
+                        setAutoInsertTracking(!!checked);
+
+                        // If enabling tracking, insert tracking code into HTML
+                        if (checked) {
+                          try {
+                            // Fetch active tracking domain
+                            const response = await apiClient.request('/api/v1/tracking-domains/active');
+
+                            if (response.error || !response.data?.domain) {
+                              showNotification('No active tracking domain found. Please add one in Tracking Domains page.', 'error');
+                              setAutoInsertTracking(false);
+                              return;
+                            }
+
+                            const trackingDomain = response.data.domain;
+                            let html = config.body_html;
+
+                            // Add tracking pixel before </body> or at end
+                            const pixelUrl = `https://${trackingDomain}/t/p/tracking.gif`;
+                            const pixelHtml = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="">`;
+
+                            if (html.includes('</body>')) {
+                              html = html.replace('</body>', `${pixelHtml}\n</body>`);
+                            } else {
+                              html += `\n${pixelHtml}`;
+                            }
+
+                            // Convert all http/https links to tracking links
+                            html = html.replace(
+                              /href=["'](https?:\/\/[^"']+)["']/gi,
+                              (match, url) => `href="https://${trackingDomain}/t/r?url=${encodeURIComponent(url)}"`
+                            );
+
+                            setConfig(c => ({ ...c, body_html: html }));
+                            showNotification(`Tracking URLs inserted using domain: ${trackingDomain}`, 'success');
+                          } catch (error: any) {
+                            console.error('Failed to insert tracking:', error);
+                            showNotification('Failed to fetch tracking domain', 'error');
+                            setAutoInsertTracking(false);
+                          }
+                        }
+                      }}
                     />
                     <Label htmlFor="auto-tracking" className="text-sm">
                       Auto-insert tracking pixel and links (recommended)
@@ -437,7 +454,7 @@ export default function NewDraftPage() {
                   </div>
                   {autoInsertTracking && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Tracking pixel and clickable links will be automatically added to your HTML.
+                      Click to insert tracking pixel and convert links to use your tracking domain.
                     </p>
                   )}
 

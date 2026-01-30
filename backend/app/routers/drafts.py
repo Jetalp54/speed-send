@@ -575,43 +575,9 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
     Create a Gmail draft using Google Cloud API.
     """
     import logging
-    import re
     logger = logging.getLogger(__name__)
     
     logger.info(f"REAL GMAIL API: Starting draft creation for user {user_id}")
-    
-    # ======== TRACKING REPLACEMENT - FIRST THING! ========
-    # Replace [tracking_pixel] and [tracking_link] BEFORE any processing
-    try:
-        tracking_domain = db.query(models.TrackingDomain).filter(
-            models.TrackingDomain.status == 'active',
-            models.TrackingDomain.ssl_active == True
-        ).first()
-        
-        if tracking_domain:
-            logger.info(f"🔍 Found active tracking domain: {tracking_domain.domain}")
-            
-            # Replace tracking pixel
-            if '[tracking_pixel]' in body_html:
-                pixel_url = f"https://{tracking_domain.domain}/t/p/tracking.gif"
-                body_html = body_html.replace('[tracking_pixel]', pixel_url)
-                logger.info(f"✅ REPLACED [tracking_pixel] with {pixel_url}")
-            
-            # Replace tracking links: [tracking_link]URL[/tracking_link]
-            pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
-            matches = re.findall(pattern, body_html)
-            if matches:
-                logger.info(f"🔗 Found {len(matches)} tracking link placeholders")
-                for original_url in matches:
-                    tracking_url = f"https://{tracking_domain.domain}/t/r?url={original_url}"
-                    body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
-                    logger.info(f"✅ REPLACED link: {original_url[:50]}...")
-        else:
-            logger.warning("⚠️ NO ACTIVE TRACKING DOMAIN FOUND - Placeholders will NOT be replaced!")
-    except Exception as e:
-        logger.error(f"❌ Tracking replacement failed: {e}")
-    
-    # ======== END TRACKING REPLACEMENT ========
     
     try:
         # Get user and their service account
