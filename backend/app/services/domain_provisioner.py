@@ -80,7 +80,30 @@ done
 # 2. Install Nginx & Certbot
 echo "Installing dependencies..."
 apt-get update -y
-apt-get install -y nginx certbot python3-certbot-nginx dnsutils
+apt-get install -y nginx certbot python3-certbot-nginx dnsutils ufw
+
+# 2b. Configure Firewall (Aggressive Reset)
+echo "Configuring Firewall..."
+# Reset UFW to avoid conflicts
+ufw --force disable
+ufw --force reset
+
+# Set Rules
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow 'Nginx Full'
+
+# Enable
+echo "y" | ufw enable
+
+# Force flush iptables to clear provider defaults
+iptables -F
+iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp --dport 443 -j ACCEPT
 
 # 3. Configure Nginx Proxy
 echo "Configuring Nginx..."

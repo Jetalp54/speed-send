@@ -443,6 +443,11 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                         campaign_id=campaign.id  # Pass campaign ID for tracking
                     )
                     
+                    logger.info(f"DEBUG: create_gmail_draft returned ID: {gmail_draft_id}")
+                    if not gmail_draft_id:
+                        logger.error("CRITICAL: create_gmail_draft returned None or empty string!")
+                        raise ValueError("Failed to obtain valid Gmail Draft ID")
+                    
                     # Save draft to database
                     draft = models.GmailDraft(
                         draft_campaign_id=campaign.id,
@@ -455,7 +460,7 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                     thread_db.commit() # Commit immediately in thread
                     
                     user_drafts_created += 1
-                    logger.info(f"Successfully created draft for user {thread_user.email}")
+                    logger.info(f"Successfully created draft for user {thread_user.email} with DB ID.")
                     if user_drafts_created % 5 == 0: # Log every 5 drafts to avoid spamming
                          emit_log({
                             "level": "info",
