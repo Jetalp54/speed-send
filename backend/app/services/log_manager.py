@@ -45,6 +45,8 @@ class LogManager:
         except Exception as e:
             # NEVER crash the application because logging failed
             logger.error(f"LogManager Sync Error: {e}")
+            import sys
+            print(f"CRITICAL LOG MANAGER ERROR: {e}", file=sys.stderr)
 
     @classmethod
     async def emit_async(cls, log_entry: dict):

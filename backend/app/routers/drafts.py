@@ -13,14 +13,14 @@ import logging
 from app.state_machine import transition_draft_status
 from app.models import DraftStatus
 from pydantic import BaseModel
-
+from app.services.log_manager import LogManager # Direct import
 
 logger = logging.getLogger(__name__)
 from googleapiclient.errors import HttpError
 import json
 
 router = APIRouter()
-from app.routers.live_logs import emit_log
+
 
 
 @router.post("/drafts", response_model=schemas.DraftCampaignResponse)
@@ -330,7 +330,7 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
     logger = logging.getLogger(__name__)
     logger.info(f"UPLOAD FUNCTION CALLED: Starting upload for draft {draft_id}")
 
-    emit_log({
+    LogManager.emit_sync({
         "level": "info", 
         "message": f"⏳ Initiating upload process for draft {draft_id}...",
         "campaign_id": draft_id
@@ -414,7 +414,7 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
         try:
             print(f"DEBUG: Processing user {user_index + 1}/{len(users)}: {user.email}")
             logger.info(f"Processing user {user_index + 1}/{len(users)}: {user.email}")
-            emit_log({
+            LogManager.emit_sync({
                 "level": "info",
                 "message": f"Processing user {user.email} ({user_index + 1}/{len(users)})",
                 "campaign_id": campaign.id,
@@ -470,7 +470,7 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                     logger.info(f"Successfully created draft for user {thread_user.email} with DB ID.")
                     
                     # Log EVERY draft for immediate feedback
-                    emit_log({
+                    LogManager.emit_sync({
                         "level": "info",
                         "message": f"User {thread_user.email}: Created {user_drafts_created} drafts",
                         "campaign_id": campaign.id
@@ -549,7 +549,7 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                     successful_users.append(result["user_email"])
                     total_drafts_created += result["drafts_created"]
                     logger.info(f"Completed {result['drafts_created']} drafts for user {result['user_email']}")
-                    emit_log({
+                    LogManager.emit_sync({
                         "level": "success",
                         "message": f"User {result['user_email']} finished. Drafts: {result['drafts_created']}",
                         "campaign_id": campaign.id
