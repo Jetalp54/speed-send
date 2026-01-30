@@ -97,3 +97,64 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
     
     # 4. Redirect
     return RedirectResponse(url=link_map.original_url)
+
+
+# ==========================================
+# EXPLICIT TRACKING (For Drafts / Static Links)
+# ==========================================
+
+@router.get("/t/pixel.gif")
+async def track_pixel_explicit(c: int = None, r: str = None, request: Request = None):
+    """
+    Explicit Open Tracking for Drafts.
+    c = campaign_id
+    r = recipient_email (optional)
+    """
+    if c:
+        try:
+            # Async Log
+            event_data = {
+                'event_type': 'open',
+                'campaign_id': c,
+                'email_log_id': None, # No log ID for drafts
+                'recipient': r,
+                'user_agent': request.headers.get('user-agent') if request else None,
+                'ip': request.client.host if request else None,
+            }
+            log_tracking_event_task.delay(event_data)
+        except Exception:
+            pass
+            
+    return Response(
+        content=TRANSPARENT_PIXEL, 
+        media_type="image/png", 
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+    )
+
+@router.get("/t/redirect")
+async def track_redirect_explicit(url: str, c: int = None, r: str = None, request: Request = None):
+    """
+    Explicit Click Tracking for Drafts.
+    url = original_url
+    c = campaign_id
+    r = recipient_email (optional)
+    """
+    if not url:
+        raise HTTPException(status_code=400, detail="Missing URL")
+        
+    if c:
+        try:
+            event_data = {
+                'event_type': 'click',
+                'campaign_id': c,
+                'email_log_id': None,
+                'recipient': r,
+                'link_url': url,
+                'user_agent': request.headers.get('user-agent') if request else None,
+                'ip': request.client.host if request else None
+            }
+            log_tracking_event_task.delay(event_data)
+        except Exception:
+            pass
+            
+    return RedirectResponse(url=url)
