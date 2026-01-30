@@ -76,6 +76,7 @@ export default function NewDraftPage() {
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<number[]>([]);
   const [emailsPerUser, setEmailsPerUser] = useState<number>(1);
+  const [autoInsertTracking, setAutoInsertTracking] = useState(true); // Auto-insert tracking by default
   const [config, setConfig] = useState<DraftConfig>({
     name: '',
     subject: '',
@@ -255,8 +256,32 @@ export default function NewDraftPage() {
 
     setLoading(true);
     try {
+      // Process HTML body to add tracking if enabled
+      let processedBodyHtml = config.body_html;
+
+      if (autoInsertTracking) {
+        // Add tracking pixel before closing </body> tag or at end
+        const trackingPixel = '<img src="[tracking_pixel]" width="1" height="1" style="display:none" alt="" />';
+
+        if (processedBodyHtml.includes('</body>')) {
+          processedBodyHtml = processedBodyHtml.replace('</body>', `${trackingPixel}</body>`);
+        } else {
+          processedBodyHtml += trackingPixel;
+        }
+
+        // Convert all http/https links to use tracking
+        // Match href="http..." or href='http...'
+        processedBodyHtml = processedBodyHtml.replace(
+          /href=["'](https?:\/\/[^"']+)["']/gi,
+          'href="[tracking_link]$1[/tracking_link]"'
+        );
+
+        console.log('✅ Tracking injected into HTML body');
+      }
+
       const payload = {
         ...config,
+        body_html: processedBodyHtml, // Use processed HTML
         selected_account_ids: selectedAccounts,
         selected_user_ids: selectedUsers,
         selected_contact_list_ids: selectedContacts,
@@ -266,6 +291,7 @@ export default function NewDraftPage() {
       console.log('🚀 Creating draft with payload:', payload);
       console.log('✅ use_custom_headers:', payload.use_custom_headers);
       console.log('✅ custom_headers length:', payload.custom_headers?.length || 0);
+      console.log('✅ autoInsertTracking:', autoInsertTracking);
 
       const response = await apiClient.request('/api/v1/drafts', {
         method: 'POST',
@@ -397,6 +423,23 @@ export default function NewDraftPage() {
                     onChange={e => setConfig(c => ({ ...c, body_html: e.target.value }))}
                     rows={8}
                   />
+
+                  {/* Auto-Insert Tracking Checkbox */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <Checkbox
+                      id="auto-tracking"
+                      checked={autoInsertTracking}
+                      onCheckedChange={(checked) => setAutoInsertTracking(!!checked)}
+                    />
+                    <Label htmlFor="auto-tracking" className="text-sm">
+                      Auto-insert tracking pixel and links (recommended)
+                    </Label>
+                  </div>
+                  {autoInsertTracking && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Tracking pixel and clickable links will be automatically added to your HTML.
+                    </p>
+                  )}
 
                   {/* Template Customization Section */}
                   <div className="border-t pt-4 mt-4 space-y-4">
