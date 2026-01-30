@@ -612,6 +612,7 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
     import base64
     from app.config import settings
     from googleapiclient.discovery import build
+    from app.services import google_service
     
     logger = logging.getLogger(__name__)
     
