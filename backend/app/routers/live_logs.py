@@ -1,87 +1,63 @@
 """
 Live Logs Router - SSE (Server-Sent Events) for Real-Time Log Streaming
 
-Provides a live log stream for monitoring:
-- Scheduled Resume processes
-- Launch processes  
-- Upload processes
-- Resume Now processes
+ARCHITECURE CHANGE:
+Replaced in-memory deque with REDIS Pub/Sub.
+This is CRITICAL because Gunicorn runs multiple workers.
+In-memory logs in Worker A are NOT visible to Client connected to Worker B.
+Redis Pub/Sub bridges this gap.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from collections import deque
 from datetime import datetime
 import asyncio
 import json
 import logging
-import threading
+from redis import asyncio as aioredis
+from app.config import settings
 
 router = APIRouter(tags=["live-logs"])
 logger = logging.getLogger(__name__)
 
-# In-memory circular buffer for recent logs (thread-safe)
-MAX_LOG_ENTRIES = 1000
-_log_buffer = deque(maxlen=MAX_LOG_ENTRIES)
-_log_lock = threading.Lock()
+# Redis Channel Name
+LOG_CHANNEL = "live_logs_channel"
 
-# Active SSE connections
-_active_connections = set()
+# Redis Connection Pool (Lazy initialization)
+_redis = None
 
+async def get_redis():
+    global _redis
+    if _redis is None:
+        _redis = await aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    return _redis
 
 def emit_log(log_entry: dict):
     """
-    Emit a log entry to the buffer and all active SSE connections.
-    
-    Args:
-        log_entry: Dict with keys: timestamp, level, campaign_id, message, data
+    Publish a log entry to Redis Channel.
+    This is synchronous wrapper that fires-and-forgets an async task
+    because calling context might be sync.
     """
-    with _log_lock:
-        # Add timestamp if not present
+    try:
+        # Add timestamp if missing
         if 'timestamp' not in log_entry:
             log_entry['timestamp'] = datetime.utcnow().isoformat()
+            
+        # We need a small async loop to publish since aioredis is async
+        # Or we can use a sync redis client just for publishing if high volume
+        # For simplicity and performance in sync context, we'll offload
         
-        # Add to buffer
-        _log_buffer.append(log_entry)
+        # NOTE: If emit_log is called from Celery, we need sync Redis
+        # If called from FastAPI (Async), we await
         
-        # Log to console as well
+        # Helper to run async in thread if needed, but for now let's assume
+        # simple async/sync detection or use sync redis for publish
+        import redis
+        r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        r.publish(LOG_CHANNEL, json.dumps(log_entry))
+        
+        # Also log to standard output (docker logs)
         logger.info(f"[LIVE] {log_entry.get('message', '')}")
-
-
-def get_recent_logs(count: int = 100):
-    """Get the most recent N log entries."""
-    with _log_lock:
-        return list(_log_buffer)[-count:]
-
-
-async def log_stream_generator():
-    """
-    Generator for SSE log streaming.
-    Yields recent logs immediately, then streams new ones.
-    """
-    # Send initial connection message
-    yield f"data: {{\"level\": \"info\", \"message\": \"Connected to live log stream\", \"timestamp\": \"{datetime.utcnow().isoformat()}\"}}\n\n"
-    
-    # Send recent logs first (last 50)
-    recent_logs = get_recent_logs(50)
-    for log in recent_logs:
-        yield f"data: {json.dumps(log)}\n\n"
-    
-    # Track which logs we've already sent by keeping a snapshot
-    sent_count = len(_log_buffer)
-    
-    while True:
-        await asyncio.sleep(0.1)  # Check for new logs every 100ms
-        
-        # Get current buffer
-        with _log_lock:
-            current_buffer = list(_log_buffer)
-        
-        current_count = len(current_buffer)
-        
-        # If buffer has new items
-        if current_count > sent_count:
-            # Send only the new logs (last N items where N = current_count - sent_count)
             new_log_count = current_count - sent_count
             new_logs = current_buffer[-new_log_count:]
             
