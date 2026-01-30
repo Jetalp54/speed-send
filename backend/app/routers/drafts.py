@@ -13,6 +13,7 @@ import logging
 from app.state_machine import transition_draft_status
 from app.models import DraftStatus
 from pydantic import BaseModel
+from app.services import google_service
 
 logger = logging.getLogger(__name__)
 from googleapiclient.errors import HttpError
