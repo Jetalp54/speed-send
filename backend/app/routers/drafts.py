@@ -13,7 +13,7 @@ import logging
 from app.state_machine import transition_draft_status
 from app.models import DraftStatus
 from pydantic import BaseModel
-from app.services import google_service
+
 
 logger = logging.getLogger(__name__)
 from googleapiclient.errors import HttpError
@@ -661,7 +661,20 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
         if not user:
              raise ValueError(f"User {user_id} not found")
 
-        credentials = google_service.get_delegated_credentials(user.email, settings.GMAIL_SCOPES)
+        # 2a. Get Service Account & Decrypt
+        service_account = user.service_account
+        if not service_account:
+             raise ValueError(f"User {user.email} has no assigned service account")
+
+        from app.encryption import EncryptionService
+        from app.google_api import GoogleWorkspaceService
+        
+        encryption_service = EncryptionService()
+        service_account_json = encryption_service.decrypt(service_account.encrypted_json)
+        
+        # 2b. Initialize Service
+        google_init = GoogleWorkspaceService(service_account_json)
+        credentials = google_init.get_delegated_credentials(user.email, settings.GMAIL_SCOPES)
         gmail_service = build('gmail', 'v1', credentials=credentials)
         
         # 3. Build Email Message
