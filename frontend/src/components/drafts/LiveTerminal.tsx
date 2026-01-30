@@ -42,22 +42,30 @@ export const LiveTerminal: React.FC = () => {
                 };
 
                 eventSource.onmessage = (event) => {
+                    console.log('📨 SSE MESSAGE RECEIVED:', event.data);
                     try {
                         const log: LogEntry = JSON.parse(event.data);
+                        console.log('✅ Parsed log:', log);
                         addLog(log);
                     } catch (err) {
-                        console.error('Failed to parse log:', err);
+                        console.error('❌ Failed to parse log:', err, 'Raw data:', event.data);
                     }
                 };
 
                 eventSource.onerror = (error) => {
-                    console.error('SSE error:', error);
+                    console.error('❌ SSE ERROR:', error);
+                    console.error('EventSource readyState:', eventSource.readyState);
                     setIsConnected(false);
+                    addLog({
+                        timestamp: new Date().toISOString(),
+                        level: 'error',
+                        message: '🔴 SSE Connection Error - Reconnecting in 3s...'
+                    });
                     eventSource.close();
 
                     // Retry connection after 3 seconds
                     setTimeout(() => {
-                        console.log('Retrying SSE connection...');
+                        console.log('🔄 Retrying SSE connection...');
                         connectSSE();
                     }, 3000);
                 };

@@ -54,6 +54,14 @@ const DraftsPage: React.FC = () => {
 
   useEffect(() => {
     fetchDraftCampaigns();
+
+    // Auto-refresh every 3 seconds for live status updates
+    const refreshInterval = setInterval(() => {
+      fetchDraftCampaigns();
+    }, 3000);
+
+    // Cleanup interval on unmount
+    return () => clearInterval(refreshInterval);
   }, []);
 
   const fetchDraftCampaigns = async () => {
