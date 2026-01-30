@@ -8,7 +8,7 @@ import traceback
 
 from app.config import settings
 from app.database import engine, Base
-from app.routers import accounts, users, campaigns, dashboard, test_email, drafts,  contacts, data_lists
+from app.routers import accounts, users, campaigns, dashboard, test_email, drafts, contacts, data_lists, live_logs
 from app.routers import send as send_router
 from app.routers import accounts_sync_stub, drafts_celery, drafts_ultra, drafts_resume, drafts_preview
 from app.middleware import PerformanceMiddleware
@@ -120,6 +120,8 @@ app.include_router(tracking.router, prefix="")
 app.include_router(contacts_enterprise.router, prefix=settings.API_V1_PREFIX)
 app.include_router(analytics.router, prefix=settings.API_V1_PREFIX)
 app.include_router(tracking_domains.router, prefix=settings.API_V1_PREFIX, tags=["tracking-domains"])
+app.include_router(live_logs.router, prefix=settings.API_V1_PREFIX, tags=["live-logs"])
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

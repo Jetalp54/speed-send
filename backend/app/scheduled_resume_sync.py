@@ -122,7 +122,22 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
     db = SessionLocal()
     
     try:
-        logger.info(f"🔄 SCHEDULED RESUME - Iteration {iteration}/{total_iterations} for campaign {campaign_id} (Interval: {interval_ms}ms)")
+        from app.routers.live_logs import emit_log
+        
+        start_time = time.time()
+        log_msg = f"🔄 Iteration {iteration}/{total_iterations} for campaign {campaign_id} (Interval: {interval_ms}ms)"
+        logger.info(f"SCHEDULED RESUME - {log_msg}")
+        emit_log({
+            "level": "info",
+            "campaign_id": campaign_id,
+            "message": log_msg,
+            "data": {
+                "iteration": iteration,
+                "total_iterations": total_iterations,
+                "interval_ms": interval_ms,
+                "process_type": "scheduled_resume"
+            }
+        })
         
         # Get campaign and its users
         from sqlalchemy.orm import joinedload
@@ -140,7 +155,14 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
             logger.warning(f"No users found for campaign {campaign_id}")
             return
         
-        logger.info(f"Processing {len(users)} users in parallel...")
+        user_log_msg = f"Processing {len(users)} users in parallel..."
+        logger.info(user_log_msg)
+        emit_log({
+            "level": "info",
+            "campaign_id": campaign_id,
+            "message": user_log_msg,
+            "data": {"users_count": len(users), "iteration": iteration}
+        })
         
         # Process all users IN PARALLEL using ThreadPoolExecutor
         max_workers = min(100, len(users))  # Up to 100 concurrent threads
@@ -166,7 +188,21 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
                     logger.error(f"Exception for user {user.email}: {str(e)}")
                     total_failed += 1
         
-        logger.info(f"✅ Iteration {iteration} complete: {total_sent} sent from {successful_users} users, {total_failed} failed")
+        elapsed_time = time.time() - start_time
+        complete_msg = f"✅ Iteration {iteration} complete: {total_sent} sent from {successful_users} users, {total_failed} failed ({elapsed_time:.2f}s)"
+        logger.info(complete_msg)
+        emit_log({
+            "level": "success",
+            "campaign_id": campaign_id,
+            "message": complete_msg,
+            "data": {
+                "iteration": iteration,
+                "sent": total_sent,
+                "failed": total_failed,
+                "successful_users": successful_users,
+                "elapsed_seconds": round(elapsed_time, 2)
+            }
+        })
         
         # Update tracking
         if campaign_id in _active_schedules:
@@ -178,7 +214,14 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
         if iteration < total_iterations:
             # Convert milliseconds to seconds for timer
             interval_seconds = interval_ms / 1000.0
-            logger.info(f"⏰ Scheduling iteration {iteration + 1} in {interval_ms}ms ({interval_seconds:.3f}s)...")
+            schedule_msg = f"⏰ Next iteration {iteration + 1} in {interval_ms}ms ({interval_seconds:.3f}s)"
+            logger.info(schedule_msg)
+            emit_log({
+                "level": "info",
+                "campaign_id": campaign_id,
+                "message": schedule_msg,
+                "data": {"next_iteration": iteration + 1, "wait_ms": interval_ms}
+            })
             timer = threading.Timer(
                 interval_seconds,
                 execute_resume_iteration,
@@ -190,7 +233,18 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
             if campaign_id in _active_schedules:
                 _active_schedules[campaign_id]["next_timer"] = timer
         else:
-            logger.info(f"🎉 SCHEDULED RESUME COMPLETE - All {total_iterations} iterations finished for campaign {campaign_id}")
+            complete_all_msg = f"🎉 COMPLETE - All {total_iterations} iterations finished for campaign {campaign_id}"
+            logger.info(f"SCHEDULED RESUME COMPLETE - {complete_all_msg}")
+            emit_log({
+                "level": "success",
+                "campaign_id": campaign_id,
+                "message": complete_all_msg,
+                "data": {
+                    "total_iterations": total_iterations,
+                    "total_sent": _active_schedules.get(campaign_id, {}).get("total_sent", 0),
+                    "total_failed": _active_schedules.get(campaign_id, {}).get("total_failed", 0)
+                }
+            })
             
             # Update campaign status
             from app.state_machine import transition_draft_status, DraftStatus
@@ -253,8 +307,23 @@ def start_scheduled_resume_sync(campaign_id: int, repetitions: int, interval_ms:
             "next_timer": None
         }
         
-        logger.info(f"🚀 Starting SYNCHRONOUS scheduled resume: {repetitions} repetitions, {interval_ms}ms interval ({interval_ms/1000.0:.3f}s)")
+        from app.routers.live_logs import emit_log
+        
+        start_msg = f"🚀 Starting scheduled resume: {repetitions} reps @ {interval_ms}ms ({interval_ms/1000.0:.3f}s)"
+        logger.info(f"SYNCHRONOUS scheduled resume - {start_msg}")
         logger.info(f"Campaign {campaign_id}: Processing ALL users in parallel each iteration")
+        
+        emit_log({
+            "level": "info",
+            "campaign_id": campaign_id,
+            "message": start_msg,
+            "data": {
+                "repetitions": repetitions,
+                "interval_ms": interval_ms,
+                "interval_seconds": interval_ms / 1000.0,
+                "process_type": "scheduled_resume_start"
+            }
+        })
         
         # Start first iteration in a background thread immediately
         # This allows the API to return quickly while processing continues
