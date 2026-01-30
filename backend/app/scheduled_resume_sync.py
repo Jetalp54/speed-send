@@ -14,6 +14,15 @@ from app import models
 
 logger = logging.getLogger(__name__)
 
+# Import emit_log for live logging
+try:
+    from app.routers.live_logs import emit_log
+except ImportError:
+    # Graceful fallback if live_logs is not available
+    def emit_log(data):
+        logger.warning(f"emit_log not available: {data}")
+
+
 # Global dictionary to track active scheduled resume processes
 _active_schedules: Dict[int, Dict[str, Any]] = {}
 
@@ -122,8 +131,6 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
     db = SessionLocal()
     
     try:
-        from app.routers.live_logs import emit_log
-        
         start_time = time.time()
         log_msg = f"🔄 Iteration {iteration}/{total_iterations} for campaign {campaign_id} (Interval: {interval_ms}ms)"
         logger.info(f"SCHEDULED RESUME - {log_msg}")
