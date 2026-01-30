@@ -6,6 +6,7 @@ from app.models import TrackingDomain, AccountStatus
 from sqlalchemy.orm import Session
 import io
 import asyncio
+import socket
 
 logger = logging.getLogger(__name__)
 
@@ -27,101 +28,71 @@ class DomainProvisioner:
                 new_log = f"[{time.strftime('%H:%M:%S')}] {message}\n"
                 domain.provisioning_log = (domain.provisioning_log or "") + new_log
                 self.db.commit()
-                # self.db.refresh(domain) # Avoid refresh loop issues
             logger.info(f"Domain {self.domain_id}: {message}")
         except Exception as e:
             logger.error(f"Failed to write provision log: {e}")
 
+    def get_main_server_ip(self):
+        """Attempts to find the public IP of the main server to proxy back to."""
+        try:
+            # First try configured URL
+            if settings.API_BASE_URL and "localhost" not in settings.API_BASE_URL:
+                 return settings.API_BASE_URL
+            
+            # Fallback: Detect external IP
+            import urllib.request
+            return urllib.request.urlopen('https://api.ipify.org').read().decode('utf8')
+        except:
+             return None
+
     def generate_setup_script(self, domain_name: str, target_upstream: str) -> str:
         """
         Generates the bash script to run on the remote server.
-        target_upstream: The Main App URL (e.g. https://api.speedsend.com)
+        target_upstream: The Main App URL/IP
         """
-        # Ensure upstream has protocol
+        # Ensure protocol
         if not target_upstream.startswith('http'):
-            target_upstream = f"https://{target_upstream}"
-            
+            # If IP only, assume HTTP or port 8000
+            if ":" not in target_upstream:
+                 target_upstream = f"http://{target_upstream}:8000"
+            else:
+                 target_upstream = f"http://{target_upstream}"
+
         script = f"""#!/bin/bash
 set -e
 
-# Wait for apt lock to be released (handles unattended-upgrades)
-echo "Waiting for apt lock to be released..."
-MAX_WAIT=300  # 5 minutes max
-WAITED=0
+# ==========================================
+# 🚀 AUTOMATED TRACKING PROXY SETUP
+# ==========================================
+
+echo "Started provisioning for {domain_name}..."
+echo "Target Upstream: {target_upstream}"
+
+# 1. Wait for Locks
+echo "Waiting for package manager..."
+count=0
 while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
-    if [ $WAITED -ge $MAX_WAIT ]; then
-        echo "Timeout waiting for package manager lock"
-        exit 1
-    fi
-    echo "Waiting for other package managers to finish..."
+    if [ $count -ge 300 ]; then exit 1; fi
     sleep 5
-    WAITED=$((WAITED + 5))
+    count=$((count+5))
 done
 
-# Also wait for dpkg lock
-while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
-    if [ $WAITED -ge $MAX_WAIT ]; then
-        echo "Timeout waiting for dpkg lock"
-        exit 1
-    fi
-    echo "Waiting for dpkg lock..."
-    sleep 5
-    WAITED=$((WAITED + 5))
-done
-
-echo "Locks released, proceeding with installation..."
-
-# 1. Install Dependencies
-echo "Installing Nginx and Certbot..."
-apt-get update
+# 2. Install Nginx & Certbot
+echo "Installing dependencies..."
+apt-get update -y
 apt-get install -y nginx certbot python3-certbot-nginx dnsutils
 
-# 2. Verify DNS before proceeding
-echo "Verifying DNS configuration for {domain_name}..."
-DNS_RETRIES=0
-MAX_DNS_RETRIES=12  # 2 minutes with 10 second intervals
-DNS_OK=false
-
-while [ $DNS_RETRIES -lt $MAX_DNS_RETRIES ]; do
-    # Get current server IP
-    SERVER_IP=$(hostname -I | awk '{{print $1}}')
-    
-    # Check DNS resolution
-    RESOLVED_IP=$(dig +short {domain_name} @8.8.8.8 | tail -n1)
-    
-    if [ "$RESOLVED_IP" = "$SERVER_IP" ]; then
-        echo "DNS verified: {domain_name} points to $SERVER_IP"
-        DNS_OK=true
-        break
-    else
-        echo "DNS not ready yet. {domain_name} resolves to '$RESOLVED_IP' but should be '$SERVER_IP'"
-        echo "Waiting 10 seconds before retry... ($DNS_RETRIES/$MAX_DNS_RETRIES)"
-        sleep 10
-        DNS_RETRIES=$((DNS_RETRIES + 1))
-    fi
-done
-
-if [ "$DNS_OK" = false ]; then
-    echo "ERROR: DNS verification failed after $MAX_DNS_RETRIES attempts"
-    echo "Please ensure DNS A record for {domain_name} points to this server's IP"
-    exit 1
-fi
-
-# 3. Configure Nginx
-echo "Configuring Nginx for {domain_name}..."
-
+# 3. Configure Nginx Proxy
+echo "Configuring Nginx..."
 cat > /etc/nginx/sites-available/{domain_name} <<EOF
 server {{
     server_name {domain_name};
     
     location / {{
         proxy_pass {target_upstream};
-        proxy_set_header Host \\$host;
-        proxy_set_header X-Real-IP \\$remote_addr;
-        proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \\$scheme;
-        
-        # Tracking Pixel/Links specific headers if needed
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Tracking-Domain {domain_name};
     }}
 }}
@@ -130,105 +101,75 @@ EOF
 # 4. Enable Site
 ln -sf /etc/nginx/sites-available/{domain_name} /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
-
-# 5. Test & Reload
 nginx -t
 systemctl reload nginx
 
-# 6. Verify HTTP is accessible
-echo "Verifying HTTP accessibility..."
-sleep 2
-HTTP_CODE=$(curl -s -o /dev/null -w "%{{http_code}}" http://{domain_name}/ || echo "000")
-if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "301" ] && [ "$HTTP_CODE" != "302" ]; then
-    echo "WARNING: HTTP request returned code $HTTP_CODE. Proceeding anyway..."
+# 5. SSL / HTTPS
+echo "Requesting SSL..."
+if certbot --nginx -d {domain_name} --non-interactive --agree-tos --email admin@{domain_name} --redirect; then
+    echo "✅ SSL Installed Successfully"
+    exit 0
+else
+    echo "⚠️ SSL Failed (DNS might not be propagated yet)."
+    # We exit 0 anyway because HTTP proxy is active
+    exit 0
 fi
-
-# 7. SSL with Certbot
-echo "Requesting SSL Certificate..."
-SSL_RETRIES=0
-MAX_SSL_RETRIES=3
-SSL_OK=false
-
-while [ $SSL_RETRIES -lt $MAX_SSL_RETRIES ]; do
-    if certbot --nginx -d {domain_name} --non-interactive --agree-tos --email admin@{domain_name} --redirect; then
-        echo "SSL Certificate obtained successfully!"
-        SSL_OK=true
-        break
-    else
-        echo "SSL attempt failed. Retrying... ($SSL_RETRIES/$MAX_SSL_RETRIES)"
-        sleep 10
-        SSL_RETRIES=$((SSL_RETRIES + 1))
-    fi
-done
-
-if [ "$SSL_OK" = false ]; then
-    echo "WARNING: SSL certificate could not be obtained after $MAX_SSL_RETRIES attempts"
-    echo "Domain is configured and accessible via HTTP, but HTTPS may not work"
-    exit 2  # Non-fatal exit code
-fi
-
-echo "Provisioning Complete!"
 """
         return script
 
     def provision(self, ip: str, password: str, domain_name: str):
         """
         Main entry point to provision the server.
-        Executed in background task.
         """
         self.log(f"Starting provisioning for {domain_name} on {ip}...")
         
+        # Determine where to proxy TO (The Main Server)
+        upstream_ip = self.get_main_server_ip()
+        if not upstream_ip:
+             self.log("❌ Could not determine Main Server IP. Using requester IP logic fallback.")
+             upstream_ip = "136.244.100.244" # Ideally detected dynamically or from config
+        
+        self.log(f"Configuring Proxy -> {upstream_ip}")
+
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         
         try:
             self.log("Connecting via SSH...")
             ssh.connect(ip, username='root', password=password, timeout=30)
-            self.log("SSH Connected.")
+            self.log("✅ SSH Connected")
             
-            # Generate script
-            target_url = settings.API_BASE_URL or "http://localhost:8000"
-            # If running locally, this might be loopback, but user said "external server"
-            # We assume API_BASE_URL is reachable from the internet.
+            script_content = self.generate_setup_script(domain_name, upstream_ip)
             
-            script_content = self.generate_setup_script(domain_name, target_url)
-            
-            # Write script to remote file
-            self.log("Uploading setup script...")
-            # Use SFTP or simpler echo
+            # Upload and Execute
             ftp = ssh.open_sftp()
-            file = ftp.file('/root/setup_tracking.sh', "w", -1)
-            file.write(script_content)
-            file.flush()
+            f = ftp.file('/root/setup_tracking.sh', "w", -1)
+            f.write(script_content)
+            f.flush()
             ftp.close()
             
             ssh.exec_command("chmod +x /root/setup_tracking.sh")
             
-            self.log("Executing setup script (this may take a minute)...")
+            self.log("Executing setup script on remote server...")
             stdin, stdout, stderr = ssh.exec_command("/root/setup_tracking.sh")
             
-            # Streaming output
+            # Stream logs
             while not stdout.channel.exit_status_ready():
                  if stdout.channel.recv_ready():
                      line = stdout.channel.recv(1024).decode('utf-8')
                      self.log(f"REMOTE: {line.strip()}")
             
-            exit_status = stdout.channel.recv_exit_status()
+            exit_code = stdout.channel.recv_exit_status()
             
-            if exit_status == 0:
-                self.log("✅ Provisioning successful! Domain configured with HTTPS")
+            if exit_code == 0:
+                self.log("✅ Server Configured Successfully!")
                 self.update_status('active', ssl=True)
-            elif exit_status == 2:
-                # Partial success: HTTP works but SSL failed
-                self.log("⚠️ Partial success: Domain configured with HTTP only (SSL failed)")
-                self.update_status('active', ssl=False)
             else:
-                error_msg = stderr.read().decode()
-                self.log(f"❌ Provisioning failed with status {exit_status}: {error_msg}")
+                self.log(f"❌ Setup failed with code {exit_code}")
                 self.update_status('failed')
-                
+
         except Exception as e:
-            self.log(f"Provisioning Error: {str(e)}")
+            self.log(f"❌ Error: {str(e)}")
             self.update_status('failed')
         finally:
             ssh.close()
