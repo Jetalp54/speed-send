@@ -44,6 +44,21 @@ class DomainProvisioner:
         script = f"""#!/bin/bash
 set -e
 
+# Wait for apt lock to be released (handles unattended-upgrades)
+echo "Waiting for apt lock to be released..."
+while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+    echo "Waiting for other package managers to finish..."
+    sleep 5
+done
+
+# Also wait for dpkg lock
+while sudo fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+    echo "Waiting for dpkg lock..."
+    sleep 5
+done
+
+echo "Locks released, proceeding with installation..."
+
 # 1. Install Dependencies
 echo "Installing Nginx and Certbot..."
 apt-get update
@@ -58,10 +73,10 @@ server {{
     
     location / {{
         proxy_pass {target_upstream};
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host \\$host;
+        proxy_set_header X-Real-IP \\$remote_addr;
+        proxy_set_header X-Forwarded-For \\$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \\$scheme;
         
         # Tracking Pixel/Links specific headers if needed
         proxy_set_header X-Tracking-Domain {domain_name};
