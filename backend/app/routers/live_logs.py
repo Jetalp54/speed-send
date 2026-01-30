@@ -3,6 +3,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from app.services.log_manager import LogManager
 
+from datetime import datetime
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -32,3 +34,15 @@ async def clear_logs():
 @router.get("/live-logs/recent")
 async def get_recent():
     return {"logs": []}
+
+@router.post("/live-logs/test")
+async def test_log_emission():
+    """
+    Manually trigger a test log to verify the pipeline.
+    """
+    LogManager.emit_sync({
+        "level": "warning", 
+        "message": "🟡 MANUAL TEST LOG: If you see this, the system is working!",
+        "timestamp": datetime.utcnow().isoformat()
+    })
+    return {"status": "sent"}

@@ -17,6 +17,10 @@ class LogManager:
     
     CHANNEL = "live_logs"
     
+    
+    # Global connection pool to prevent socket exhaustion
+    pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
+
     @staticmethod
     def _format_log(log_entry: dict):
         """Ensure log entry has timestamp and consistent structure."""
@@ -30,14 +34,15 @@ class LogManager:
     def emit_sync(cls, log_entry: dict):
         """
         FIRE-AND-FORGET: Synchronous emission (for drafts.py, tasks, standard functions).
+        Uses a connection pool for reliability.
         """
         try:
             message = cls._format_log(log_entry)
             
-            # Connect and Publish (Short-lived connection for robustness in threaded env)
-            r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+            # Use the global pool
+            r = redis.Redis(connection_pool=cls.pool)
             r.publish(cls.CHANNEL, message)
-            r.close()
+            # No need to close, connection returns to pool
             
             # Also write to stdout for Docker logs
             logger.info(f"[LIVE-SYNC] {log_entry.get('message')}")
