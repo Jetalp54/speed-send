@@ -25,7 +25,11 @@ export const LiveTerminal: React.FC = () => {
         // Connect to SSE endpoint
         const connectSSE = () => {
             try {
-                const eventSource = new EventSource('http://localhost:8000/api/v1/live-logs/stream');
+                // Use window.location.origin for production compatibility
+                const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+                const sseUrl = `${baseUrl}/api/v1/live-logs/stream`;
+                console.log('Connecting to SSE:', sseUrl);
+                const eventSource = new EventSource(sseUrl);
 
                 eventSource.onopen = () => {
                     console.log('SSE connected');
@@ -91,7 +95,8 @@ export const LiveTerminal: React.FC = () => {
 
     const clearLogs = async () => {
         try {
-            await fetch('http://localhost:8000/api/v1/live-logs/clear', { method: 'POST' });
+            const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+            await fetch(`${baseUrl}/api/v1/live-logs/clear`, { method: 'POST' });
             setLogs([]);
         } catch (err) {
             console.error('Failed to clear logs:', err);
