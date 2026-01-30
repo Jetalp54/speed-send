@@ -788,7 +788,14 @@ def launch_drafts(draft_id: int, db: Session = Depends(get_db)):
     Launch (send) all drafts for a specific campaign using Gmail API.
     """
     import logging
+    from app.services.log_manager import LogManager
     logger = logging.getLogger(__name__)
+
+    LogManager.emit_sync({
+        "level": "info",
+        "campaign_id": draft_id,
+        "message": f"🚀 Starting standard launch for campaign {draft_id}..."
+    })
     
     campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == draft_id).first()
     
@@ -847,6 +854,11 @@ def launch_drafts(draft_id: int, db: Session = Depends(get_db)):
             gmail_service = build('gmail', 'v1', credentials=credentials)
             
             logger.info(f"🚀 Launching {len(user_drafts)} drafts for user {user.email}")
+            LogManager.emit_sync({
+                "level": "info",
+                "campaign_id": draft_id,
+                "message": f"Processing user {user.email} ({len(user_drafts)} drafts)..."
+            })
             
             # Send each draft
             for draft in user_drafts:

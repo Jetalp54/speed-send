@@ -24,7 +24,7 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
 import { TestDraftDialog } from '@/components/drafts/TestDraftDialog';
-import { LiveTerminal } from '@/components/drafts/LiveTerminal';
+import ConsoleMonitor from '@/components/drafts/ConsoleMonitor';
 import { serviceAccountsApi, usersApi, dataListsApi, draftsApi, API_URL, apiClient } from '@/lib/api';
 
 interface DraftCampaign {
@@ -464,7 +464,7 @@ const DraftsPage: React.FC = () => {
       />
 
       {/* Live Process Monitor Terminal */}
-      <LiveTerminal />
+      <ConsoleMonitor />
     </div>
   );
 };

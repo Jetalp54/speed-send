@@ -107,18 +107,18 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
     
     This is the FASTEST launch method - all users send in parallel.
     """
-    from app.routers.live_logs import emit_log
+    from app.services.log_manager import LogManager
     
-    emit_log({
+    LogManager.emit_sync({
         "level": "info",
         "campaign_id": draft_id,
-        "message": f"🚀 Starting launch for campaign {draft_id}...",
+        "message": f"🚀 Starting ULTRA launch for campaign {draft_id}...",
     })
     
     campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == draft_id).first()
     
     if not campaign:
-        emit_log({
+        LogManager.emit_sync({
             "level": "error",
             "campaign_id": draft_id,
             "message": f"Campaign {draft_id} not found.",
@@ -133,6 +133,11 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
             "level": "warning",
             "campaign_id": draft_id,
             "message": f"Campaign {draft_id} has no drafts to launch. Please upload drafts first.",
+        })
+        LogManager.emit_sync({
+            "level": "warning",
+            "campaign_id": draft_id,
+            "message": f"Campaign {draft_id} has no drafts to launch.",
         })
         raise HTTPException(status_code=400, detail="This campaign has 0 drafts to launch. Please upload drafts first.")
     
@@ -149,14 +154,14 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
         logger.info(f"Attempting to transition Campaign {campaign.id} to SENDING")
         transition_draft_status(db, campaign.id, DraftStatus.SENDING, triggered_by="api:launch_drafts_ultra")
         logger.info(f"Successfully transitioned Campaign {campaign.id} to SENDING")
-        emit_log({
+        LogManager.emit_sync({
             "level": "info",
             "campaign_id": draft_id,
             "message": f"Campaign status updated to SENDING.",
         })
     except Exception as e:
         logger.error(f"Failed to transition status to SENDING: {e}")
-        emit_log({
+        LogManager.emit_sync({
             "level": "error",
             "campaign_id": draft_id,
             "message": f"Failed to update campaign status to SENDING: {str(e)}",
@@ -165,7 +170,7 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
     
     # EXECUTE SYNCHRONOUSLY (No Celery)
     logger.info(f"🚀 EXECUTING SYNCHRONOUS LAUNCH for {len(drafts_by_user)} users, {len(drafts)} total drafts")
-    emit_log({
+    LogManager.emit_sync({
         "level": "info",
         "campaign_id": draft_id,
         "message": f"🚀 Processing {len(drafts_by_user)} users with {len(drafts)} total drafts",
@@ -189,7 +194,7 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
                 continue
             
             logger.info(f"📧 Processing {len(user_drafts)} drafts for user: {user.email}")
-            emit_log({
+            LogManager.emit_sync({
                 "level": "info",
                 "campaign_id": draft_id,
                 "message": f"📧 Sending {len(user_drafts)} drafts from {user.email}",
@@ -244,7 +249,7 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
     if total_sent > 0:
         campaign.status = DraftStatus.COMPLETED
         logger.info(f"✅ Campaign {campaign.id} marked as COMPLETED ({total_sent} sent)")
-        emit_log({
+        LogManager.emit_sync({
             "level": "success",
             "campaign_id": draft_id,
             "message": f"🎉 Campaign completed! {total_sent} drafts sent successfully",
@@ -252,7 +257,7 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
     else:
         campaign.status = DraftStatus.FAILED
         logger.error(f"❌ Campaign {campaign.id} marked as FAILED (0 sent)")
-        emit_log({
+        LogManager.emit_sync({
             "level": "error",
             "campaign_id": draft_id,
             "message": f"❌ Campaign failed - no drafts sent",

@@ -14,13 +14,8 @@ from app import models
 
 logger = logging.getLogger(__name__)
 
-# Import emit_log for live logging
-try:
-    from app.routers.live_logs import emit_log
-except ImportError:
-    # Graceful fallback if live_logs is not available
-    def emit_log(data):
-        logger.warning(f"emit_log not available: {data}")
+# Import LogManager for live logging
+from app.services.log_manager import LogManager
 
 
 # Global dictionary to track active scheduled resume processes
@@ -134,7 +129,7 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
         start_time = time.time()
         log_msg = f"🔄 Iteration {iteration}/{total_iterations} for campaign {campaign_id} (Interval: {interval_ms}ms)"
         logger.info(f"SCHEDULED RESUME - {log_msg}")
-        emit_log({
+        LogManager.emit_sync({
             "level": "info",
             "campaign_id": campaign_id,
             "message": log_msg,
@@ -164,7 +159,7 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
         
         user_log_msg = f"Processing {len(users)} users in parallel..."
         logger.info(user_log_msg)
-        emit_log({
+        LogManager.emit_sync({
             "level": "info",
             "campaign_id": campaign_id,
             "message": user_log_msg,
@@ -198,7 +193,7 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
         elapsed_time = time.time() - start_time
         complete_msg = f"✅ Iteration {iteration} complete: {total_sent} sent from {successful_users} users, {total_failed} failed ({elapsed_time:.2f}s)"
         logger.info(complete_msg)
-        emit_log({
+        LogManager.emit_sync({
             "level": "success",
             "campaign_id": campaign_id,
             "message": complete_msg,
@@ -223,7 +218,7 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
             interval_seconds = interval_ms / 1000.0
             schedule_msg = f"⏰ Next iteration {iteration + 1} in {interval_ms}ms ({interval_seconds:.3f}s)"
             logger.info(schedule_msg)
-            emit_log({
+            LogManager.emit_sync({
                 "level": "info",
                 "campaign_id": campaign_id,
                 "message": schedule_msg,
@@ -242,7 +237,7 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
         else:
             complete_all_msg = f"🎉 COMPLETE - All {total_iterations} iterations finished for campaign {campaign_id}"
             logger.info(f"SCHEDULED RESUME COMPLETE - {complete_all_msg}")
-            emit_log({
+            LogManager.emit_sync({
                 "level": "success",
                 "campaign_id": campaign_id,
                 "message": complete_all_msg,
@@ -314,13 +309,14 @@ def start_scheduled_resume_sync(campaign_id: int, repetitions: int, interval_ms:
             "next_timer": None
         }
         
-        from app.routers.live_logs import emit_log
+        # Removed emit_log import as LogManager is imported at top
+        # from app.routers.live_logs import emit_log
         
         start_msg = f"🚀 Starting scheduled resume: {repetitions} reps @ {interval_ms}ms ({interval_ms/1000.0:.3f}s)"
         logger.info(f"SYNCHRONOUS scheduled resume - {start_msg}")
         logger.info(f"Campaign {campaign_id}: Processing ALL users in parallel each iteration")
         
-        emit_log({
+        LogManager.emit_sync({
             "level": "info",
             "campaign_id": campaign_id,
             "message": start_msg,
