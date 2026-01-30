@@ -77,14 +77,19 @@ while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
     count=$((count+5))
 done
 
-# 2. Install Nginx & Certbot
+# 2. Fix DNS (IMMEDIATE PRIORITY)
+echo "Fixing DNS..."
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+
+# 3. Install Nginx & Certbot
 echo "Installing dependencies..."
 apt-get update -y
 apt-get install -y nginx certbot python3-certbot-nginx dnsutils ufw
 
-# 2b. Configure Firewall (Aggressive Reset)
+# 4. Configure Firewall (Safe Method)
 echo "Configuring Firewall..."
-# Reset UFW to avoid conflicts
+# Reset UFW to safe defaults
 ufw --force disable
 ufw --force reset
 
@@ -99,11 +104,8 @@ ufw allow 'Nginx Full'
 # Enable
 echo "y" | ufw enable
 
-# Force flush iptables to clear provider defaults
-iptables -F
-iptables -A INPUT -p tcp --dport 22 -j ACCEPT
-iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+# DO NOT FLUSH IPTABLES MANUALLY - IT BREAKS DOCER/LOOPBACK
+# Just trust UFW. It works.
 
 # 3. Configure Nginx Proxy
 echo "Configuring Nginx..."
