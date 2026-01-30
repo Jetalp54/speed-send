@@ -58,46 +58,55 @@ def emit_log(log_entry: dict):
         
         # Also log to standard output (docker logs)
         logger.info(f"[LIVE] {log_entry.get('message', '')}")
-            new_log_count = current_count - sent_count
-            new_logs = current_buffer[-new_log_count:]
             
-            for log in new_logs:
-                yield f"data: {json.dumps(log)}\n\n"
-            
-            sent_count = current_count
-        
-        # Send periodic ping to keep connection alive
-        if current_count == sent_count:
-            yield f": ping\n\n"
+    except Exception as e:
+        logger.error(f"Failed to emit live log: {e}")
 
+
+async def log_stream_generator(request: Request):
+    """
+    Generator that subscribes to Redis and yields SSE messages.
+    """
+    redis = await get_redis()
+    pubsub = redis.pubsub()
+    await pubsub.subscribe(LOG_CHANNEL)
+    
+    try:
+        # 1. Send connection established message
+        yield f"data: {json.dumps({'level': 'info', 'message': 'Connected to Redis Log Stream', 'timestamp': datetime.utcnow().isoformat()})}\n\n"
+        
+        # 2. Listen for messages
+        async for message in pubsub.listen():
+            if await request.is_disconnected():
+                break
+                
+            if message['type'] == 'message':
+                # SSE format: "data: <json>\n\n"
+                yield f"data: {message['data']}\n\n"
+                
+    except asyncio.CancelledError:
+        pass
+    finally:
+        await pubsub.unsubscribe(LOG_CHANNEL)
 
 @router.get("/live-logs/stream")
-async def stream_logs():
+async def stream_logs(request: Request):
     """
-    SSE endpoint for streaming live logs.
-    
-    Client usage:
-    ```javascript
-    const eventSource = new EventSource('/api/v1/live-logs/stream');
-    eventSource.onmessage = (event) => {
-        const log = JSON.parse(event.data);
-        console.log(log.message);
-    };
-    ```
+    SSE Endpoint. Connects client to Redis Pub/Sub stream.
     """
     return StreamingResponse(
-        log_stream_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Disable nginx buffering
-        }
+        log_stream_generator(request),
+        media_type="text/event-stream"
     )
 
+@router.post("/live-logs/clear")
+async def clear_logs():
+    """
+    Clear logs is now client-side only since we stream.
+    We just return success.
+    """
+    return {"status": "cleared"}
 
-@router.get("/live-logs/recent")
-async def get_recent():
     """Get the most recent log entries (last 100)."""
     return {
         "logs": get_recent_logs(100),
