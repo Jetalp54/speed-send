@@ -8,36 +8,13 @@ sys.path.append(os.getcwd())
 
 # Import from the app's own database configuration
 # This ensures we use the same connection string and network settings as the running app
-import sys
-import os
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-
-# Add current directory to path
-sys.path.append(os.getcwd())
-
-from app.config import settings
+from app.database import SessionLocal
+from app.models import TrackingDomain
 
 def fix_tracking_domains():
     db = None
     try:
-        # Override host to 'postgres' which is the docker-compose service name
-        # The internal app uses strict env vars, but 'db' alias might be missing in some contexts
-        # 'postgres' is the canonical service name defined in docker-compose.yml
-        db_url = settings.DATABASE_URL
-        if "@db:" in db_url or "@gmail_saas_db:" in db_url:
-             pass 
-        else:
-             # Force correct internal hostname if it looks like localhost
-             print(f"⚠️ Original DB URL: {db_url}")
-             db_url = db_url.replace("localhost", "postgres")
-             db_url = db_url.replace("@db:", "@postgres:")
-             print(f"🔧 Revised DB URL: {db_url}")
-
-        engine = create_engine(db_url)
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        
-        print("🔌 Connecting to database...")
+        print("🔌 Connecting to database using app config...")
         db = SessionLocal()
         
         print("🔍 Checking Tracking Domains...")

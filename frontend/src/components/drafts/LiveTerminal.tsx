@@ -108,6 +108,24 @@ export const LiveTerminal: React.FC = () => {
         });
     };
 
+    const formatTimestamp = (isoString: string) => {
+        try {
+            if (!isoString) return new Date().toLocaleTimeString();
+            return new Date(isoString).toLocaleTimeString();
+        } catch (e) {
+            return new Date().toLocaleTimeString();
+        }
+    };
+
+    const addTestLog = () => {
+        addLog({
+            timestamp: new Date().toISOString(),
+            level: 'info',
+            message: '🧪 This is a test log message generated from the frontend.',
+            campaign_id: 999
+        });
+    };
+
     // Auto-scroll to bottom when new logs arrive
     useEffect(() => {
         if (terminalRef.current && !isCollapsed) {
@@ -122,15 +140,6 @@ export const LiveTerminal: React.FC = () => {
             setLogs([]);
         } catch (err) {
             console.error('Failed to clear logs:', err);
-        }
-    };
-
-    const formatTimestamp = (timestamp: string) => {
-        try {
-            const date = new Date(timestamp);
-            return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        } catch {
-            return timestamp;
         }
     };
 
@@ -198,6 +207,15 @@ export const LiveTerminal: React.FC = () => {
 
                     <div className="flex items-center gap-2">
                         <Button
+                            onClick={addTestLog}
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-green-400 hover:text-green-300 text-xs px-2 border border-green-900 bg-green-900/10"
+                            title="Add Test Log"
+                        >
+                            + Test Log
+                        </Button>
+                        <Button
                             onClick={clearLogs}
                             variant="ghost"
                             size="sm"
@@ -239,15 +257,15 @@ export const LiveTerminal: React.FC = () => {
                             </div>
                         ) : (
                             logs.map((log, index) => (
-                                <div key={index} className="mb-1 flex gap-2 text-xs leading-relaxed">
-                                    <span className="text-gray-500 select-none">
+                                <div key={index} className="mb-1 flex gap-2 text-xs leading-relaxed font-mono">
+                                    <span className="text-gray-500 select-none min-w-[80px]">
                                         {formatTimestamp(log.timestamp)}
                                     </span>
                                     <span className="select-none">{getLevelIcon(log.level)}</span>
-                                    <span className={getLevelColor(log.level)}>{log.message}</span>
+                                    <span className={`${getLevelColor(log.level)} break-all`}>{log.message}</span>
                                     {log.campaign_id && (
-                                        <span className="text-gray-600 text-xs">
-                                            [Campaign {log.campaign_id}]
+                                        <span className="text-gray-600 text-xs ml-auto whitespace-nowrap">
+                                            [ID: {log.campaign_id}]
                                         </span>
                                     )}
                                 </div>
