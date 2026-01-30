@@ -59,27 +59,40 @@ async def log_stream_generator():
     Generator for SSE log streaming.
     Yields recent logs immediately, then streams new ones.
     """
+    # Send initial connection message
+    yield f"data: {{\"level\": \"info\", \"message\": \"Connected to live log stream\", \"timestamp\": \"{datetime.utcnow().isoformat()}\"}}\n\n"
+    
     # Send recent logs first (last 50)
     recent_logs = get_recent_logs(50)
     for log in recent_logs:
         yield f"data: {json.dumps(log)}\n\n"
     
-    # Keep connection alive and stream new logs
-    last_size = len(_log_buffer)
+    # Track which logs we've already sent by keeping a snapshot
+    sent_count = len(_log_buffer)
     
     while True:
         await asyncio.sleep(0.1)  # Check for new logs every 100ms
         
-        current_size = len(_log_buffer)
-        if current_size > last_size:
-            # New logs available
-            with _log_lock:
-                new_logs = list(_log_buffer)[last_size:]
+        # Get current buffer
+        with _log_lock:
+            current_buffer = list(_log_buffer)
+        
+        current_count = len(current_buffer)
+        
+        # If buffer has new items
+        if current_count > sent_count:
+            # Send only the new logs (last N items where N = current_count - sent_count)
+            new_log_count = current_count - sent_count
+            new_logs = current_buffer[-new_log_count:]
             
             for log in new_logs:
                 yield f"data: {json.dumps(log)}\n\n"
             
-            last_size = current_size
+            sent_count = current_count
+        
+        # Send periodic ping to keep connection alive
+        if current_count == sent_count:
+            yield f": ping\n\n"
 
 
 @router.get("/live-logs/stream")
