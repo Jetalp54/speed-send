@@ -222,7 +222,40 @@ async def sync_service_account(
             raise HTTPException(status_code=400, detail=f"Failed to fetch users from Google Workspace: {str(e)}")
         
         # Clear existing users for this account
-        db.query(WorkspaceUser).filter(WorkspaceUser.service_account_id == account_id).delete()
+        # Must clean up foreign key references first to avoid constraint violations
+        from sqlalchemy import text
+        
+        logger.info(f"Cleaning up existing users and their references for account {account_id}...")
+        
+        # 1. Delete gmail_drafts referencing these users
+        db.execute(text("""
+            DELETE FROM gmail_drafts 
+            WHERE user_id IN (SELECT id FROM workspace_users WHERE service_account_id = :id)
+        """), {"id": account_id})
+        
+        # 2. Delete draft_campaign_users associations (this was causing the error)
+        db.execute(text("""
+            DELETE FROM draft_campaign_users 
+            WHERE user_id IN (SELECT id FROM workspace_users WHERE service_account_id = :id)
+        """), {"id": account_id})
+        
+        # 3. Delete campaign_senders using these users
+        db.execute(text("""
+            DELETE FROM campaign_senders
+            WHERE user_id IN (SELECT id FROM workspace_users WHERE service_account_id = :id)
+        """), {"id": account_id})
+        
+        # 4. Delete email_logs for these users
+        db.execute(text("""
+            DELETE FROM email_logs
+            WHERE user_id IN (SELECT id FROM workspace_users WHERE service_account_id = :id)
+        """), {"id": account_id})
+        
+        # 5. Now safe to delete the workspace users
+        db.execute(text("DELETE FROM workspace_users WHERE service_account_id = :id"), {"id": account_id})
+        
+        logger.info(f"Successfully cleaned up existing users for account {account_id}")
+
         
         # Save users to database
         saved_users = []

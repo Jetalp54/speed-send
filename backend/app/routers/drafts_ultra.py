@@ -226,25 +226,63 @@ def resume_drafts_now(draft_id: int, db: Session = Depends(get_db)):
 @router_v2.post("/drafts/{draft_id}/resume-scheduled")
 def resume_drafts_scheduled(draft_id: int, schedule: dict, db: Session = Depends(get_db)):
     """
-    Start a scheduled resume process (PowerMTA-style ramp up).
+    Start PowerMTA-style scheduled resume process.
+    Sends drafts every X seconds for X repetitions in parallel for ALL users.
+    
+    SYNCHRONOUS EXECUTION - Uses threading, no Celery dependency.
+    Scales to 1200+ users.
     """
-    from app.tasks_scheduled_resume import start_scheduled_resume
+    from app.scheduled_resume_sync import start_scheduled_resume_sync
     
     campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == draft_id).first()
     if not campaign:
         raise HTTPException(status_code=404, detail="Draft campaign not found")
-        
+    
+    # Get schedule parameters
     repetitions = schedule.get("repetitions", 20)
-    interval = schedule.get("interval_seconds", 1)
+    interval_seconds = schedule.get("interval_seconds", 1)
     
-    # Save interval to campaign for the task to use
-    # Note: Using dynamic attribute setting since model might not have column yet
-    # Ideally, add 'schedule_interval' column to DraftCampaign model
-    campaign.schedule_interval = interval 
-    # Store in metadata/custom headers field if column missing? 
-    # For now assuming task code handles it or we rely on explicit passing
+    # Validate parameters
+    if repetitions < 1 or repetitions > 1000:
+        raise HTTPException(status_code=400, detail="Repetitions must be between 1 and 1000")
     
-    result = start_scheduled_resume(draft_id, repetitions, interval)
+    if interval_seconds < 1 or interval_seconds > 3600:
+        raise HTTPException(status_code=400, detail="Interval must be between 1 and 3600 seconds")
+    
+    logger.info(f"🚀 Starting scheduled resume for campaign {draft_id}: {repetitions} reps @ {interval_seconds}s")
+    
+    # Start synchronous scheduled resume
+    result = start_scheduled_resume_sync(draft_id, repetitions, interval_seconds)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Failed to start scheduled resume"))
+    
+    return result
+
+
+
+@router_v2.get("/drafts/{draft_id}/schedule-status")
+def get_scheduled_resume_status(draft_id: int):
+    """
+    Get the current status of a scheduled resume process.
+    """
+    from app.scheduled_resume_sync import get_schedule_status
+    
+    status = get_schedule_status(draft_id)
+    return status
+
+
+@router_v2.post("/drafts/{draft_id}/cancel-schedule")
+def cancel_scheduled_resume(draft_id: int):
+    """
+    Cancel an active scheduled resume process.
+    """
+    from app.scheduled_resume_sync import cancel_scheduled_resume
+    
+    result = cancel_scheduled_resume(draft_id)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=404, detail=result.get("error", "Failed to cancel schedule"))
     
     return result
 
