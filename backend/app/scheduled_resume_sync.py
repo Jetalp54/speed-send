@@ -108,7 +108,7 @@ def send_user_drafts_batch(user_id: int) -> Dict[str, Any]:
         db.close()
 
 
-def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations: int, interval_seconds: int):
+def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations: int, interval_ms: int):
     """
     Execute ONE iteration of scheduled resume for ALL users in parallel.
     This function is called by threading.Timer at scheduled intervals.
@@ -117,12 +117,12 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
         campaign_id: Draft campaign ID
         iteration: Current iteration number (1-based)
         total_iterations: Total number of repetitions
-        interval_seconds: Seconds between iterations
+        interval_ms: Milliseconds between iterations (e.g., 100ms, 500ms, 1000ms)
     """
     db = SessionLocal()
     
     try:
-        logger.info(f"🔄 SCHEDULED RESUME - Iteration {iteration}/{total_iterations} for campaign {campaign_id} (Interval: {interval_seconds}s)")
+        logger.info(f"🔄 SCHEDULED RESUME - Iteration {iteration}/{total_iterations} for campaign {campaign_id} (Interval: {interval_ms}ms)")
         
         # Get campaign and its users
         from sqlalchemy.orm import joinedload
@@ -176,11 +176,13 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
         
         # Schedule next iteration if needed
         if iteration < total_iterations:
-            logger.info(f"⏰ Scheduling iteration {iteration + 1} in {interval_seconds} seconds...")
+            # Convert milliseconds to seconds for timer
+            interval_seconds = interval_ms / 1000.0
+            logger.info(f"⏰ Scheduling iteration {iteration + 1} in {interval_ms}ms ({interval_seconds:.3f}s)...")
             timer = threading.Timer(
                 interval_seconds,
                 execute_resume_iteration,
-                args=[campaign_id, iteration + 1, total_iterations, interval_seconds]
+                args=[campaign_id, iteration + 1, total_iterations, interval_ms]
             )
             timer.daemon = True  # Allow program to exit even if timer is pending
             timer.start()
@@ -209,15 +211,15 @@ def execute_resume_iteration(campaign_id: int, iteration: int, total_iterations:
         db.close()
 
 
-def start_scheduled_resume_sync(campaign_id: int, repetitions: int, interval_seconds: int) -> Dict[str, Any]:
+def start_scheduled_resume_sync(campaign_id: int, repetitions: int, interval_ms: int) -> Dict[str, Any]:
     """
-    Start PowerMTA-style scheduled resume process.
-    Sends drafts every X seconds for X repetitions, processing all users in parallel.
+    Start PowerMTA-style scheduled resume process with millisecond precision.
+    Sends drafts every X milliseconds for X repetitions, processing all users in parallel.
     
     Args:
         campaign_id: Draft campaign ID
         repetitions: Number of times to repeat sending
-        interval_seconds: Seconds between each repetition
+        interval_ms: Milliseconds between each repetition (e.g., 100ms, 500ms, 1000ms)
         
     Returns:
         Dict with success status and execution info
@@ -244,31 +246,32 @@ def start_scheduled_resume_sync(campaign_id: int, repetitions: int, interval_sec
         _active_schedules[campaign_id] = {
             "started_at": datetime.utcnow(),
             "repetitions": repetitions,
-            "interval": interval_seconds,
+            "interval_ms": interval_ms,
             "last_iteration": 0,
             "total_sent": 0,
             "total_failed": 0,
             "next_timer": None
         }
         
-        logger.info(f"🚀 Starting SYNCHRONOUS scheduled resume: {repetitions} repetitions, {interval_seconds}s interval")
+        logger.info(f"🚀 Starting SYNCHRONOUS scheduled resume: {repetitions} repetitions, {interval_ms}ms interval ({interval_ms/1000.0:.3f}s)")
         logger.info(f"Campaign {campaign_id}: Processing ALL users in parallel each iteration")
         
         # Start first iteration in a background thread immediately
         # This allows the API to return quickly while processing continues
         first_iteration_thread = threading.Thread(
             target=execute_resume_iteration,
-            args=[campaign_id, 1, repetitions, interval_seconds],
+            args=[campaign_id, 1, repetitions, interval_ms],
             daemon=True  # Daemon thread won't prevent program exit
         )
         first_iteration_thread.start()
         
         return {
             "success": True,
-            "message": f"Scheduled resume started: {repetitions} repetitions every {interval_seconds}s",
+            "message": f"Scheduled resume started: {repetitions} repetitions every {interval_ms}ms",
             "campaign_id": campaign_id,
             "repetitions": repetitions,
-            "interval_seconds": interval_seconds,
+            "interval_ms": interval_ms,
+            "interval_seconds": interval_ms / 1000.0,
             "mode": "synchronous_threaded",
             "note": "Processing all users in parallel. Check backend logs for progress."
         }
@@ -296,7 +299,8 @@ def get_schedule_status(campaign_id: int) -> Dict[str, Any]:
         "started_at": schedule_info["started_at"].isoformat(),
         "current_iteration": schedule_info["last_iteration"],
         "total_iterations": schedule_info["repetitions"],
-        "interval_seconds": schedule_info["interval"],
+        "interval_ms": schedule_info["interval_ms"],
+        "interval_seconds": schedule_info["interval_ms"] / 1000.0,
         "total_sent": schedule_info["total_sent"],
         "total_failed": schedule_info["total_failed"]
     }

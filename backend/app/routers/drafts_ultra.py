@@ -226,11 +226,14 @@ def resume_drafts_now(draft_id: int, db: Session = Depends(get_db)):
 @router_v2.post("/drafts/{draft_id}/resume-scheduled")
 def resume_drafts_scheduled(draft_id: int, schedule: dict, db: Session = Depends(get_db)):
     """
-    Start PowerMTA-style scheduled resume process.
-    Sends drafts every X seconds for X repetitions in parallel for ALL users.
+    Start PowerMTA-style scheduled resume process with MILLISECOND precision.
+    Sends drafts every X milliseconds for X repetitions in parallel for ALL users.
     
     SYNCHRONOUS EXECUTION - Uses threading, no Celery dependency.
     Scales to 1200+ users.
+    Ultra-fast intervals: Supports as low as 100ms between iterations.
+    
+    Example: 100ms interval with 20 repetitions = 2 seconds total, all users process in parallel each time
     """
     from app.scheduled_resume_sync import start_scheduled_resume_sync
     
@@ -238,21 +241,25 @@ def resume_drafts_scheduled(draft_id: int, schedule: dict, db: Session = Depends
     if not campaign:
         raise HTTPException(status_code=404, detail="Draft campaign not found")
     
-    # Get schedule parameters
+    # Get schedule parameters - now using milliseconds
     repetitions = schedule.get("repetitions", 20)
-    interval_seconds = schedule.get("interval_seconds", 1)
+    interval_ms = schedule.get("interval_ms", 1000)  # Default 1000ms = 1 second
     
     # Validate parameters
     if repetitions < 1 or repetitions > 1000:
         raise HTTPException(status_code=400, detail="Repetitions must be between 1 and 1000")
     
-    if interval_seconds < 1 or interval_seconds > 3600:
-        raise HTTPException(status_code=400, detail="Interval must be between 1 and 3600 seconds")
+    # Support ultra-fast intervals: 100ms to 60000ms (1 minute)
+    if interval_ms < 100 or interval_ms > 60000:
+        raise HTTPException(
+            status_code=400, 
+            detail="Interval must be between 100ms and 60000ms (1 minute). Example: 100ms, 500ms, 1000ms (1 sec)"
+        )
     
-    logger.info(f"🚀 Starting scheduled resume for campaign {draft_id}: {repetitions} reps @ {interval_seconds}s")
+    logger.info(f"🚀 Starting scheduled resume for campaign {draft_id}: {repetitions} reps @ {interval_ms}ms ({interval_ms/1000.0:.3f}s)")
     
-    # Start synchronous scheduled resume
-    result = start_scheduled_resume_sync(draft_id, repetitions, interval_seconds)
+    # Start synchronous scheduled resume with milliseconds
+    result = start_scheduled_resume_sync(draft_id, repetitions, interval_ms)
     
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Failed to start scheduled resume"))
