@@ -69,16 +69,16 @@ def get_tracking_domains(db: Session = Depends(get_db)):
 
 @router.get("/tracking-domains/active")
 def get_active_tracking_domain(db: Session = Depends(get_db)):
-    """Get the first active tracking domain with SSL enabled."""
+    """Get the first active tracking domain (SSL not required)."""
     domain = db.query(models.TrackingDomain).filter(
-        models.TrackingDomain.status == 'active',
-        models.TrackingDomain.ssl_active == True
+        models.TrackingDomain.status == 'active'
     ).first()
     
     if not domain:
         raise HTTPException(status_code=404, detail="No active tracking domain found")
     
     return {"domain": domain.domain}
+
 
 @router.delete("/tracking-domains/{domain_id}")
 def delete_tracking_domain(domain_id: int, db: Session = Depends(get_db)):
