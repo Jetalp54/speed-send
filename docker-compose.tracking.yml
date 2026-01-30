@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  # Tracking Node (Just the backend, no local DB)
+  tracking_node:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: speed_send_tracking
+    image: speed-send-backend
+    environment:
+      # Connects to MAIN SERVER Database (Use IP)
+      DATABASE_URL: "${DATABASE_URL}"
+      # Optional: Connect to Main Redis if you want async tasks working properly
+      # REDIS_URL: "${REDIS_URL}" 
+
+      # App Config
+      SECRET_KEY: "${SECRET_KEY}"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY}"
+      ENVIRONMENT: production
+      # Tracking Mode Only? (Ideally we disable other routes but basic backend is fine)
+    ports:
+      - "80:8000" # Expose on port 80 directly
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    restart: unless-stopped
