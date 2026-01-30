@@ -1,9 +1,10 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Card, CardHeader, CardContent, Divider, Typography, Box, Badge, IconButton } from '@mui/material';
-import TerminalIcon from '@mui/icons-material/Terminal';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import DeleteSweepIcon from '@mui/icons-material/DeleteSweep';
+import { Terminal, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface LogEntry {
     level: 'info' | 'success' | 'warning' | 'error' | 'system';
@@ -33,7 +34,7 @@ const ConsoleMonitor: React.FC = () => {
 
         const connect = () => {
             console.log("ConsoleMonitor: Connecting to SSE...");
-            eventSource = new EventSource('http://localhost:8000/api/v1/live-logs/stream');
+            eventSource = new EventSource('/api/v1/live-logs/stream'); // Use relative path for proxy
 
             eventSource.onopen = () => {
                 console.log("ConsoleMonitor: Connected!");
@@ -84,83 +85,73 @@ const ConsoleMonitor: React.FC = () => {
         addSystemLog("Console cleared.");
     };
 
-    const getColor = (level: string) => {
+    const getColorClass = (level: string) => {
         switch (level) {
-            case 'success': return '#4caf50'; // Green
-            case 'error': return '#f44336';   // Red
-            case 'warning': return '#ff9800'; // Orange
-            case 'system': return '#2196f3';  // Blue
-            default: return '#e0e0e0';        // White/Grey
+            case 'success': return 'text-green-400';
+            case 'error': return 'text-red-400';
+            case 'warning': return 'text-orange-400';
+            case 'system': return 'text-blue-400';
+            default: return 'text-gray-300';
         }
     };
 
     return (
-        <Card variant="outlined" sx={{
-            mt: 4,
-            bgcolor: '#0a0a0a',
-            color: '#f0f0f0',
-            border: '1px solid #333',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
-        }}>
-            <CardHeader
-                title={
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Badge variant="dot" color={connected ? "success" : "error"}>
-                            <TerminalIcon />
-                        </Badge>
-                        <Typography variant="h6" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
-                            LIVE CONSOLE MONITOR
-                        </Typography>
-                        {connected ? (
-                            <Typography variant="caption" sx={{ color: '#4caf50', border: '1px solid #4caf50', px: 1, borderRadius: 1 }}>
-                                ONLINE
-                            </Typography>
-                        ) : (
-                            <Typography variant="caption" sx={{ color: '#f44336', border: '1px solid #f44336', px: 1, borderRadius: 1 }}>
-                                DISCONNECTED
-                            </Typography>
-                        )}
-                        {errorCount > 0 && (
-                            <Typography variant="caption" sx={{ color: '#f44336', fontWeight: 'bold' }}>
-                                {errorCount} ERRORS
-                            </Typography>
-                        )}
-                    </Box>
-                }
-                action={
-                    <Box>
-                        <IconButton onClick={clearLogs} size="small" sx={{ color: '#ffffff80', mr: 1 }} title="Clear">
-                            <DeleteSweepIcon />
-                        </IconButton>
-                    </Box>
-                }
-                sx={{ borderBottom: '1px solid #333' }}
-            />
-            <CardContent sx={{
-                height: '400px',
-                overflowY: 'auto',
-                p: 2,
-                fontFamily: '"Fira Code", monospace',
-                fontSize: '0.85rem',
-                backgroundColor: '#000'
-            }}>
-                {logs.length === 0 && (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#666' }}>
-                        <Typography>Waiting for process logs...</Typography>
-                    </Box>
-                )}
+        <Card className="mt-8 bg-zinc-950 border-zinc-800 text-zinc-100 shadow-2xl">
+            <CardHeader className="border-b border-zinc-800 py-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="relative">
+                            <Terminal className="w-5 h-5 text-zinc-400" />
+                            <span className={`absolute -top-1 -right-1 block h-2.5 w-2.5 rounded-full ring-2 ring-zinc-950 ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+                        </div>
 
-                {logs.map((log, i) => (
-                    <Box key={i} sx={{ mb: 0.5, display: 'flex', gap: 2 }}>
-                        <Typography component="span" sx={{ color: '#666', minWidth: '80px', fontSize: '0.75rem' }}>
-                            {new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                        </Typography>
-                        <Typography component="span" sx={{ color: getColor(log.level), flex: 1, wordBreak: 'break-all' }}>
-                            {log.message}
-                        </Typography>
-                    </Box>
-                ))}
-                <div ref={bottomRef} />
+                        <div className="flex flex-col">
+                            <span className="text-sm font-bold font-mono tracking-wider text-zinc-300">LIVE MONITOR</span>
+                            <span className={`text-[10px] font-mono ${connected ? 'text-green-500' : 'text-red-500'}`}>
+                                {connected ? 'CONNECTED' : 'DISCONNECTED'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        {errorCount > 0 && (
+                            <Badge variant="destructive" className="font-mono text-xs">
+                                {errorCount} ERRORS
+                            </Badge>
+                        )}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={clearLogs}
+                            className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                            title="Clear Console"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </Button>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="p-0">
+                <div className="h-[400px] overflow-y-auto p-4 font-mono text-sm bg-black/50 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+                    {logs.length === 0 && (
+                        <div className="flex flex-col items-center justify-center h-full text-zinc-600 gap-2">
+                            <Terminal className="w-8 h-8 opacity-50" />
+                            <span>Waiting for process logs...</span>
+                        </div>
+                    )}
+
+                    {logs.map((log, i) => (
+                        <div key={i} className="flex gap-3 mb-1 font-mono text-xs md:text-sm hover:bg-white/5 p-0.5 rounded px-2">
+                            <span className="text-zinc-600 shrink-0 select-none w-20">
+                                {new Date(log.timestamp).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                            </span>
+                            <span className={`${getColorClass(log.level)} break-all`}>
+                                {log.message}
+                            </span>
+                        </div>
+                    ))}
+                    <div ref={bottomRef} />
+                </div>
             </CardContent>
         </Card>
     );
