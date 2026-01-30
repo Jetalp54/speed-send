@@ -606,80 +606,69 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
     import logging
     import re
     from urllib.parse import quote
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from email.message import Message
+    import base64
+    from app.config import settings
+    from googleapiclient.discovery import build
+    
     logger = logging.getLogger(__name__)
     
-    logger.info(f"REAL GMAIL API: Starting draft creation for user {user_id}")
-    
-    # ======== TRACKING REPLACEMENT (EXPLICIT / STATICAL) ========
     try:
-        tracking_domain = db.query(models.TrackingDomain).filter(
-            models.TrackingDomain.status == 'active'
-            # No SSL check here to match previous fix
-        ).first()
+        logger.info(f"REAL GMAIL API: Starting draft creation for user {user_id}")
         
-        if tracking_domain:
-            logger.info(f"🔍 Found active tracking domain: {tracking_domain.domain}")
+        # 1. Tracking Replacement (Safe Block)
+        try:
+            tracking_domain = db.query(models.TrackingDomain).filter(
+                models.TrackingDomain.status == 'active'
+            ).first()
             
-            # 1. Replace tracking pixel
-            if '[tracking_pixel]' in body_html:
-                # Use explicit pixel endpoint with campaign ID
-                pixel_params = f"?c={campaign_id}" if campaign_id else ""
-                pixel_url = f"https://{tracking_domain.domain}/t/pixel.gif{pixel_params}"
-                body_html = body_html.replace('[tracking_pixel]', pixel_url)
-                logger.info(f"✅ REPLACED [tracking_pixel] with {pixel_url}")
-            
-            # 2. Replace tracking links: [tracking_link]URL[/tracking_link]
-            pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
-            matches = re.findall(pattern, body_html)
-            if matches:
-                logger.info(f"🔗 Found {len(matches)} tracking link placeholders")
-                for original_url in matches:
-                    encoded_url = quote(original_url)
-                    tracking_params = f"?url={encoded_url}"
-                    if campaign_id:
-                        tracking_params += f"&c={campaign_id}"
-                        
-                    tracking_url = f"https://{tracking_domain.domain}/t/redirect{tracking_params}"
-                    body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
-                    logger.info(f"✅ REPLACED link: {original_url[:50]}...")
-        else:
-            logger.warning("⚠️ NO ACTIVE TRACKING DOMAIN FOUND - Placeholders will NOT be replaced!")
-    except Exception as e:
-        logger.error(f"❌ Tracking replacement failed: {e}")
-    # ============================================================
-        
-        # Get delegated credentials for the user
-        from app.config import settings
-        credentials = google_service.get_delegated_credentials(
-            user.email, 
-            settings.GMAIL_SCOPES
-        )
-        
-        logger.info(f"Delegated credentials created for {user.email}")
-        
-        # Build Gmail service
-        from googleapiclient.discovery import build
+            if tracking_domain:
+                logger.info(f"🔍 Found active tracking domain: {tracking_domain.domain}")
+                
+                # Replace pixel
+                if '[tracking_pixel]' in body_html:
+                    pixel_params = f"?c={campaign_id}" if campaign_id else ""
+                    pixel_url = f"https://{tracking_domain.domain}/t/pixel.gif{pixel_params}"
+                    body_html = body_html.replace('[tracking_pixel]', pixel_url)
+                    logger.info(f"✅ REPLACED [tracking_pixel] with {pixel_url}")
+                
+                # Replace links
+                pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
+                matches = re.findall(pattern, body_html)
+                if matches:
+                    links_count = len(matches)
+                    logger.info(f"🔗 Found {links_count} tracking link placeholders")
+                    for original_url in matches:
+                        encoded_url = quote(original_url)
+                        tracking_params = f"?url={encoded_url}"
+                        if campaign_id:
+                            tracking_params += f"&c={campaign_id}"
+                            
+                        tracking_url = f"https://{tracking_domain.domain}/t/redirect{tracking_params}"
+                        body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
+            else:
+                logger.warning("⚠️ NO ACTIVE TRACKING DOMAIN FOUND - Placeholders will NOT be replaced!")
+        except Exception as e:
+            logger.error(f"❌ Tracking replacement failed: {e}")
+            # Continue execution - do not fail draft creation
+
+        # 2. Authenticate & Build Service
+        user = db.query(models.WorkspaceUser).filter(models.WorkspaceUser.id == user_id).first()
+        if not user:
+             raise ValueError(f"User {user_id} not found")
+
+        credentials = google_service.get_delegated_credentials(user.email, settings.GMAIL_SCOPES)
         gmail_service = build('gmail', 'v1', credentials=credentials)
         
-        logger.info("Gmail service built successfully")
-        
-        # Create the email message
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-        from email.message import Message
-        import base64
-        
+        # 3. Build Email Message
         message = None
         recipient_email = recipients[0] if recipients else ""
         
-        logger.info(f"CUSTOM HEADERS DEBUG - use_custom_headers: {use_custom_headers}")
-        
-        # Process custom headers if enabled
+        # Custom Headers Logic
         if use_custom_headers and custom_headers:
             from app.template_engine import TemplateEngine
-            logger.info("CUSTOM HEADERS DEBUG - Processing custom headers with smart MIME handling")
-            
-            # Prepare context for template engine
             context = {
                 'smtp': user.email,
                 'from': from_name or '',
@@ -688,11 +677,9 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                 'domain': user.email.split('@')[1] if '@' in user.email else 'localhost'
             }
             
-            # Process custom headers with template engine
             processed_headers = TemplateEngine.process_template(custom_headers, context)
             
-            # Parse headers
-            # Handle both literal \n (from textarea) and actual newlines
+            # Simple parsing of key:value lines
             raw_headers = processed_headers.replace('\\n', '\n').replace('\r\n', '\n')
             header_lines = [line.strip() for line in raw_headers.split('\n') if line.strip()]
             
@@ -702,34 +689,24 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                     k, v = line.split(':', 1)
                     parsed_headers.append((k.strip(), v.strip()))
             
-            # Determine MIME Strategy
+            # Determine content type strategy
             content_type_val = next((v for k, v in parsed_headers if k.lower() == 'content-type'), None)
-            logger.info(f"CUSTOM HEADERS DEBUG - Detected Content-Type: {content_type_val}")
             
             if content_type_val:
                 if 'multipart' in content_type_val.lower():
-                     # User-defined multipart (raw structure in body)
-                     logger.info("Using raw Message() for multipart")
                      message = Message()
                      message.set_payload(body_html)
                 else:
-                     # User-defined text/* (auto-encode body)
                      subtype = 'html' if 'html' in content_type_val.lower() else 'plain'
-                     logger.info(f"Using MIMEText for text/{subtype}")
                      message = MIMEText(body_html, subtype)
             else:
-                # Default fallback
-                logger.info("Fallback to MIMEText('html')")
                 message = MIMEText(body_html, 'html')
 
-            # Apply Headers
+            # Apply headers
             headers_applied = 0
             for k, v in parsed_headers:
                 if not v: continue
-                # Remove default header if exists (e.g. from MIMEText init)
-                if k in message: del message[k]
-                
-                # SPECIAL SAFETY CHECK: Ensure no newlines in value (prevent "embedded header" error)
+                if k in message: del message[k] # Override default
                 safe_value = v.replace('\n', ' ').replace('\r', ' ')
                 message[k] = safe_value
                 headers_applied += 1
@@ -737,49 +714,37 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
             if 'To' not in message and recipient_email:
                 message['To'] = recipient_email
                 
-            logger.info(f"CUSTOM HEADERS DEBUG - Applied {headers_applied} custom headers")
+            logger.info(f"Applied {headers_applied} custom headers")
             
         else:
-            logger.info("Using standard MIMEMultipart logic")
-            # Create multipart message
+            # Standard Logic
             message = MIMEMultipart('alternative')
             message['To'] = ', '.join(recipients)
             message['From'] = f"{from_name} <{user.email}>" if from_name else user.email
             message['Subject'] = subject
-            
-            # Add HTML body
             html_part = MIMEText(body_html, 'html')
             message.attach(html_part)
         
-        # Encode message
+        # 4. create Draft
         raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-        
-        # Create draft
-        draft_body = {
-            'message': {
-                'raw': raw_message
-            }
-        }
-        
-        logger.info(f"Creating Gmail draft for user {user.email} with {len(recipients)} recipients")
-        logger.info(f"Recipients: {recipients}")
-        logger.info(f"Subject: {subject}")
+        draft_body = {'message': {'raw': raw_message}}
         
         result = gmail_service.users().drafts().create(
             userId='me',
             body=draft_body
         ).execute()
         
-        draft_id = result['id']
-        logger.info(f"Gmail draft created successfully: {draft_id}")
-        logger.info(f"REAL GMAIL API: Draft creation completed for user {user.email}")
+        draft_id = result.get('id')
+        if not draft_id:
+             raise ValueError("Gmail API returned success but no ID in response")
+             
+        logger.info(f"✅ Draft created: {draft_id}")
         return draft_id
         
     except Exception as e:
-        logger.error(f"REAL GMAIL API ERROR: Failed to create Gmail draft: {str(e)}")
-        logger.error(f"Error type: {type(e).__name__}")
+        logger.error(f"REAL GMAIL API ERROR: {str(e)}")
         import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to create Gmail draft: {str(e)}")
 
 @router.post("/drafts/{draft_id}/launch")
