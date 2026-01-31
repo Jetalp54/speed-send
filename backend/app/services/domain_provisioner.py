@@ -79,38 +79,46 @@ done
 
 # 2. Fix DNS (IMMEDIATE PRIORITY)
 echo "Fixing DNS..."
-echo "nameserver 8.8.8.8" > /etc/resolv.conf
-echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+cat > /etc/resolv.conf <<EOF
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+nameserver 1.1.1.1
+EOF
+chattr +i /etc/resolv.conf 2>/dev/null || true
 
-# 3. Install Nginx & Certbot
+# 3. Fix Package Sources (CRITICAL FOR SOME PROVIDERS)
+echo "Configuring package sources..."
+cp /etc/apt/sources.list /etc/apt/sources.list.backup 2>/dev/null || true
+cat > /etc/apt/sources.list <<EOF
+deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
+EOF
+
+# 4. Install Dependencies
 echo "Installing dependencies..."
+export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 apt-get install -y nginx certbot python3-certbot-nginx dnsutils ufw
 
-# 4. Configure Firewall (Safe Method)
+# 5. Configure Firewall (Safe Method)
 echo "Configuring Firewall..."
-# Reset UFW to safe defaults
 ufw --force disable
 ufw --force reset
-
-# Set Rules
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp
 ufw allow 80/tcp
 ufw allow 443/tcp
 ufw allow 'Nginx Full'
-
-# Enable
 echo "y" | ufw enable
 
-# DO NOT FLUSH IPTABLES MANUALLY - IT BREAKS DOCER/LOOPBACK
-# Just trust UFW. It works.
-
-# 3. Configure Nginx Proxy
+# 6. Configure Nginx Proxy
 echo "Configuring Nginx..."
 cat > /etc/nginx/sites-available/{domain_name} <<EOF
 server {{
+    listen 80;
     server_name {domain_name};
     
     location / {{
@@ -123,13 +131,13 @@ server {{
 }}
 EOF
 
-# 4. Enable Site
+# 7. Enable Site
 ln -sf /etc/nginx/sites-available/{domain_name} /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
 
-# 5. SSL / HTTPS
+# 8. SSL / HTTPS
 echo "Requesting SSL..."
 if certbot --nginx -d {domain_name} --non-interactive --agree-tos --email admin@{domain_name} --redirect; then
     echo "✅ SSL Installed Successfully"

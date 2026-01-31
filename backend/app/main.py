@@ -33,8 +33,27 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created/verified")
         
+        # SELF-HEAL: Ensure 'version' column exists for optimistic closing
+        # This fixes 500 errors if migration failed to run
+        try:
+            from sqlalchemy import text
+            from app.database import SessionLocal
+            db = SessionLocal()
+            try:
+                # Check directly using SQL to avoid caching issues
+                logger.info("Verifying schema integrity...")
+                db.execute(text("ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;"))
+                db.commit()
+                logger.info("✅ Schema verification complete: 'version' column ensured.")
+            except Exception as e:
+                logger.warning(f"Schema verification warning (non-critical): {e}")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(f"Failed to verify schema: {e}")
+
         # Database tables created successfully
-        logger.info("Database tables created successfully")
+        logger.info("Database initialized successfully")
         
         # Check if database has any data (optional - don't fail if tables don't exist yet)
         try:
