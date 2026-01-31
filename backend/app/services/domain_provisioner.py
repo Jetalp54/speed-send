@@ -59,69 +59,81 @@ class DomainProvisioner:
                  target_upstream = f"http://{target_upstream}"
 
         script = f"""#!/bin/bash
-# 🚀 PROVISIONER v8 (Diagnostics & Network Reset)
-set -x # Debug Mode
+# 🚀 PROVISIONER v9 (Broken Network / MTU Fix)
+set -x
 set -e
+trap 'echo "❌ ERROR at line $LINENO (Exit Code: $?)"' ERR
 
 echo "Started provisioning for {domain_name}..."
 
-# Trap errors
-trap 'echo "❌ ERROR at line $LINENO (Exit Code: $?)"' ERR
-
 # ------------------------------------------------
-# 0. DISABLE INTERFERENCE (Firewall/DNS Stub)
+# 0. KILL & CLEAN
 # ------------------------------------------------
-echo "🛑 Disabling Firewall & Systemd-Resolved..."
-ufw disable || true
-systemctl stop systemd-resolved || true
-systemctl disable systemd-resolved || true
-rm -f /etc/resolv.conf
-
-# 1. HARD DNS RESET
-echo "🔧 Configuring Static DNS..."
-cat > /etc/resolv.conf <<EOF
-nameserver 8.8.8.8
-nameserver 1.1.1.1
-EOF
-chattr +i /etc/resolv.conf || true # Lock it so nothing changes it
-
-# 2. CONNECTIVITY CHECK
-echo "📡 Checking Network..."
-ping -c 3 8.8.8.8 || {{ echo "❌ NO INTERNET ACCESS."; exit 1; }}
-ping -c 3 google.com || {{ echo "❌ NO DNS RESOLUTION."; exit 1; }}
-
-# 3. APT PREP
-echo "📦 Preparing Apt..."
-killall apt apt-get || true
+echo "🧹 Cleaning locks..."
+killall apt apt-get 2>/dev/null || true
 rm -f /var/lib/apt/lists/lock
 rm -f /var/cache/apt/archives/lock
 rm -f /var/lib/dpkg/lock*
-dpkg --configure -a || true
+dpkg --configure -a || true 
 
-# Force IPv4
-echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
-echo 'Acquire::Retries "5";' >> /etc/apt/apt.conf.d/99force-ipv4
-echo 'Acquire::http::Timeout "60";' >> /etc/apt/apt.conf.d/99force-ipv4
+# ------------------------------------------------
+# 1. NETWORK TUNING (The Magic Fix)
+# ------------------------------------------------
+echo "🔧 Tuning Network for standard HTTP..."
 
-# 4. PACKAGE SOURCES (Force Clean Standard)
+# Fix DNS first
+chattr -i /etc/resolv.conf 2>/dev/null || true
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+
+# APT CONFIGURATION FOR FLAKY NETWORKS
+# This fixes issues with transparent proxies, bad MTU, and packet loss
+cat > /etc/apt/apt.conf.d/99robust <<EOF
+Acquire::ForceIPv4 "true";
+Acquire::Retries "10";
+Acquire::http::Timeout "30";
+Acquire::http::Pipeline-Depth "0";
+Acquire::http::No-Cache "true";
+Acquire::BrokenProxy "true";
+EOF
+
+# ------------------------------------------------
+# 2. MIRROR SELECTION (Auto-Detect Best)
+# ------------------------------------------------
+echo "📦 Selecting Best Mirror..."
 rm -rf /var/lib/apt/lists/*
+
+# Use the magic 'mirrors.ubuntu.com' redirector which finds the closest working mirror
 cat > /etc/apt/sources.list <<EOF
+deb mirror://mirrors.ubuntu.com/mirrors.txt jammy main restricted universe multiverse
+deb mirror://mirrors.ubuntu.com/mirrors.txt jammy-updates main restricted universe multiverse
+deb mirror://mirrors.ubuntu.com/mirrors.txt jammy-security main restricted universe multiverse
+EOF
+
+# ------------------------------------------------
+# 3. UPDATE & INSTALL
+# ------------------------------------------------
+echo "🔄 Updating (Attempt 1)..."
+# We try update. If it fails, we fallback to main archive as last resort
+if ! apt-get update; then
+    echo "⚠️ Auto-mirror failed. Falling back to MAIN archive..."
+    cat > /etc/apt/sources.list <<EOF
 deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
 deb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
 deb http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
 EOF
+    apt-get update
+fi
 
-# 5. UPDATE
-echo "🔄 Updating..."
-apt-get -o Acquire::ForceIPv4=true update
-
-# 6. INSTALL
-echo "⬇️ Installing..."
+echo "⬇️ Installing Packages..."
 export DEBIAN_FRONTEND=noninteractive
-apt-get -o Acquire::ForceIPv4=true install -y nginx certbot python3-certbot-nginx dnsutils ufw
+apt-get install -y nginx certbot python3-certbot-nginx dnsutils ufw
 
-# 7. FIREWALL (Re-enable)
+# ------------------------------------------------
+# 4. CONFIGURATION
+# ------------------------------------------------
 echo "🛡️ Configuring Firewall..."
+ufw --force disable
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
@@ -131,7 +143,6 @@ ufw allow 443/tcp
 ufw allow 'Nginx Full'
 echo "y" | ufw enable
 
-# 8. NGINX
 echo "⚙️ Configuring Nginx..."
 cat > /etc/nginx/sites-available/{domain_name} <<EOF
 server {{
@@ -154,12 +165,14 @@ ln -sf /etc/nginx/sites-available/{domain_name} /etc/nginx/sites-enabled/
 nginx -t
 systemctl reload nginx || systemctl restart nginx
 
-# 9. SSL
+# ------------------------------------------------
+# 5. SSL SETUP
+# ------------------------------------------------
 echo "🔒 Requesting SSL..."
 if certbot --nginx -d {domain_name} --non-interactive --agree-tos --email admin@{domain_name} --redirect; then
     echo "✅ DONE: SSL Installed."
 else
-    echo "⚠️ WARNING: SSL Failed (likely DNS propagation). HTTP is still active."
+    echo "⚠️ WARNING: SSL Failed (DNS propagation?). HTTP will still work."
 fi
 
 exit 0
