@@ -413,7 +413,7 @@ class TrackingEvent(Base):
     __tablename__ = "tracking_events"
     
     id = Column(Integer, primary_key=True, index=True) # BigInteger in Prod
-    event_type = Column(String(20), nullable=False) # 'open', 'click'
+    event_type = Column(String(20), nullable=False) # 'open', 'click', 'unsubscribe'
     
     campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
     email_log_id = Column(Integer, ForeignKey("email_logs.id"), nullable=True)
@@ -424,8 +424,15 @@ class TrackingEvent(Base):
     # Privacy-safe Metadata
     user_agent = Column(Text) # Raw UA
     user_agent_type = Column(String(50)) # 'mobile', 'desktop', 'bot'
-    geo_country = Column(String(2))
+    geo_country = Column(String(2))  # ISO country code
+    geo_city = Column(String(100))   # City name
+    geo_region = Column(String(100)) # State/region
     ip_hash = Column(String(64)) # Anonymized IP
+    
+    # Device Detection (NEW)
+    device_type = Column(String(20))  # 'mobile', 'tablet', 'desktop'
+    os = Column(String(50))           # e.g., 'iOS 15.0'
+    browser = Column(String(50))      # e.g., 'Safari 15.0'
     
     # Relationships
     campaign = relationship("Campaign")

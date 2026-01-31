@@ -1,0 +1,12 @@
+# Tracking Server App - Do not commit secrets
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+.env.local
+venv/
+env/
+*.log
+.DS_Store
+*.mmdb

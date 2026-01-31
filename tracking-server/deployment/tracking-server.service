@@ -1,0 +1,23 @@
+[Unit]
+Description=Email Tracking Server
+After=network.target redis-server.service postgresql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/tracking-server
+Environment="PATH=/opt/tracking-server/venv/bin"
+EnvironmentFile=/opt/tracking-server/.env
+ExecStart=/opt/tracking-server/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 4 --log-level info
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
