@@ -62,7 +62,7 @@ class DomainProvisioner:
 set -e
 
 # ==========================================
-# 🚀 AUTOMATED TRACKING PROXY SETUP
+# 🚀 AUTOMATED TRACKING PROXY SETUP (v4 - Anti-Hang)
 # ==========================================
 
 echo "Started provisioning for {domain_name}..."
@@ -77,7 +77,7 @@ while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
     count=$((count+5))
 done
 
-# 2. Fix DNS (IMMEDIATE PRIORITY)
+# 2. Fix DNS & Network (Force IPv4)
 echo "Fixing DNS..."
 # Unlock file if it was previously locked
 chattr -i /etc/resolv.conf 2>/dev/null || true
@@ -85,29 +85,36 @@ chattr -i /etc/resolv.conf 2>/dev/null || true
 cat > /etc/resolv.conf <<EOF
 nameserver 8.8.8.8
 nameserver 8.8.4.4
-nameserver 1.1.1.1
 EOF
 chattr +i /etc/resolv.conf 2>/dev/null || true
 
-# 3. Fix Package Sources (CRITICAL FOR SOME PROVIDERS)
+# Force IPv4 for Apt to prevent IPv6 hangs
+echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+
+# 3. Robust Package Sources (US Mirror is often more stable)
 echo "Configuring package sources..."
 cp /etc/apt/sources.list /etc/apt/sources.list.backup 2>/dev/null || true
 cat > /etc/apt/sources.list <<EOF
-deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
-deb http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
+deb http://us.archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
+deb http://us.archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
+deb http://us.archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
+deb http://us.archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
 EOF
 
 # 4. Auto-Repair & Install Dependencies
 echo "Installing dependencies..."
 export DEBIAN_FRONTEND=noninteractive
+
 # Fix broken installs from previous attempts
 dpkg --configure -a || true
 apt-get install -f -y || true
 
-apt-get update -y
-apt-get install -y nginx certbot python3-certbot-nginx dnsutils ufw
+# Update with timeout to fail fast if stuck
+echo "Running apt-get update..."
+timeout 300 apt-get -o Acquire::ForceIPv4=true update || echo "Update timed out, trying to continue..."
+
+echo "Installing packages..."
+apt-get -o Acquire::ForceIPv4=true install -y nginx certbot python3-certbot-nginx dnsutils ufw
 
 # 5. Configure Firewall (Safe Method)
 echo "Configuring Firewall..."
