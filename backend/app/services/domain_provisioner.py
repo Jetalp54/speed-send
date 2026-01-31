@@ -59,70 +59,119 @@ class DomainProvisioner:
                  target_upstream = f"http://{target_upstream}"
 
         script = f"""#!/bin/bash
-# 🚀 ROBUST PROVISIONER v5 (Aggressive Fix)
+# 🚀 PROVISIONER v6 (Smart & Safe)
 
-# Trap errors to show exactly where it failed
+# Trap errors
 trap 'echo "❌ ERROR on line $LINENO (Exit Code: $?)"' ERR
 set -e
 
 echo "Started provisioning for {domain_name}..."
 
-# 0. PRE-FLIGHT CLEANUP (Aggressive)
-echo "🧹 Cleaning locks and stale state..."
+# ------------------------------------------------
+# 0. PRE-FLIGHT CHECKS & LOCK CLEANUP
+# ------------------------------------------------
+echo "🧹 Cleaning locks..."
 killall apt apt-get 2>/dev/null || true
 rm -f /var/lib/apt/lists/lock
 rm -f /var/cache/apt/archives/lock
 rm -f /var/lib/dpkg/lock*
 dpkg --configure -a || true 
 
-# 1. DNS & Network (Force IPv4)
-echo "🌐 Configuring Network..."
+echo "🌐 Checking Connectivity..."
+# Check if we have internet at all
+if ! ping -c 1 8.8.8.8 >/dev/null 2>&1; then
+    echo "⚠️ Ping 8.8.8.8 failed. Checking default gateway..."
+    ip route show | grep default
+else
+    echo "✅ Internet Connection: OK"
+fi
+
+# ------------------------------------------------
+# 1. DNS CONFIGURATION (Safe Mode)
+# ------------------------------------------------
+echo "🔧 Configuring DNS..."
 chattr -i /etc/resolv.conf 2>/dev/null || true
-cat > /etc/resolv.conf <<EOF
+
+# Test if we can resolve google.com BEFORE changing anything
+if ! host google.com >/dev/null 2>&1; then
+    echo "⚠️ DNS resolution failed. Forcing Google DNS."
+    cat > /etc/resolv.conf <<EOF
 nameserver 8.8.8.8
 nameserver 1.1.1.1
 EOF
-# Don't lock it yet, let apt use it
+else
+    echo "✅ Existing DNS works. Appending Google DNS as fallback."
+    if ! grep -q "8.8.8.8" /etc/resolv.conf; then
+        echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+    fi
+fi
 
+# Force IPv4 to prevent IPv6 timeouts
 echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
 echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99force-ipv4
-echo 'Acquire::http::Timeout "20";' >> /etc/apt/apt.conf.d/99force-ipv4
+echo 'Acquire::http::Timeout "30";' >> /etc/apt/apt.conf.d/99force-ipv4
 
-# 2. Package Sources (Reset to Clean Slate)
-echo "📦 Resetting Sources..."
-rm -rf /var/lib/apt/lists/*
-cat > /etc/apt/sources.list <<EOF
+# ------------------------------------------------
+# 2. PACKAGE SOURCES (Adaptive Strategy)
+# ------------------------------------------------
+echo "📦 Configuring Repositories..."
+
+# Function to try updating
+try_update() {{
+    echo "🔄 Running apt-get update..."
+    rm -rf /var/lib/apt/lists/*
+    if apt-get -o Acquire::ForceIPv4=true update; then
+        return 0
+    fi
+    return 1
+}}
+
+# A. Try DEFAULT sources first (maybe the provider requires them)
+echo "▶️ Strategy A: Trying current/default mirrors..."
+if try_update; then
+    echo "✅ Default mirrors work!"
+else
+    echo "⚠️ Default mirrors failed. Backing up and switching to Main Ubuntu Mirrors..."
+    cp /etc/apt/sources.list /etc/apt/sources.list.backup_$(date +%s) 2>/dev/null || true
+    
+    # B. Try MAIN Ubuntu sources
+    echo "▶️ Strategy B: Switch to Archive.ubuntu.com..."
+    cat > /etc/apt/sources.list <<EOF
 deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
 deb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
 deb http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
 EOF
-
-# 3. Update Loop (Retry Strategy)
-echo "🔄 Running Apt Update..."
-update_success=0
-for i in 1 2 3; do
-    echo "Attempt $i..."
-    if apt-get -o Acquire::ForceIPv4=true update; then
-        update_success=1
-        break
+    
+    if try_update; then
+        echo "✅ Main mirrors work!"
+    else
+        echo "⚠️ Main mirrors failed. Switching to US Mirrors..."
+        
+        # C. Try US Mirrors (often more reliable globally)
+        echo "▶️ Strategy C: Switch to US.archive.ubuntu.com..."
+        sed -i 's/archive.ubuntu.com/us.archive.ubuntu.com/g' /etc/apt/sources.list
+        
+        if try_update; then
+            echo "✅ US mirrors work!"
+        else
+            echo "❌ CRITICAL FAILURE: No repositories are reachable."
+            echo "🔎 Diagnostics:"
+            ping -c 3 archive.ubuntu.com || true
+            exit 100
+        fi
     fi
-    echo "⚠️ Update failed. Cleaning and retrying in 5s..."
-    rm -rf /var/lib/apt/lists/*
-    sleep 5
-done
-
-if [ $update_success -eq 0 ]; then
-    echo "❌ CRITICAL: Apt update failed 3 times. Trying US mirror..."
-    sed -i 's/archive.ubuntu.com/us.archive.ubuntu.com/g' /etc/apt/sources.list
-    apt-get -o Acquire::ForceIPv4=true update || {{ echo "❌ Total failure updating sources."; exit 100; }}
 fi
 
-# 4. Install Dependencies
+# ------------------------------------------------
+# 3. INSTALLATION
+# ------------------------------------------------
 echo "⬇️ Installing Packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get -o Acquire::ForceIPv4=true install -y nginx certbot python3-certbot-nginx dnsutils ufw
 
-# 5. Firewall
+# ------------------------------------------------
+# 4. CONFIGURATION
+# ------------------------------------------------
 echo "🛡️ Configuring Firewall..."
 ufw --force disable
 ufw --force reset
@@ -134,7 +183,6 @@ ufw allow 443/tcp
 ufw allow 'Nginx Full'
 echo "y" | ufw enable
 
-# 6. Nginx Config
 echo "⚙️ Configuring Nginx..."
 cat > /etc/nginx/sites-available/{domain_name} <<EOF
 server {{
@@ -154,15 +202,17 @@ EOF
 # Link and Reload
 rm -f /etc/nginx/sites-enabled/default
 ln -sf /etc/nginx/sites-available/{domain_name} /etc/nginx/sites-enabled/
-nginx -t || echo "⚠️ Nginx config syntax warning (ignoring)"
+nginx -t || echo "⚠️ Nginx syntax check warning"
 systemctl reload nginx || systemctl restart nginx
 
-# 7. SSL (Certbot)
+# ------------------------------------------------
+# 5. SSL SETUP
+# ------------------------------------------------
 echo "🔒 Requesting SSL..."
 if certbot --nginx -d {domain_name} --non-interactive --agree-tos --email admin@{domain_name} --redirect; then
     echo "✅ DONE: SSL Installed."
 else
-    echo "⚠️ WARNING: SSL Failed (likely DNS propagation). HTTP is still active."
+    echo "⚠️ WARNING: SSL Failed (DNS propagation?). HTTP will still work."
 fi
 
 exit 0
