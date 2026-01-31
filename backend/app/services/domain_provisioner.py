@@ -79,6 +79,9 @@ done
 
 # 2. Fix DNS (IMMEDIATE PRIORITY)
 echo "Fixing DNS..."
+# Unlock file if it was previously locked
+chattr -i /etc/resolv.conf 2>/dev/null || true
+
 cat > /etc/resolv.conf <<EOF
 nameserver 8.8.8.8
 nameserver 8.8.4.4
