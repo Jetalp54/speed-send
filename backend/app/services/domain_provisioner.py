@@ -96,9 +96,13 @@ deb http://archive.ubuntu.com/ubuntu jammy-security main restricted universe mul
 deb http://archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
 EOF
 
-# 4. Install Dependencies
+# 4. Auto-Repair & Install Dependencies
 echo "Installing dependencies..."
 export DEBIAN_FRONTEND=noninteractive
+# Fix broken installs from previous attempts
+dpkg --configure -a || true
+apt-get install -f -y || true
+
 apt-get update -y
 apt-get install -y nginx certbot python3-certbot-nginx dnsutils ufw
 
