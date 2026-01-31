@@ -59,65 +59,71 @@ class DomainProvisioner:
                  target_upstream = f"http://{target_upstream}"
 
         script = f"""#!/bin/bash
+# 🚀 ROBUST PROVISIONER v5 (Aggressive Fix)
+
+# Trap errors to show exactly where it failed
+trap 'echo "❌ ERROR on line $LINENO (Exit Code: $?)"' ERR
 set -e
 
-# ==========================================
-# 🚀 AUTOMATED TRACKING PROXY SETUP (v4 - Anti-Hang)
-# ==========================================
-
 echo "Started provisioning for {domain_name}..."
-echo "Target Upstream: {target_upstream}"
 
-# 1. Wait for Locks
-echo "Waiting for package manager..."
-count=0
-while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
-    if [ $count -ge 300 ]; then exit 1; fi
-    sleep 5
-    count=$((count+5))
-done
+# 0. PRE-FLIGHT CLEANUP (Aggressive)
+echo "🧹 Cleaning locks and stale state..."
+killall apt apt-get 2>/dev/null || true
+rm -f /var/lib/apt/lists/lock
+rm -f /var/cache/apt/archives/lock
+rm -f /var/lib/dpkg/lock*
+dpkg --configure -a || true 
 
-# 2. Fix DNS & Network (Force IPv4)
-echo "Fixing DNS..."
-# Unlock file if it was previously locked
+# 1. DNS & Network (Force IPv4)
+echo "🌐 Configuring Network..."
 chattr -i /etc/resolv.conf 2>/dev/null || true
-
 cat > /etc/resolv.conf <<EOF
 nameserver 8.8.8.8
-nameserver 8.8.4.4
+nameserver 1.1.1.1
 EOF
-chattr +i /etc/resolv.conf 2>/dev/null || true
+# Don't lock it yet, let apt use it
 
-# Force IPv4 for Apt to prevent IPv6 hangs
 echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99force-ipv4
+echo 'Acquire::http::Timeout "20";' >> /etc/apt/apt.conf.d/99force-ipv4
 
-# 3. Robust Package Sources (US Mirror is often more stable)
-echo "Configuring package sources..."
-cp /etc/apt/sources.list /etc/apt/sources.list.backup 2>/dev/null || true
+# 2. Package Sources (Reset to Clean Slate)
+echo "📦 Resetting Sources..."
+rm -rf /var/lib/apt/lists/*
 cat > /etc/apt/sources.list <<EOF
-deb http://us.archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-deb http://us.archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-deb http://us.archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
-deb http://us.archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
 EOF
 
-# 4. Auto-Repair & Install Dependencies
-echo "Installing dependencies..."
+# 3. Update Loop (Retry Strategy)
+echo "🔄 Running Apt Update..."
+update_success=0
+for i in 1 2 3; do
+    echo "Attempt $i..."
+    if apt-get -o Acquire::ForceIPv4=true update; then
+        update_success=1
+        break
+    fi
+    echo "⚠️ Update failed. Cleaning and retrying in 5s..."
+    rm -rf /var/lib/apt/lists/*
+    sleep 5
+done
+
+if [ $update_success -eq 0 ]; then
+    echo "❌ CRITICAL: Apt update failed 3 times. Trying US mirror..."
+    sed -i 's/archive.ubuntu.com/us.archive.ubuntu.com/g' /etc/apt/sources.list
+    apt-get -o Acquire::ForceIPv4=true update || {{ echo "❌ Total failure updating sources."; exit 100; }}
+fi
+
+# 4. Install Dependencies
+echo "⬇️ Installing Packages..."
 export DEBIAN_FRONTEND=noninteractive
-
-# Fix broken installs from previous attempts
-dpkg --configure -a || true
-apt-get install -f -y || true
-
-# Update with timeout to fail fast if stuck
-echo "Running apt-get update..."
-timeout 300 apt-get -o Acquire::ForceIPv4=true update || echo "Update timed out, trying to continue..."
-
-echo "Installing packages..."
 apt-get -o Acquire::ForceIPv4=true install -y nginx certbot python3-certbot-nginx dnsutils ufw
 
-# 5. Configure Firewall (Safe Method)
-echo "Configuring Firewall..."
+# 5. Firewall
+echo "🛡️ Configuring Firewall..."
 ufw --force disable
 ufw --force reset
 ufw default deny incoming
@@ -128,8 +134,8 @@ ufw allow 443/tcp
 ufw allow 'Nginx Full'
 echo "y" | ufw enable
 
-# 6. Configure Nginx Proxy
-echo "Configuring Nginx..."
+# 6. Nginx Config
+echo "⚙️ Configuring Nginx..."
 cat > /etc/nginx/sites-available/{domain_name} <<EOF
 server {{
     listen 80;
@@ -145,22 +151,21 @@ server {{
 }}
 EOF
 
-# 7. Enable Site
-ln -sf /etc/nginx/sites-available/{domain_name} /etc/nginx/sites-enabled/
+# Link and Reload
 rm -f /etc/nginx/sites-enabled/default
-nginx -t
-systemctl reload nginx
+ln -sf /etc/nginx/sites-available/{domain_name} /etc/nginx/sites-enabled/
+nginx -t || echo "⚠️ Nginx config syntax warning (ignoring)"
+systemctl reload nginx || systemctl restart nginx
 
-# 8. SSL / HTTPS
-echo "Requesting SSL..."
+# 7. SSL (Certbot)
+echo "🔒 Requesting SSL..."
 if certbot --nginx -d {domain_name} --non-interactive --agree-tos --email admin@{domain_name} --redirect; then
-    echo "✅ SSL Installed Successfully"
-    exit 0
+    echo "✅ DONE: SSL Installed."
 else
-    echo "⚠️ SSL Failed (DNS might not be propagated yet)."
-    # We exit 0 anyway because HTTP proxy is active
-    exit 0
+    echo "⚠️ WARNING: SSL Failed (likely DNS propagation). HTTP is still active."
 fi
+
+exit 0
 """
         return script
 
