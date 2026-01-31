@@ -59,68 +59,69 @@ class DomainProvisioner:
                  target_upstream = f"http://{target_upstream}"
 
         script = f"""#!/bin/bash
-# 🚀 PROVISIONER v7 (Nuclear Option - Force Stable)
-set -x # ENABLE DEBUG LOGGING - Print every command
-set -e # Exit on error
+# 🚀 PROVISIONER v8 (Diagnostics & Network Reset)
+set -x # Debug Mode
+set -e
 
 echo "Started provisioning for {domain_name}..."
 
-# Trap errors for better visibility
+# Trap errors
 trap 'echo "❌ ERROR at line $LINENO (Exit Code: $?)"' ERR
 
 # ------------------------------------------------
-# 0. NUKE LOCKS & STALE STATE
+# 0. DISABLE INTERFERENCE (Firewall/DNS Stub)
 # ------------------------------------------------
-echo "🧹 Cleaning up system locks..."
-killall apt apt-get 2>/dev/null || true
-rm -f /var/lib/apt/lists/lock
-rm -f /var/cache/apt/archives/lock
-rm -f /var/lib/dpkg/lock*
-dpkg --configure -a || true 
+echo "🛑 Disabling Firewall & Systemd-Resolved..."
+ufw disable || true
+systemctl stop systemd-resolved || true
+systemctl disable systemd-resolved || true
+rm -f /etc/resolv.conf
 
-# ------------------------------------------------
-# 1. NETWORK & DNS (Force Google)
-# ------------------------------------------------
-echo "🌐 Forcing Robust DNS..."
-chattr -i /etc/resolv.conf 2>/dev/null || true
+# 1. HARD DNS RESET
+echo "🔧 Configuring Static DNS..."
 cat > /etc/resolv.conf <<EOF
 nameserver 8.8.8.8
 nameserver 1.1.1.1
 EOF
+chattr +i /etc/resolv.conf || true # Lock it so nothing changes it
 
-# Force IPv4 for Apt
+# 2. CONNECTIVITY CHECK
+echo "📡 Checking Network..."
+ping -c 3 8.8.8.8 || {{ echo "❌ NO INTERNET ACCESS."; exit 1; }}
+ping -c 3 google.com || {{ echo "❌ NO DNS RESOLUTION."; exit 1; }}
+
+# 3. APT PREP
+echo "📦 Preparing Apt..."
+killall apt apt-get || true
+rm -f /var/lib/apt/lists/lock
+rm -f /var/cache/apt/archives/lock
+rm -f /var/lib/dpkg/lock*
+dpkg --configure -a || true
+
+# Force IPv4
 echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
-echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99force-ipv4
-echo 'Acquire::http::Timeout "30";' >> /etc/apt/apt.conf.d/99force-ipv4
+echo 'Acquire::Retries "5";' >> /etc/apt/apt.conf.d/99force-ipv4
+echo 'Acquire::http::Timeout "60";' >> /etc/apt/apt.conf.d/99force-ipv4
 
-# ------------------------------------------------
-# 2. REPOSITORIES (Force US Mirrors)
-# ------------------------------------------------
-echo "📦 Forcing Standard US Repositories..."
-# We ignore the provider's mirrors because they seem broken/incomplete
+# 4. PACKAGE SOURCES (Force Clean Standard)
 rm -rf /var/lib/apt/lists/*
 cat > /etc/apt/sources.list <<EOF
-deb http://us.archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
-deb http://us.archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
-deb http://us.archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
-deb http://us.archive.ubuntu.com/ubuntu jammy-backports main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse
+deb http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse
 EOF
 
-# ------------------------------------------------
-# 3. UPDATE & INSTALL
-# ------------------------------------------------
-echo "🔄 Updating Package Lists..."
+# 5. UPDATE
+echo "🔄 Updating..."
 apt-get -o Acquire::ForceIPv4=true update
 
-echo "⬇️ Installing Packages..."
+# 6. INSTALL
+echo "⬇️ Installing..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get -o Acquire::ForceIPv4=true install -y nginx certbot python3-certbot-nginx dnsutils ufw
 
-# ------------------------------------------------
-# 4. CONFIGURATION
-# ------------------------------------------------
+# 7. FIREWALL (Re-enable)
 echo "🛡️ Configuring Firewall..."
-ufw --force disable
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
@@ -130,6 +131,7 @@ ufw allow 443/tcp
 ufw allow 'Nginx Full'
 echo "y" | ufw enable
 
+# 8. NGINX
 echo "⚙️ Configuring Nginx..."
 cat > /etc/nginx/sites-available/{domain_name} <<EOF
 server {{
@@ -152,14 +154,12 @@ ln -sf /etc/nginx/sites-available/{domain_name} /etc/nginx/sites-enabled/
 nginx -t
 systemctl reload nginx || systemctl restart nginx
 
-# ------------------------------------------------
-# 5. SSL SETUP
-# ------------------------------------------------
+# 9. SSL
 echo "🔒 Requesting SSL..."
 if certbot --nginx -d {domain_name} --non-interactive --agree-tos --email admin@{domain_name} --redirect; then
     echo "✅ DONE: SSL Installed."
 else
-    echo "⚠️ WARNING: SSL Failed (likely DNS propagation). HTTP will still work."
+    echo "⚠️ WARNING: SSL Failed (likely DNS propagation). HTTP is still active."
 fi
 
 exit 0
