@@ -19,16 +19,21 @@ def inject_tracking_links(db, html_content: str, campaign_id: int, email_log_id:
     """
     from app.models import Campaign, TrackingDomain # Lazy import to avoid circular dep
     
-    # Defaults
-    base_url = settings.API_BASE_URL.rstrip('/')
-    
-    # Check for Custom Domain
-    campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
-    if campaign and campaign.tracking_domain_id:
-        domain = db.query(TrackingDomain).filter(TrackingDomain.id == campaign.tracking_domain_id).first()
-        if domain and domain.status == 'active' and domain.ssl_active:
-            # Use custom domain
-            base_url = f"https://{domain.domain}"
+    # Priority 1: Use external tracking domain from settings (RECOMMENDED)
+    if settings.USE_EXTERNAL_TRACKING and settings.TRACKING_DOMAIN:
+        base_url = settings.TRACKING_DOMAIN.rstrip('/')
+        logger.info(f"Using external tracking domain: {base_url}")
+    else:
+        # Priority 2: Check for campaign-specific custom domain
+        base_url = settings.API_BASE_URL.rstrip('/')
+        
+        campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
+        if campaign and campaign.tracking_domain_id:
+            domain = db.query(TrackingDomain).filter(TrackingDomain.id == campaign.tracking_domain_id).first()
+            if domain and domain.status == 'active' and domain.ssl_active:
+                # Use campaign-specific custom domain
+                base_url = f"https://{domain.domain}"
+                logger.info(f"Using campaign tracking domain: {base_url}")
     
     # 1. Open Pixel
     

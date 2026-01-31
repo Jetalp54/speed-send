@@ -20,7 +20,11 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     PROJECT_NAME: str = "Gmail Bulk Sender SaaS"
     VERSION: str = "1.0.0"
-    API_BASE_URL: str = "http://localhost:8000" # Base URL for tracking links
+    API_BASE_URL: str = "http://localhost:8000" # Base URL for tracking links (fallback)
+    
+    # External Tracking Server (IMPORTANT: Set this in production)
+    TRACKING_DOMAIN: Optional[str] = None  # e.g., "https://track.yourdomain.com"
+    USE_EXTERNAL_TRACKING: bool = False  # Set to True to use external tracking server
     
     # CORS
     BACKEND_CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:8000"]
