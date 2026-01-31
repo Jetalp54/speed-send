@@ -501,3 +501,14 @@ class TrackingDomain(Base):
     
     # Relationships could be added to Campaigns if strict enforcement is needed
     # campaigns = relationship("Campaign", back_populates="tracking_domain")
+
+# 6. Persistent Task Logs (Replaces Redis Pub/Sub)
+class TaskLog(Base):
+    __tablename__ = "task_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, index=True, nullable=True) # Can be draft_id or actual campaign_id
+    level = Column(String(20), default='info')
+    message = Column(Text)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    data = Column(JSON) # Extra context

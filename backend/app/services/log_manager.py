@@ -18,7 +18,7 @@ class LogManager:
     CHANNEL = "live_logs"
     
     
-    # Global connection pool to prevent socket exhaustion
+    # Global connection pool (Still useful for cache if needed, but DB is primary now)
     pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
 
     @staticmethod
@@ -33,28 +33,37 @@ class LogManager:
     @classmethod
     def emit_sync(cls, log_entry: dict):
         """
-        FIRE-AND-FORGET: Synchronous emission (for drafts.py, tasks, standard functions).
-        Uses a connection pool for reliability.
+        Dual-mode emission: Redis (for legacy/stream) AND Database (for reliability).
         """
+        from app.database import SessionLocal
+        from app.models import TaskLog
+        
+        # 1. Database Persistence (Reliable)
+        try:
+            db = SessionLocal()
+            db_log = TaskLog(
+                campaign_id=log_entry.get('campaign_id'),
+                level=log_entry.get('level', 'info'),
+                message=log_entry.get('message'),
+                timestamp=datetime.utcnow(),
+                data=log_entry.get('data')
+            )
+            db.add(db_log)
+            db.commit()
+            db.close()
+        except Exception as e:
+            import sys
+            print(f"DB LOGGING ERROR: {e}", file=sys.stderr)
+
+        # 2. Redis Stream (Best effort)
         try:
             message = cls._format_log(log_entry)
-            
-            # Use the global pool
             r = redis.Redis(connection_pool=cls.pool)
             r.publish(cls.CHANNEL, message)
-            
-            # Persist to history (Last 500 logs)
-            r.lpush(f"{cls.CHANNEL}_history", message)
-            r.ltrim(f"{cls.CHANNEL}_history", 0, 499)
-            
             # Also write to stdout for Docker logs
             logger.info(f"[LIVE-SYNC] {log_entry.get('message')}")
-            
         except Exception as e:
-            # NEVER crash the application because logging failed
-            logger.error(f"LogManager Sync Error: {e}")
-            import sys
-            print(f"CRITICAL LOG MANAGER ERROR: {e}", file=sys.stderr)
+            logger.error(f"Redis Logging Error: {e}")
 
     @classmethod
     async def emit_async(cls, log_entry: dict):

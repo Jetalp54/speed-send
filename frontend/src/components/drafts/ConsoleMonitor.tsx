@@ -18,6 +18,7 @@ const ConsoleMonitor: React.FC = () => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [connected, setConnected] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
+    const [lastLogId, setLastLogId] = useState(0);
     const [errorCount, setErrorCount] = useState(0);
 
     // Auto-scroll
@@ -27,74 +28,60 @@ const ConsoleMonitor: React.FC = () => {
         }
     }, [logs]);
 
-    // Initial Fetch of Recent Logs (History)
+    // POLLING MONITOR (Robust replacement for SSE)
     useEffect(() => {
-        const fetchHistory = async () => {
+        let isMounted = true;
+        let pollTimer: NodeJS.Timeout;
+
+        const pollLogs = async () => {
+            if (!isMounted) return;
+
             try {
-                const res = await fetch('/api/v1/live-logs/recent');
-                const data = await res.json();
-                if (data.logs && Array.isArray(data.logs)) {
-                    setLogs(prev => {
-                        // Merge history avoiding duplicates if any
-                        const newLogs = [...data.logs, ...prev];
-                        // Unique by timestamp+message basic check or just overwrite
-                        return data.logs;
-                    });
+                // Fetch logs newer than the last one we have
+                const res = await fetch(`/api/v1/live-logs/recent?after_id=${lastLogId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.logs && data.logs.length > 0) {
+                        setConnected(true); // If we get data (or even 200 OK), we are "connected" to API
+
+                        setLogs(prev => {
+                            // Filter out duplicates just in case
+                            const existingIds = new Set(prev.map(l => (l as any).id));
+                            const newUniqueLogs = data.logs.filter((l: any) => !existingIds.has(l.id));
+                            return [...prev, ...newUniqueLogs].slice(-500); // Keep last 500
+                        });
+
+                        // Update cursor to the ID of the last log received
+                        const maxId = Math.max(...data.logs.map((l: any) => l.id));
+                        setLastLogId(maxId);
+
+                        // Check for errors
+                        const errorCount = data.logs.filter((l: any) => l.level === 'error').length;
+                        if (errorCount > 0) setErrorCount(c => c + errorCount);
+                    } else {
+                        // Connection is good, just no new logs
+                        setConnected(true);
+                    }
+                } else {
+                    setConnected(false); // API error
                 }
             } catch (e) {
-                console.error("Failed to fetch log history:", e);
-            }
-        };
-        fetchHistory();
-    }, []);
-
-    // SSE Connection
-    useEffect(() => {
-        let eventSource: EventSource | null = null;
-        let reconnectTimer: NodeJS.Timeout;
-
-        const connect = () => {
-            console.log("ConsoleMonitor: Connecting to SSE...");
-            eventSource = new EventSource('/api/v1/live-logs/stream'); // Use relative path for proxy
-
-            eventSource.onopen = () => {
-                console.log("ConsoleMonitor: Connected!");
-                setConnected(true);
-                // System message handled by backend stream usually, 
-                // but we can add local one too if needed.
-            };
-
-            eventSource.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    // Filter out keep-alives or empty messages if any
-                    setLogs(prev => {
-                        const newLogs = [...prev, data];
-                        return newLogs.slice(-500); // Keep last 500
-                    });
-                    if (data.level === 'error') setErrorCount(c => c + 1);
-                } catch (e) {
-                    console.error("Failed to parse log:", event.data);
-                }
-            };
-
-            eventSource.onerror = (err) => {
-                console.error("ConsoleMonitor: SSE Error", err);
+                console.error("Poll error:", e);
                 setConnected(false);
-                eventSource?.close();
+            }
 
-                // Retry in 3s
-                reconnectTimer = setTimeout(connect, 3000);
-            };
+            // Schedule next poll
+            pollTimer = setTimeout(pollLogs, 1000); // 1 second interval
         };
 
-        connect();
+        // Initial start
+        pollLogs();
 
         return () => {
-            eventSource?.close();
-            clearTimeout(reconnectTimer);
+            isMounted = false;
+            clearTimeout(pollTimer);
         };
-    }, []);
+    }, [lastLogId]); // Dependency on lastLogId ensures we query with updated cursor
 
     const addSystemLog = (msg: string) => {
         setLogs(prev => [...prev, {
@@ -108,6 +95,7 @@ const ConsoleMonitor: React.FC = () => {
         setLogs([]);
         setErrorCount(0);
         addSystemLog("Console cleared.");
+        // We don't reset lastLogId because we don't want to re-fetch cleared logs
     };
 
     const getColorClass = (level: string) => {
@@ -131,9 +119,9 @@ const ConsoleMonitor: React.FC = () => {
                         </div>
 
                         <div className="flex flex-col">
-                            <span className="text-sm font-bold font-mono tracking-wider text-zinc-300">LIVE MONITOR</span>
+                            <span className="text-sm font-bold font-mono tracking-wider text-zinc-300">LIVE MONITOR (DB)</span>
                             <span className={`text-[10px] font-mono ${connected ? 'text-green-500' : 'text-red-500'}`}>
-                                {connected ? 'CONNECTED' : 'DISCONNECTED'}
+                                {connected ? 'CONNECTED' : 'POLLING...'}
                             </span>
                         </div>
                     </div>

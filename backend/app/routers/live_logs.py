@@ -1,7 +1,12 @@
 import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import StreamingResponse
 from app.services.log_manager import LogManager
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import TaskLog
 
 from datetime import datetime
 
@@ -32,36 +37,34 @@ async def clear_logs():
     return {"status": "cleared"}
 
 @router.get("/live-logs/recent")
-async def get_recent():
+async def get_recent(db: Session = Depends(get_db), limit: int = 100, after_id: int = 0):
     """
-    Get the last 100 logs from history.
-    Useful for catching up if the SSE stream was late to connect.
+    Get recent logs from the database.
+    Supports polling via 'after_id'.
     """
-    import redis.asyncio as aioredis
-    from app.config import settings
+    query = db.query(TaskLog).order_by(TaskLog.id.asc())
     
-    try:
-        redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-        # Get last 100 logs (lrange 0 99)
-        # Redis List is typically LPUSH, so 0 is the newest.
-        logs_raw = await redis_client.lrange("live_logs_history", 0, 99)
-        await redis_client.close()
-        
-        # Parse JSON strings back to objects
-        logs = []
-        for log_str in logs_raw:
-             try:
-                 logs.append(json.loads(log_str))
-             except:
-                 pass
-                 
-        # Reverse to show oldest first in UI if needed, but Console usually appends.
-        # Console expects chronological order (oldest -> newest).
-        # LPUSH means index 0 is NEWEST. So we need to reverse.
-        return {"logs": logs[::-1]}
-    except Exception as e:
-        logger.error(f"Failed to fetch recent logs: {e}")
-        return {"logs": []}
+    if after_id > 0:
+        query = query.filter(TaskLog.id > after_id)
+    else:
+        # If no cursor, get last N
+        # We need to subquery or just slice. 
+        # Simpler: Get last N by desc, then reverse in code
+        logs = db.query(TaskLog).order_by(TaskLog.id.desc()).limit(limit).all()
+        return {"logs": [log_to_dict(l) for l in reversed(logs)]}
+
+    logs = query.limit(limit).all()
+    return {"logs": [log_to_dict(l) for l in logs]}
+
+def log_to_dict(log: TaskLog):
+    return {
+        "id": log.id,
+        "campaign_id": log.campaign_id,
+        "level": log.level,
+        "message": log.message,
+        "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+        "data": log.data
+    }
 
 @router.post("/live-logs/test")
 async def test_log_emission():
