@@ -33,7 +33,35 @@ async def clear_logs():
 
 @router.get("/live-logs/recent")
 async def get_recent():
-    return {"logs": []}
+    """
+    Get the last 100 logs from history.
+    Useful for catching up if the SSE stream was late to connect.
+    """
+    import redis.asyncio as aioredis
+    from app.config import settings
+    
+    try:
+        redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+        # Get last 100 logs (lrange 0 99)
+        # Redis List is typically LPUSH, so 0 is the newest.
+        logs_raw = await redis_client.lrange("live_logs_history", 0, 99)
+        await redis_client.close()
+        
+        # Parse JSON strings back to objects
+        logs = []
+        for log_str in logs_raw:
+             try:
+                 logs.append(json.loads(log_str))
+             except:
+                 pass
+                 
+        # Reverse to show oldest first in UI if needed, but Console usually appends.
+        # Console expects chronological order (oldest -> newest).
+        # LPUSH means index 0 is NEWEST. So we need to reverse.
+        return {"logs": logs[::-1]}
+    except Exception as e:
+        logger.error(f"Failed to fetch recent logs: {e}")
+        return {"logs": []}
 
 @router.post("/live-logs/test")
 async def test_log_emission():

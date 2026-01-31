@@ -27,6 +27,27 @@ const ConsoleMonitor: React.FC = () => {
         }
     }, [logs]);
 
+    // Initial Fetch of Recent Logs (History)
+    useEffect(() => {
+        const fetchHistory = async () => {
+            try {
+                const res = await fetch('/api/v1/live-logs/recent');
+                const data = await res.json();
+                if (data.logs && Array.isArray(data.logs)) {
+                    setLogs(prev => {
+                        // Merge history avoiding duplicates if any
+                        const newLogs = [...data.logs, ...prev];
+                        // Unique by timestamp+message basic check or just overwrite
+                        return data.logs;
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to fetch log history:", e);
+            }
+        };
+        fetchHistory();
+    }, []);
+
     // SSE Connection
     useEffect(() => {
         let eventSource: EventSource | null = null;
@@ -39,14 +60,18 @@ const ConsoleMonitor: React.FC = () => {
             eventSource.onopen = () => {
                 console.log("ConsoleMonitor: Connected!");
                 setConnected(true);
-                addSystemLog("Connected to Live Log Stream");
+                // System message handled by backend stream usually, 
+                // but we can add local one too if needed.
             };
 
             eventSource.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
                     // Filter out keep-alives or empty messages if any
-                    setLogs(prev => [...prev.slice(-499), data]); // Keep last 500 logs
+                    setLogs(prev => {
+                        const newLogs = [...prev, data];
+                        return newLogs.slice(-500); // Keep last 500
+                    });
                     if (data.level === 'error') setErrorCount(c => c + 1);
                 } catch (e) {
                     console.error("Failed to parse log:", event.data);

@@ -42,7 +42,10 @@ class LogManager:
             # Use the global pool
             r = redis.Redis(connection_pool=cls.pool)
             r.publish(cls.CHANNEL, message)
-            # No need to close, connection returns to pool
+            
+            # Persist to history (Last 500 logs)
+            r.lpush(f"{cls.CHANNEL}_history", message)
+            r.ltrim(f"{cls.CHANNEL}_history", 0, 499)
             
             # Also write to stdout for Docker logs
             logger.info(f"[LIVE-SYNC] {log_entry.get('message')}")
