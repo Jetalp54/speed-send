@@ -30,7 +30,7 @@ import {
     ArrowLeft,
     Globe,
     MousePointer2,
-    MailRead,
+    MailOpen,
     Smartphone,
     Monitor,
     Clock,
@@ -300,7 +300,9 @@ const PremiumAnalyticsPage = () => {
                             <div className="flex items-center justify-between">
                                 <h2 className="text-4xl font-extrabold text-slate-900 group-hover:text-white transition-colors">{data?.unique_opens}</h2>
                                 <div className="bg-indigo-50 p-2 rounded-lg group-hover:bg-indigo-900/40">
-                                    <MailRead className="h-6 w-6 text-indigo-600" />
+                                    <div className="bg-indigo-50 p-2 rounded-lg group-hover:bg-indigo-900/40">
+                                        <MailOpen className="h-6 w-6 text-indigo-600" />
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2 mt-4">
