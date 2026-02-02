@@ -429,6 +429,11 @@ class TrackingEvent(Base):
     geo_region = Column(String(100)) # State/region
     ip_hash = Column(String(64)) # Anonymized IP
     
+    # Extended Device Info
+    device_type = Column(String(20)) # mobile, tablet, desktop
+    os = Column(String(50)) # Windows, iOS, Android
+    browser = Column(String(50)) # Chrome, Safari, Firefox
+    
     # Device Detection (NEW)
     device_type = Column(String(20))  # 'mobile', 'tablet', 'desktop'
     os = Column(String(50))           # e.g., 'iOS 15.0'

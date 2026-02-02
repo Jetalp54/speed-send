@@ -176,8 +176,15 @@ def log_tracking_event_task(event_data):
             link_map_id=event_data.get('link_map_id'),
             user_agent=event_data.get('user_agent'),
             user_agent_type=event_data.get('user_agent_type', 'unknown'),
-            iso_country=event_data.get('geo_country'), # Changed from geo_country to match typical schema naming or keep logic
-            ip_hash=ip_hash
+            # Fix: Use correct model field names
+            geo_country=event_data.get('geo_country'),
+            geo_city=event_data.get('geo_city'),
+            geo_region=event_data.get('geo_region'),
+            ip_hash=ip_hash,
+            # Extended fields
+            device_type=event_data.get('device_type'),
+            os=event_data.get('os'),
+            browser=event_data.get('browser')
         )
         db.add(event)
         db.commit()
