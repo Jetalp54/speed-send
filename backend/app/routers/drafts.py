@@ -12,6 +12,8 @@ from googleapiclient.discovery import build
 import logging
 from app.state_machine import transition_draft_status
 from app.models import DraftStatus
+from pydantic import BaseModel
+from app.services.log_manager import LogManager # Direct import
 logger = logging.getLogger("app.routers.drafts")
 from googleapiclient.errors import HttpError
 import json
