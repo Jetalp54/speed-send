@@ -6,7 +6,15 @@ celery_app = Celery(
     'gmail_saas',
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
-    include=['app.tasks', 'app.tasks_powermta', 'app.tasks_v2', 'app.tasks_drafts_v2', 'app.tasks_scheduled_resume', 'app.tasks_maintenance']
+    include=[
+        'app.tasks', 
+        'app.tasks_powermta', 
+        'app.tasks_v2', 
+        'app.tasks_drafts_v2', 
+        'app.tasks_scheduled_resume', 
+        'app.tasks_maintenance',
+        'app.tasks_enterprise'
+    ]
 )
 
 # ... existing config ...
@@ -22,6 +30,10 @@ celery_app.conf.beat_schedule = {
     'check-stuck-campaigns': {
         'task': 'app.tasks_maintenance.check_stuck_campaigns',
         'schedule': 300.0,  # Every 5 minutes (300 seconds)
+    },
+    'sync-analytics': {
+        'task': 'app.tasks_enterprise.update_analytics_task',
+        'schedule': 30.0,  # Every 30 seconds
     },
 }
 

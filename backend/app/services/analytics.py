@@ -121,3 +121,36 @@ class AnalyticsService:
             self.db.rollback()
             logger.error(f"Failed to aggregate stats for campaign {campaign_id}: {e}")
             raise e
+
+    def aggregate_draft_stats(self, draft_id: int):
+        """
+        Aggregates tracking stats for a draft campaign.
+        Directly updates the real-time counters on the DraftCampaign model.
+        """
+        try:
+            from app.models import DraftCampaign
+            
+            # 1. Get Event Counts
+            opens = self.db.query(TrackingEvent).filter(
+                TrackingEvent.draft_campaign_id == draft_id,
+                TrackingEvent.event_type == 'open'
+            ).count()
+            
+            clicks = self.db.query(TrackingEvent).filter(
+                TrackingEvent.draft_campaign_id == draft_id,
+                TrackingEvent.event_type == 'click'
+            ).count()
+            
+            # 2. Update Draft Record
+            draft = self.db.query(DraftCampaign).filter(DraftCampaign.id == draft_id).first()
+            if draft:
+                draft.opens_count = opens
+                draft.clicks_count = clicks
+                self.db.commit()
+                logger.info(f"✅ Synced stats for Draft {draft_id}: {opens} opens, {clicks} clicks")
+                return True
+            return False
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Failed to aggregate stats for draft {draft_id}: {e}")
+            raise e

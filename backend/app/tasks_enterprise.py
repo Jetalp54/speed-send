@@ -224,35 +224,42 @@ def process_send_job(self, job_id):
 @celery_app.task
 def update_analytics_task():
     """
-    Periodic Task: Updates aggregated stats for all active campaigns.
-    Runs every 5-10 minutes.
+    Periodic Task: Updates aggregated stats for all active campaigns and drafts.
+    Runs every 30-60 seconds (configured in beat).
     """
     db = SessionLocal()
     try:
-        from app.models import Campaign, CampaignStatus
+        from app.models import Campaign, CampaignStatus, DraftCampaign
         from app.services.analytics import AnalyticsService
-        
-        # 1. Find sending/active campaigns
-        # We also might want to check 'Completed' campaigns for late opens/clicks for X days.
-        # Simplified: Check all SENDING and COMPLETED.
-        campaigns = db.query(Campaign).filter(
-            Campaign.status.in_([CampaignStatus.SENDING, CampaignStatus.COMPLETED, CampaignStatus.PAUSED])
-        ).all()
         
         analytics = AnalyticsService(db)
         count = 0
+        draft_count = 0
+        
+        # 1. Update Campaigns (Sending/Completed/Paused)
+        campaigns = db.query(Campaign).filter(
+            Campaign.status.in_([CampaignStatus.SENDING, CampaignStatus.COMPLETED, CampaignStatus.PAUSED])
+        ).limit(100).all() # Limit per run
+        
         for campaign in campaigns:
-            # Maybe optimize: only update if modified recently?
-            # Or simplified: Limit to last 50 campaigns?
-            # For now: Update all relevant ones.
             try:
                 analytics.aggregate_campaign_stats(campaign.id)
                 count += 1
             except Exception as e:
                 logger.error(f"Failed to update stats for campaign {campaign.id}: {e}")
+        
+        # 2. Update Drafts (Only those with logs or activity)
+        # For simplicity, update all active drafts (limit to avoid impact)
+        drafts = db.query(DraftCampaign).order_by(DraftCampaign.created_at.desc()).limit(100).all()
+        for draft in drafts:
+            try:
+                analytics.aggregate_draft_stats(draft.id)
+                draft_count += 1
+            except Exception as e:
+                logger.error(f"Failed to update stats for draft {draft.id}: {e}")
                 
-        logger.info(f"Updated analytics for {count} campaigns")
-        return f"Updated {count} campaigns"
+        logger.info(f"Updated analytics for {count} campaigns and {draft_count} drafts")
+        return f"Updated {count} campaigns, {draft_count} drafts"
         
     except Exception as e:
         logger.error(f"Analytics task failed: {e}")
