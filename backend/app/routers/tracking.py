@@ -36,7 +36,7 @@ def get_client_ip(request: Request) -> str:
             else:
                 ip = val.strip()
             
-            if ip and ip != "127.0.0.1":
+            if ip:
                 return ip
 
     return request.client.host if request.client else "unknown"

@@ -102,18 +102,11 @@ class OpaqueSigner:
     @classmethod
     def get_fernet(cls):
         if cls._fernet is None:
-            # key must be 32 url-safe base64-encoded bytes
-            # We assume settings.ENCRYPTION_KEY is suitable or we derive it.
-            # If plain string, we might need to hash it to get 32 bytes valid key.
-            # Simplified: Use a specific key for tracking if needed, or re-use main ENCRYPTION_KEY (if proper format).
             try:
                 key = settings.ENCRYPTION_KEY
-                # Ensure it's bytes
                 if isinstance(key, str):
                     key = key.encode()
-                # Fernet key must be 32 base64-encoded bytes
-                # If key is short/raw, we hash & b64encode
-                if len(key) != 44: # Standard Fernet key length
+                if len(key) != 44:
                      m = hashlib.sha256()
                      m.update(key)
                      key = base64.urlsafe_b64encode(m.digest())
@@ -161,6 +154,9 @@ def log_tracking_event_task(event_data):
     """
     logger.info(f"⚙️ EXECUTING TASK: logging {event_data['event_type']} for Cam:{event_data.get('campaign_id')} Draft:{event_data.get('draft_campaign_id')}")
     db = SessionLocal()
+    # Log database name for debugging connection issues
+    db_name = db.get_bind().url.database
+    logger.info(f"⚙️ EXECUTING TASK | DB: {db_name} | logging {event_data['event_type']} for Cam:{event_data.get('campaign_id')} Draft:{event_data.get('draft_campaign_id')}")
     try:
         # Anonymize IP if present (GDPR compliance)
         ip_address = event_data.get('ip')
