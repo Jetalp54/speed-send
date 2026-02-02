@@ -101,8 +101,6 @@ async def send_test_email(
         try:
             # Check if we should use custom headers (for testing)
             # For now, use regular send_email for test endpoint
-                attachments=[]
-            )
             
             # Hydrate body_html with test pixel param to avoid broken image
             # Although we won't get analytics for test emails (no campaign_id),
