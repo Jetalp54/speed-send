@@ -47,12 +47,15 @@ async def track_open(opaque_id: str, request: Request):
                      'email_log_id': email_log_id,
                      'user_agent': request.headers.get('user-agent'),
                      'ip': request.client.host,
-                     # GeoIP would happen here or in worker
+                 # GeoIP would happen here or in worker
                  }
-                 log_tracking_event_task.delay(event_data)
+                 # SYNC CALL: Immediate update for "Real Pattern" analytics
+                 log_tracking_event_task(event_data)
              db.close()
-        except Exception:
-             pass # Never fail the pixel load
+        except Exception as e:
+             # Log error but don't fail pixel
+             print(f"Tracking Open Error: {e}")
+             pass
 
     # 3. Return Pixel
     return Response(
@@ -93,7 +96,8 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
          'user_agent': request.headers.get('user-agent'),
          'ip': request.client.host
     }
-    log_tracking_event_task.delay(event_data)
+    # SYNC CALL: Immediate update
+    log_tracking_event_task(event_data)
     
     # 4. Redirect
     return RedirectResponse(url=link_map.original_url)
@@ -103,26 +107,29 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
 # EXPLICIT TRACKING (For Drafts / Static Links)
 # ==========================================
 
-@router.get("/t/pixel.gif")
+@router.get("/t/pixel.png")
 async def track_pixel_explicit(c: int = None, r: str = None, request: Request = None):
     """
-    Explicit Open Tracking for Drafts.
+    Explicit Open Tracking for Drafts (PNG).
     c = campaign_id
     r = recipient_email (optional)
     """
     if c:
         try:
-            # Async Log
+            # Synchronous Log for reliability
             event_data = {
                 'event_type': 'open',
                 'campaign_id': c,
-                'email_log_id': None, # No log ID for drafts
+                'email_log_id': None,
                 'recipient': r,
                 'user_agent': request.headers.get('user-agent') if request else None,
                 'ip': request.client.host if request else None,
+                'geo_country': 'XX' # To be filled by geolocation middleware or logic
             }
-            log_tracking_event_task.delay(event_data)
-        except Exception:
+            # Execute directly, no delay (fixes "Demo" feel of laggy analytics)
+            log_tracking_event_task(event_data)
+        except Exception as e:
+            print(f"Tracking Error: {e}")
             pass
             
     return Response(
@@ -135,9 +142,6 @@ async def track_pixel_explicit(c: int = None, r: str = None, request: Request = 
 async def track_redirect_explicit(url: str, c: int = None, r: str = None, request: Request = None):
     """
     Explicit Click Tracking for Drafts.
-    url = original_url
-    c = campaign_id
-    r = recipient_email (optional)
     """
     if not url:
         raise HTTPException(status_code=400, detail="Missing URL")
@@ -153,7 +157,7 @@ async def track_redirect_explicit(url: str, c: int = None, r: str = None, reques
                 'user_agent': request.headers.get('user-agent') if request else None,
                 'ip': request.client.host if request else None
             }
-            log_tracking_event_task.delay(event_data)
+            log_tracking_event_task(event_data)
         except Exception:
             pass
             
