@@ -636,12 +636,27 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
             if tracking_domain:
                 logger.info(f"🔍 Found active tracking domain: {tracking_domain.domain}")
                 
-                # Replace pixel
+                # Replace [tracking_pixel] placeholder
                 if '[tracking_pixel]' in body_html:
                     pixel_params = f"?c={campaign_id}" if campaign_id else ""
-                    pixel_url = f"https://{tracking_domain.domain}/t/pixel.gif{pixel_params}"
+                    pixel_url = f"https://{tracking_domain.domain}/t/pixel.png{pixel_params}"
                     body_html = body_html.replace('[tracking_pixel]', pixel_url)
                     logger.info(f"✅ REPLACED [tracking_pixel] with {pixel_url}")
+                
+                # Fix Frontend-inserted "Naked" Pixels (which lack ?c=...)
+                # The frontend inserts: src="https://domain/t/pixel.png"
+                # We need to append ?c=campaign_id
+                if campaign_id:
+                     import re
+                     # Regex to find pixel.png that doesn't have ?c= yet
+                     # Look for src=".../t/pixel.png" (and not followed by ?)
+                     naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
+                     
+                     def add_campaign_param(match):
+                         return f'{match.group(1)}?c={campaign_id}{match.group(2)}'
+                         
+                     body_html = re.sub(naked_pixel_pattern, add_campaign_param, body_html)
+                     logger.info(f"✅ Hydrated frontend-inserted pixels with campaign_id={campaign_id}")
                 
                 # Replace links
                 pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
