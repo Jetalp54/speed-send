@@ -21,7 +21,7 @@ async def track_open(opaque_id: str, request: Request):
     """
     Open Tracking Pixel.
     """
-    print(f"TRACKING RECEIVED: Open via Opaque ID {opaque_id}")
+    logger.info(f"📡 TRACKING RECEIVED: Open via Opaque ID {opaque_id}")
     email_log_id, _ = OpaqueSigner.unsign(opaque_id)
     
     if email_log_id:
@@ -37,10 +37,10 @@ async def track_open(opaque_id: str, request: Request):
                      'ip': request.client.host,
                  }
                  log_tracking_event_task.delay(event_data)
-                 print(f"TRACKING LOGGED: Open for Campaign {log.campaign_id}, Log {email_log_id}")
+                 logger.info(f"✅ TRACKING LOGGED: Open for Campaign {log.campaign_id}, Log {email_log_id}")
              db.close()
         except Exception as e:
-             print(f"Tracking Open Error: {e}")
+             logger.error(f"❌ Tracking Open Error: {e}")
              pass
 
     return Response(
@@ -54,7 +54,7 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
     """
     Click Tracking Redirect.
     """
-    print(f"TRACKING RECEIVED: Click via Opaque ID {opaque_id}")
+    logger.info(f"📡 TRACKING RECEIVED: Click via Opaque ID {opaque_id}")
     email_log_id, link_map_id = OpaqueSigner.unsign(opaque_id)
     
     if not email_log_id or not link_map_id:
@@ -76,7 +76,7 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
          'ip': request.client.host
     }
     log_tracking_event_task.delay(event_data)
-    print(f"TRACKING LOGGED: Click for Campaign {campaign_id}, Link {link_map_id}")
+    logger.info(f"✅ TRACKING LOGGED: Click for Campaign {campaign_id}, Link {link_map_id}")
     
     return RedirectResponse(url=link_map.original_url)
 
@@ -84,8 +84,8 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
 # --- EXPLICIT TRACKING ---
 
 @router.get("/t/pixel.png")
-async def track_pixel_explicit(c: int = None, r: str = None, request: Request = None):
-    print(f"TRACKING RECEIVED: Explicit Pixel for Campaign {c}")
+async def track_pixel_explicit(request: Request, c: int = None, r: str = None):
+    logger.info(f"📡 TRACKING RECEIVED: Explicit Pixel for Campaign {c}")
     if c:
         try:
             event_data = {
@@ -93,13 +93,13 @@ async def track_pixel_explicit(c: int = None, r: str = None, request: Request = 
                 'campaign_id': c,
                 'email_log_id': None,
                 'recipient': r,
-                'user_agent': request.headers.get('user-agent') if request else None,
-                'ip': request.client.host if request else None
+                'user_agent': request.headers.get('user-agent'),
+                'ip': request.client.host
             }
             log_tracking_event_task.delay(event_data)
-            print(f"TRACKING LOGGED: Explicit Open for Campaign {c}")
+            logger.info(f"✅ TRACKING LOGGED: Explicit Open for Campaign {c}")
         except Exception as e:
-            print(f"Tracking Error: {e}")
+            logger.error(f"❌ Tracking Error: {e}")
             pass
             
     return Response(
@@ -109,8 +109,8 @@ async def track_pixel_explicit(c: int = None, r: str = None, request: Request = 
     )
 
 @router.get("/t/redirect")
-async def track_redirect_explicit(url: str, c: int = None, r: str = None, request: Request = None):
-    print(f"TRACKING RECEIVED: Explicit Redirect to {url} for Campaign {c}")
+async def track_redirect_explicit(request: Request, url: str, c: int = None, r: str = None):
+    logger.info(f"📡 TRACKING RECEIVED: Explicit Redirect to {url} for Campaign {c}")
     if not url:
         raise HTTPException(status_code=400, detail="Missing URL")
         
@@ -122,12 +122,13 @@ async def track_redirect_explicit(url: str, c: int = None, r: str = None, reques
                 'email_log_id': None,
                 'recipient': r,
                 'link_url': url,
-                'user_agent': request.headers.get('user-agent') if request else None,
-                'ip': request.client.host if request else None
+                'user_agent': request.headers.get('user-agent'),
+                'ip': request.client.host
             }
             log_tracking_event_task.delay(event_data)
-            print(f"TRACKING LOGGED: Explicit Click for Campaign {c}")
-        except Exception:
+            logger.info(f"✅ TRACKING LOGGED: Explicit Click for Campaign {c}")
+        except Exception as e:
+            logger.error(f"❌ Tracking Redirect Error: {e}")
             pass
             
     return RedirectResponse(url=url)
