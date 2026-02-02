@@ -33,6 +33,15 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created/verified")
         
+        try:
+            # Run Schema Fixer (Self-Heal) to ensure columns exist
+            from app.fix_db import fix_schema
+            logger.info("🔧 Running DB Schema Fixer...")
+            fix_schema()
+            logger.info("✅ DB Schema Fixer completed")
+        except Exception as e:
+            logger.error(f"Failed to run schema fixer: {e}")
+
         # SELF-HEAL: Ensure 'version' column exists for optimistic closing
         # This fixes 500 errors if migration failed to run
         try:

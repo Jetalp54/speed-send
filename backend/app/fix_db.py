@@ -46,6 +46,29 @@ def fix_schema():
             except Exception as e:
                 print(f"- Error adding body_template: {e}")
 
+            # ==========================================
+            # Fix Tracking Events (Missing Columns)
+            # ==========================================
+            tracking_cols = [
+                ("user_agent", "TEXT"),
+                ("user_agent_type", "VARCHAR(50)"),
+                ("geo_country", "VARCHAR(2)"),
+                ("geo_city", "VARCHAR(100)"),
+                ("geo_region", "VARCHAR(100)"),
+                ("ip_hash", "VARCHAR(64)"),
+                ("device_type", "VARCHAR(20)"),
+                ("os", "VARCHAR(50)"),
+                ("browser", "VARCHAR(50)")
+            ]
+            
+            for col_name, col_type in tracking_cols:
+                try:
+                    # distinct 'tracking_events' table
+                    conn.execute(text(f"ALTER TABLE tracking_events ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                    print(f"- Checked/Added tracking_events.{col_name}")
+                except Exception as e:
+                    print(f"- Error checking {col_name}: {e}")
+
             conn.commit()
             print("Schema update completed successfully.")
     except Exception as e:
