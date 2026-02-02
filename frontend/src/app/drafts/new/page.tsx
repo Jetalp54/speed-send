@@ -423,7 +423,8 @@ export default function NewDraftPage() {
                             let html = config.body_html;
 
                             // Add tracking pixel before </body> or at end
-                            const pixelUrl = `https://${trackingDomain}/t/p/tracking.gif`;
+                            // Use the new standard PNG pixel
+                            const pixelUrl = `https://${trackingDomain}/t/pixel.png`;
                             const pixelHtml = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="">`;
 
                             if (html.includes('</body>')) {
