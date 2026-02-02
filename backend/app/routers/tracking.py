@@ -19,12 +19,20 @@ TRANSPARENT_PIXEL = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
 )
 
-@router.api_route("/t/o/{opaque_id}.png", methods=["GET", "HEAD"])
+@router.get("/t/o/{opaque_id}.png")
+@router.head("/t/o/{opaque_id}.png")
 async def track_open(opaque_id: str, request: Request):
     """
     Open Tracking Pixel.
     """
     logger.info(f"📡 TRACKING RECEIVED: Open via Opaque ID {opaque_id}")
+    if request.method == "HEAD":
+        return Response(
+            content=TRANSPARENT_PIXEL, 
+            media_type="image/png", 
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        )
+
     email_log_id, _ = OpaqueSigner.unsign(opaque_id)
     
     if email_log_id:
@@ -52,7 +60,8 @@ async def track_open(opaque_id: str, request: Request):
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
     )
 
-@router.api_route("/t/c/{opaque_id}", methods=["GET", "HEAD"])
+@router.get("/t/c/{opaque_id}")
+@router.head("/t/c/{opaque_id}")
 async def track_click(opaque_id: str, request: Request, db: Session = Depends(get_db)):
     """
     Click Tracking Redirect.
@@ -60,6 +69,7 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
     logger.info(f"📡 TRACKING RECEIVED: Click via Opaque ID {opaque_id}")
     if request.method == "HEAD":
         return Response(status_code=200)
+
     email_log_id, link_map_id = OpaqueSigner.unsign(opaque_id)
     
     if not email_log_id or not link_map_id:
@@ -88,11 +98,13 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
 
 # --- EXPLICIT TRACKING ---
 
-@router.api_route("/t/pixel.png", methods=["GET", "HEAD"])
+@router.get("/t/pixel.png")
+@router.head("/t/pixel.png")
 async def track_pixel_explicit(request: Request, c: int = None, r: str = None):
     logger.info(f"📡 TRACKING RECEIVED: Explicit Pixel for Campaign {c}")
     if request.method == "HEAD":
         return Response(content=TRANSPARENT_PIXEL, media_type="image/png")
+
     if c:
         try:
             event_data = {
@@ -115,11 +127,13 @@ async def track_pixel_explicit(request: Request, c: int = None, r: str = None):
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
     )
 
-@router.api_route("/t/redirect", methods=["GET", "HEAD"])
+@router.get("/t/redirect")
+@router.head("/t/redirect")
 async def track_redirect_explicit(request: Request, url: str, c: int = None, r: str = None):
     logger.info(f"📡 TRACKING RECEIVED: Explicit Redirect to {url} for Campaign {c}")
     if request.method == "HEAD":
         return Response(status_code=200)
+
     if not url:
         raise HTTPException(status_code=400, detail="Missing URL")
         
