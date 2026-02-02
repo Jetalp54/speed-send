@@ -152,7 +152,6 @@ def log_tracking_event_task(event_data):
     """
     Async task to write tracking event to DB.
     """
-    logger.info(f"⚙️ EXECUTING TASK: logging {event_data['event_type']} for Cam:{event_data.get('campaign_id')} Draft:{event_data.get('draft_campaign_id')}")
     db = SessionLocal()
     # Log database name for debugging connection issues
     db_name = db.get_bind().url.database
@@ -193,11 +192,11 @@ def log_tracking_event_task(event_data):
                 # Use a fast, free GeoIP API (ip-api.com)
                 # Note: In heavy production, use a local MaxMind DB
                 with httpx.Client(timeout=3.0) as client:
-                    response = client.get(f"http://ip-api.com/json/{ip_address}?fields=status,message,country,regionName,city")
+                    response = client.get(f"http://ip-api.com/json/{ip_address}?fields=status,message,countryCode,regionName,city")
                     if response.status_code == 200:
                         geo_data = response.json()
                         if geo_data.get("status") == "success":
-                            event.geo_country = geo_data.get("country")
+                            event.geo_country = geo_data.get("countryCode")
                             event.geo_region = geo_data.get("regionName")
                             geo_city = geo_data.get("city")
                             event.geo_city = geo_city
