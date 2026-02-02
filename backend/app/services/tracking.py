@@ -187,6 +187,28 @@ def log_tracking_event_task(event_data):
             browser=event_data.get('browser')
         )
         db.add(event)
+        
+        # --- NEW: Real-time counter updates ---
+        from app.models import Campaign, EmailLog
+        
+        # 1. Update Campaign Stats
+        campaign = db.query(Campaign).filter(Campaign.id == event_data['campaign_id']).first()
+        if campaign:
+            if event_data['event_type'] == 'open':
+                campaign.opens_count = (campaign.opens_count or 0) + 1
+            elif event_data['event_type'] == 'click':
+                campaign.clicks_count = (campaign.clicks_count or 0) + 1
+        
+        # 2. Update Email Log Stats (if linked)
+        email_log_id = event_data.get('email_log_id')
+        if email_log_id:
+            log = db.query(EmailLog).filter(EmailLog.id == email_log_id).first()
+            if log:
+                if event_data['event_type'] == 'open':
+                    log.opens_count = (log.opens_count or 0) + 1
+                elif event_data['event_type'] == 'click':
+                    log.clicks_count = (log.clicks_count or 0) + 1
+        
         db.commit()
     except Exception as e:
         logger.error(f"Failed to log tracking event: {e}")

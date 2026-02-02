@@ -70,7 +70,7 @@ services:
     image: speed-send-backend
     container_name: gmail_saas_celery_worker
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-gmailsaas}:${POSTGRES_PASSWORD:-gmailsaas123}@postgres:5432/${POSTGRES_DB:-gmail_saas}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gmailsaas}:${POSTGRES_PASSWORD:-gmailsaas123}@gmail_saas_db:5432/${POSTGRES_DB:-gmail_saas}
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-your-encryption-key-32-bytes-long}
@@ -99,7 +99,7 @@ services:
     image: speed-send-backend
     container_name: gmail_saas_celery_beat
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-gmailsaas}:${POSTGRES_PASSWORD:-gmailsaas123}@postgres:5432/${POSTGRES_DB:-gmail_saas}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gmailsaas}:${POSTGRES_PASSWORD:-gmailsaas123}@gmail_saas_db:5432/${POSTGRES_DB:-gmail_saas}
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-your-encryption-key-32-bytes-long}
