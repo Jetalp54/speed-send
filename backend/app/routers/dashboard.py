@@ -80,14 +80,29 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
             "sent": sent_count
         })
 
+    # Total Email Stats (All time)
+    total_emails_sent = db.query(func.count(EmailLog.id)).filter(
+        EmailLog.status == EmailStatus.SENT
+    ).scalar() or 0
+    
+    total_emails_failed = db.query(func.count(EmailLog.id)).filter(
+        EmailLog.status == EmailStatus.FAILED
+    ).scalar() or 0
+    
+    # Calculate success rate
+    total_attempts = total_emails_sent + total_emails_failed
+    success_rate = (total_emails_sent / total_attempts * 100) if total_attempts > 0 else 0.0
+
     return DashboardStats(
         total_service_accounts=total_service_accounts,
         total_users=total_users,
         total_campaigns=total_campaigns,
         active_campaigns=active_campaigns,
         completed_campaigns=completed_campaigns,
+        total_emails_sent=total_emails_sent,
         emails_sent_today=emails_sent_today,
         emails_failed_today=emails_failed_today,
+        success_rate=round(success_rate, 2),
         quota_usage=quota_usage,
         history=history
     )
