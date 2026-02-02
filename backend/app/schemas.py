@@ -297,6 +297,10 @@ class DraftCampaignResponse(DraftCampaignBase):
     drafts_by_user: Dict[str, int] = {}
     recipients_count: int = 0
     users_count: int = 0
+    # Analytics Stats
+    opens_count: int = 0
+    clicks_count: int = 0
+    bounces_count: int = 0
 
     class Config:
         from_attributes = True

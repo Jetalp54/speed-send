@@ -173,7 +173,11 @@ def get_draft_campaigns(db: Session = Depends(get_db)):
             status=campaign.status or DraftStatus.CREATED.value,
             recipients_count=recipients_count,
             users_count=len(campaign.selected_users),
-            emails_per_user=campaign.emails_per_user or 0
+            emails_per_user=campaign.emails_per_user or 0,
+            # Analytics
+            opens_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.campaign_id == campaign.id, models.TrackingEvent.event_type == 'open').count(),
+            clicks_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.campaign_id == campaign.id, models.TrackingEvent.event_type == 'click').count(),
+            bounces_count=0 # Placeholder for now, handling bounces is complex via Gmail API
         ))
     return response
 
@@ -225,7 +229,11 @@ def get_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         body_template=campaign.body_template,
         # Test fields
         test_after_email=campaign.test_after_email,
-        test_after_count=campaign.test_after_count or 0
+        test_after_count=campaign.test_after_count or 0,
+        # Analytics
+        opens_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.campaign_id == campaign.id, models.TrackingEvent.event_type == 'open').count(),
+        clicks_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.campaign_id == campaign.id, models.TrackingEvent.event_type == 'click').count(),
+        bounces_count=0
     )
 
 # Redundant get_draft_campaign removed (it was defined twice in original file)

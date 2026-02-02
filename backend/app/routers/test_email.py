@@ -101,6 +101,22 @@ async def send_test_email(
         try:
             # Check if we should use custom headers (for testing)
             # For now, use regular send_email for test endpoint
+                attachments=[]
+            )
+            
+            # Hydrate body_html with test pixel param to avoid broken image
+            # Although we won't get analytics for test emails (no campaign_id),
+            # this prevents the "broken image" icon in the client.
+            if request.body_html:
+                import re
+                # Fix Naked Pixel
+                naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
+                # Use c=0 for test
+                def add_test_param(match):
+                    return f'{match.group(1)}?c=0{match.group(2)}'
+                
+                request.body_html = re.sub(naked_pixel_pattern, add_test_param, request.body_html)
+
             message_id = google_service.send_email(
                 sender_email=user.email,
                 recipient_email=request.recipient_email,

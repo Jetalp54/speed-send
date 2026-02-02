@@ -40,6 +40,9 @@ interface DraftCampaign {
   recipients_count: number;
   users_count: number;
   emails_per_user: number;
+  opens_count?: number;
+  clicks_count?: number;
+  bounces_count?: number;
 }
 
 const DraftsPage: React.FC = () => {
@@ -364,6 +367,28 @@ const DraftsPage: React.FC = () => {
                   <p className="text-xs text-gray-500 text-right">
                     Created {format(new Date(campaign.created_at), 'MMM d, yyyy')}
                   </p>
+
+                  {/* Analytics Stats Footer */}
+                  <div className="border-t pt-3 mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                    <div className="col-span-1">
+                      <span className="block font-bold text-green-600 text-sm">
+                        {campaign.opens_count || 0}
+                      </span>
+                      <span className="text-gray-500">Opens</span>
+                    </div>
+                    <div className="col-span-1 border-l border-gray-100">
+                      <span className="block font-bold text-blue-600 text-sm">
+                        {campaign.clicks_count || 0}
+                      </span>
+                      <span className="text-gray-500">Clicks</span>
+                    </div>
+                    <div className="col-span-1 border-l border-gray-100">
+                      <span className="block font-bold text-red-600 text-sm">
+                        {campaign.bounces_count || 0}
+                      </span>
+                      <span className="text-gray-500">Bounces</span>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
