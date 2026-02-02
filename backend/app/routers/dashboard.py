@@ -88,6 +88,11 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
     total_emails_failed = db.query(func.count(EmailLog.id)).filter(
         EmailLog.status == EmailStatus.FAILED
     ).scalar() or 0
+
+    # Total Analytics (New)
+    from app.models import TrackingEvent
+    total_opens = db.query(func.count(TrackingEvent.id)).filter(TrackingEvent.event_type == 'open').scalar() or 0
+    total_clicks = db.query(func.count(TrackingEvent.id)).filter(TrackingEvent.event_type == 'click').scalar() or 0
     
     # Calculate success rate
     total_attempts = total_emails_sent + total_emails_failed
@@ -102,6 +107,8 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
         total_emails_sent=total_emails_sent,
         emails_sent_today=emails_sent_today,
         emails_failed_today=emails_failed_today,
+        total_opens=total_opens,
+        total_clicks=total_clicks,
         success_rate=round(success_rate, 2),
         quota_usage=quota_usage,
         history=history

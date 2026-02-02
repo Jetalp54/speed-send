@@ -242,6 +242,9 @@ class CampaignResponse(CampaignBase):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     paused_at: Optional[datetime] = None
+    opens_count: int = 0
+    clicks_count: int = 0
+    bounces_count: int = 0
     sender_accounts: List[ServiceAccountResponse] = []
 
     class Config:
@@ -364,11 +367,16 @@ class TestEmailResponse(BaseModel):
 
 # Dashboard Schemas
 class DashboardStats(BaseModel):
+    total_service_accounts: int
+    total_users: int
     total_campaigns: int
     active_campaigns: int
+    completed_campaigns: int
     total_emails_sent: int
     emails_sent_today: int
     emails_failed_today: int
+    total_opens: int = 0
+    total_clicks: int = 0
     success_rate: float
     quota_usage: Dict[str, Any]
     history: List[Dict[str, Any]] = []

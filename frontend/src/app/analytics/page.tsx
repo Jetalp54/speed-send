@@ -103,7 +103,7 @@ export default function AnalyticsPage() {
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                       >
                         {pieData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -138,8 +138,7 @@ export default function AnalyticsPage() {
                     </div>
                   </div>
                   <div className="text-2xl font-bold">
-                    {/* Todo: Wire up real opens count */}
-                    --
+                    {stats?.total_opens || 0}
                   </div>
                 </div>
                 <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
@@ -153,7 +152,7 @@ export default function AnalyticsPage() {
                     </div>
                   </div>
                   <div className="text-2xl font-bold">
-                    --
+                    {stats?.total_clicks || 0}
                   </div>
                 </div>
               </CardContent>
