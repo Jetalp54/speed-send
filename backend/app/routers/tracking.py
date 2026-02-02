@@ -64,8 +64,11 @@ async def track_open(opaque_id: str, request: Request):
     if request.method == "HEAD":
         return Response(
             content=TRANSPARENT_PIXEL, 
-            media_type="image/png", 
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+            media_type="image/png",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "X-Tracking-System": "fastapi-backend"
+            }
         )
 
     email_log_id, _ = OpaqueSigner.unsign(opaque_id)
@@ -147,7 +150,10 @@ async def track_pixel_explicit(request: Request, c: int = None, d: int = None, r
         return Response(
             content=TRANSPARENT_PIXEL, 
             media_type="image/png",
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "X-Tracking-System": "fastapi-backend"
+            }
         )
 
     if c or d:
