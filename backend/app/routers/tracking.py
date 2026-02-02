@@ -10,7 +10,8 @@ from fastapi import Depends
 import base64
 
 import logging
-logger = logging.getLogger(__name__)
+# Logger for this module
+logger = logging.getLogger("app.routers.tracking")
 
 router = APIRouter()
 

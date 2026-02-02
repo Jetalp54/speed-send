@@ -10,7 +10,7 @@ from app.models import TrackingEvent, LinkMap
 import hashlib
 import re
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app.services.tracking")
 
 def inject_tracking_links(db, html_content: str, campaign_id: int, email_log_id: int) -> str:
     """
