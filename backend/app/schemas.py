@@ -423,6 +423,36 @@ class DraftUploadResponse(BaseModel):
     users_count: int
     details: Optional[Dict[str, Any]] = None
 
+# Analytics Granular Schemas
+class AnalyticsPoint(BaseModel):
+    label: str
+    value: int
+
+class AnalyticsTimeSeries(BaseModel):
+    timestamp: str
+    opens: int = 0
+    clicks: int = 0
+
+class GranularAnalyticsResponse(BaseModel):
+    draft_id: int
+    total_opens: int
+    unique_opens: int
+    total_clicks: int
+    unique_clicks: int
+    
+    # Distributions
+    geo_countries: List[AnalyticsPoint] = []
+    geo_cities: List[AnalyticsPoint] = []
+    device_types: List[AnalyticsPoint] = []
+    browsers: List[AnalyticsPoint] = []
+    os_systems: List[AnalyticsPoint] = []
+    
+    # Time-series (Hourly/Daily)
+    timeseries: List[AnalyticsTimeSeries] = []
+    
+    # Recent Events
+    recent_events: List[Dict[str, Any]] = []
+
 # Update forward references
 ContactListResponse.model_rebuild()
 ContactResponse.model_rebuild()

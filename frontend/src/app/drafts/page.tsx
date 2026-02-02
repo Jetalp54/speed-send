@@ -261,6 +261,10 @@ const DraftsPage: React.FC = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => router.push(`/drafts/${campaign.id}/analytics`)}>
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Analytics
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push(`/drafts/edit/${campaign.id}`)}>
                       <Edit className="h-4 w-4 mr-2" />
                       Edit
