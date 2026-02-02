@@ -9,6 +9,7 @@ from app.database import SessionLocal
 from app.models import TrackingEvent, LinkMap
 import hashlib
 import re
+import httpx
 
 logger = logging.getLogger("app.services.tracking")
 
@@ -188,6 +189,23 @@ def log_tracking_event_task(event_data):
             os=event_data.get('os'),
             browser=event_data.get('browser')
         )
+        
+        # --- NEW: Geo-Location Lookup ---
+        if ip_address and ip_address != "127.0.0.1" and not event.geo_country:
+            try:
+                # Use a fast, free GeoIP API (ip-api.com)
+                # Note: In heavy production, use a local MaxMind DB
+                response = httpx.get(f"http://ip-api.com/json/{ip_address}?fields=status,country,regionName,city", timeout=2.0)
+                if response.status_code == 200:
+                    geo_data = response.json()
+                    if geo_data.get("status") == "success":
+                        event.geo_country = geo_data.get("country")
+                        event.geo_region = geo_data.get("regionName")
+                        event.geo_city = geo_data.get("city")
+                        logger.info(f"📍 Resolved Location: {event.geo_city}, {event.geo_country}")
+            except Exception as geo_err:
+                logger.warning(f"⚠️ GeoIP Lookup failed: {geo_err}")
+
         db.add(event)
         
         # --- NEW: Real-time counter updates ---

@@ -13,6 +13,21 @@ import logging
 # Logger for this module
 logger = logging.getLogger("app.routers.tracking")
 
+def get_client_ip(request: Request) -> str:
+    """
+    Extract real client IP from headers or request.
+    """
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    if x_forwarded_for:
+        # Get the first IP in the list (client IP)
+        return x_forwarded_for.split(",")[0].strip()
+    
+    x_real_ip = request.headers.get("x-real-ip")
+    if x_real_ip:
+        return x_real_ip
+    
+    return request.client.host if request.client else "unknown"
+
 router = APIRouter()
 
 # 1x1 Transparent PNG
@@ -48,7 +63,7 @@ async def track_open(opaque_id: str, request: Request):
                      'campaign_id': log.campaign_id,
                      'email_log_id': email_log_id,
                      'user_agent': request.headers.get('user-agent'),
-                     'ip': request.client.host,
+                     'ip': get_client_ip(request),
                  }
                  log_tracking_event_task.delay(event_data)
                  logger.info(f"✅ TRACKING LOGGED: Open for Campaign {log.campaign_id}, Log {email_log_id}")
@@ -91,7 +106,7 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
          'email_log_id': email_log_id,
          'link_map_id': link_map_id,
          'user_agent': request.headers.get('user-agent'),
-         'ip': request.client.host
+         'ip': get_client_ip(request)
     }
     log_tracking_event_task.delay(event_data)
     logger.info(f"✅ TRACKING LOGGED: Click for Campaign {campaign_id}, Link {link_map_id}")
@@ -123,7 +138,7 @@ async def track_pixel_explicit(request: Request, c: int = None, d: int = None, r
                 'email_log_id': None,
                 'recipient': r,
                 'user_agent': request.headers.get('user-agent'),
-                'ip': request.client.host
+                'ip': get_client_ip(request)
             }
             log_tracking_event_task.delay(event_data)
             logger.info(f"✅ EXPLICIT OPEN RECEIVED: c={c}, d={d}. Dispatched to worker.")
@@ -157,7 +172,7 @@ async def track_redirect_explicit(request: Request, url: str, c: int = None, d: 
                 'recipient': r,
                 'link_url': url,
                 'user_agent': request.headers.get('user-agent'),
-                'ip': request.client.host
+                'ip': get_client_ip(request)
             }
             log_tracking_event_task.delay(event_data)
             logger.info(f"✅ EXPLICIT CLICK RECEIVED: to {url}, c={c}, d={d}. Dispatched to worker.")
