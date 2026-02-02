@@ -202,9 +202,14 @@ def log_tracking_event_task(event_data):
             is_draft = db.query(DraftCampaign).filter(DraftCampaign.id == c_id).first()
             if is_draft:
                 d_id = c_id
-                # Update the event record too if needed, but primarily we update the counter
+                # CRITICAL: If we found it's a draft, we MUST clear the campaign__id 
+                # on the event object or the database will throw a ForeignKeyViolation 
+                # because the ID doesn't exist in the "campaigns" table.
                 event.draft_campaign_id = d_id
-                logger.info(f"🔄 Auto-resolved Campaign ID {c_id} as Draft ID {d_id}")
+                event.campaign_id = None 
+                # Re-sync local variable for the update logic below
+                c_id = None 
+                logger.info(f"🔄 Auto-resolved Campaign ID {event_data.get('campaign_id')} as Draft ID {d_id}. Cleared campaign_id to avoid DB error.")
 
         # 2. Update Campaign Stats
         if c_id:
