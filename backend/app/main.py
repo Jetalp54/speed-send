@@ -11,7 +11,7 @@ from app.database import engine, Base
 from app.routers import accounts, users, campaigns, dashboard, test_email, drafts, contacts, data_lists, live_logs
 from app.routers import send as send_router
 # drafts_resume REMOVED - conflicts with drafts_ultra /resume-scheduled endpoint
-from app.routers import accounts_sync_stub, drafts_celery, drafts_ultra, drafts_preview
+from app.routers import accounts_sync_stub, drafts_celery, drafts_ultra, drafts_preview, tracking
 from app.middleware import PerformanceMiddleware
 
 # Configure logging
