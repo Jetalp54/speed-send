@@ -212,12 +212,12 @@ const DraftsPage: React.FC = () => {
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">Draft Management</h1>
-          <p className="text-gray-600 mt-2">Manage your saved draft campaigns</p>
+          <h1 className="text-3xl font-bold">Campaign Center</h1>
+          <p className="text-gray-600 mt-2">Oversee and dispatch your outreach campaigns</p>
         </div>
         <Button onClick={() => router.push('/drafts/new')} className="flex items-center gap-2">
           <Upload className="h-4 w-4" />
-          Create New Draft
+          New Outreach Campaign
         </Button>
       </div>
 
@@ -235,7 +235,7 @@ const DraftsPage: React.FC = () => {
               <p className="text-gray-500 mb-4">You haven&apos;t created any draft campaigns yet.</p>
               <Button onClick={() => router.push('/drafts/new')} className="flex items-center gap-2">
                 <Upload className="h-4 w-4" />
-                Create Your First Draft
+                Initialize Your First Campaign
               </Button>
             </div>
           </CardContent>
@@ -293,6 +293,13 @@ const DraftsPage: React.FC = () => {
                       Test
                     </DropdownMenuItem>
                     <DropdownMenuItem
+                      onClick={() => router.push(`/drafts/${campaign.id}/analytics`)}
+                      className="text-blue-600"
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      View Full Analytics
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
                       onClick={() => launchDrafts(campaign.id)}
                       disabled={loading || (campaign.status !== 'ready' && campaign.status !== 'uploaded')}
                       className="text-green-600"
@@ -341,11 +348,11 @@ const DraftsPage: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <span className="text-gray-500">Recipients:</span>
+                      <span className="text-gray-500">Target Prospects:</span>
                       <span className="ml-1 font-medium">{campaign.recipients_count || 0}</span>
                     </div>
                     <div>
-                      <span className="text-gray-500">Users:</span>
+                      <span className="text-gray-500">Sending Accounts:</span>
                       <span className="ml-1 font-medium">{campaign.users_count || 0}</span>
                     </div>
                   </div>
@@ -356,7 +363,7 @@ const DraftsPage: React.FC = () => {
 
                   {campaign.drafts_by_user && Object.keys(campaign.drafts_by_user).length > 0 && (
                     <div>
-                      <p className="text-sm font-medium mb-2">Drafts by User:</p>
+                      <p className="text-sm font-medium mb-2">Dispatch Breakdown by Account:</p>
                       <div className="max-h-24 overflow-y-auto">
                         {Object.entries(campaign.drafts_by_user).map(([user, count]) => (
                           <div key={user} className="flex justify-between text-xs text-gray-600">

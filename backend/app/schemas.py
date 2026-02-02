@@ -439,6 +439,7 @@ class GranularAnalyticsResponse(BaseModel):
     unique_opens: int
     total_clicks: int
     unique_clicks: int
+    total_sent: int = 0
     
     # Distributions
     geo_countries: List[AnalyticsPoint] = []

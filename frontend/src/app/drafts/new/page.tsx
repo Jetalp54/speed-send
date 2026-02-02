@@ -232,7 +232,7 @@ export default function NewDraftPage() {
     const requiresFromName = !config.use_custom_headers;
 
     if (!config.name.trim()) {
-      showNotification('Please enter a draft name.', 'error');
+      showNotification('Please enter a campaign label.', 'error');
       return;
     }
     if (requiresSubject && !config.subject.trim()) {
@@ -274,7 +274,7 @@ export default function NewDraftPage() {
       });
       if (response.error) throw new Error(response.error);
 
-      showNotification('Draft created successfully! Now uploading to users...', 'success');
+      showNotification('Campaign initialized! Now syncing dispatch queue...', 'success');
 
       // Automatically upload the draft
       await uploadDrafts(response.data.id);
@@ -293,7 +293,7 @@ export default function NewDraftPage() {
       const response = await apiClient.request(`/api/v1/drafts/${draftId}/upload`, { method: 'POST' });
       if (response.error) throw new Error(response.error);
 
-      showNotification(`Successfully uploaded ${response.data.total_drafts} drafts to ${response.data.users_count} users!`, 'success');
+      showNotification(`Successfully synced ${response.data.total_drafts} dispatches across ${response.data.users_count} personas!`, 'success');
       router.push('/drafts');
     } catch (error: any) {
       console.error('Upload drafts error:', error);
@@ -310,7 +310,7 @@ export default function NewDraftPage() {
       const requiresFromName = !config.use_custom_headers;
 
       if (!config.name.trim()) {
-        showNotification('Please enter a draft name.', 'error');
+        showNotification('Please enter a campaign label.', 'error');
         return;
       }
       if (requiresSubject && !config.subject.trim()) {
@@ -344,7 +344,7 @@ export default function NewDraftPage() {
   return (
     <div className="flex h-screen bg-background">
       <div className="flex-1 overflow-auto p-8 space-y-6">
-        <h1 className="text-3xl font-bold">Create New Draft</h1>
+        <h1 className="text-3xl font-bold">Design Outreach Campaign</h1>
 
         {/* Progress Steps */}
         <div className="flex items-center space-x-4 mb-6">
@@ -352,21 +352,21 @@ export default function NewDraftPage() {
             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
               1
             </div>
-            <span>Draft Details</span>
+            <span>Campaign Creative</span>
           </div>
           <div className={`w-8 h-1 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
           <div className={`flex items-center space-x-2 ${step >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
               2
             </div>
-            <span>Distribution</span>
+            <span>Sending Strategy</span>
           </div>
           <div className={`w-8 h-1 ${step >= 3 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
           <div className={`flex items-center space-x-2 ${step >= 3 ? 'text-blue-600' : 'text-gray-400'}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
               3
             </div>
-            <span>Upload</span>
+            <span>Dispatch Sync</span>
           </div>
         </div>
 
@@ -375,20 +375,20 @@ export default function NewDraftPage() {
             {/* Step 1: Draft Details */}
             {step === 1 && (
               <Card>
-                <CardHeader><CardTitle>Draft Details</CardTitle></CardHeader>
+                <CardHeader><CardTitle>Campaign Creative</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <Input
-                    placeholder="Draft Name"
+                    placeholder="Internal Campaign Label (e.g. Q1 Sales Push)"
                     value={config.name}
                     onChange={e => setConfig(c => ({ ...c, name: e.target.value }))}
                   />
                   <Input
-                    placeholder="Subject"
+                    placeholder="Email Subject Line"
                     value={config.subject}
                     onChange={e => setConfig(c => ({ ...c, subject: e.target.value }))}
                   />
                   <Input
-                    placeholder="From Name"
+                    placeholder="From Name (Brand Overlay)"
                     value={config.from_name}
                     onChange={e => setConfig(c => ({ ...c, from_name: e.target.value }))}
                   />
@@ -600,14 +600,14 @@ export default function NewDraftPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Settings className="h-5 w-5" />
-                    Distribution Logic
+                    Sending Strategy
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* User Selection */}
                     <div>
-                      <Label className="text-base font-medium">Select Users</Label>
+                      <Label className="text-base font-medium">Select Sending Personas</Label>
                       <div className="max-h-64 overflow-y-auto border rounded-md p-3 mt-2">
                         {users.filter(u => selectedAccounts.includes(u.service_account_id)).map(user => (
                           <div key={user.id} className="flex items-center space-x-2 py-1">
@@ -635,7 +635,7 @@ export default function NewDraftPage() {
 
                     {/* Contact Lists Selection */}
                     <div>
-                      <Label className="text-base font-medium">Select Contact Lists</Label>
+                      <Label className="text-base font-medium">Target Subscriber Lists</Label>
                       <div className="max-h-64 overflow-y-auto border rounded-md p-3 mt-2">
                         {contactLists.map(list => (
                           <div key={list.id} className="flex items-center space-x-2 py-1">
@@ -664,7 +664,7 @@ export default function NewDraftPage() {
 
                   {/* Emails Per User */}
                   <div>
-                    <Label htmlFor="emails-per-user">Emails Per User</Label>
+                    <Label htmlFor="emails-per-user">Dispatches Per Persona</Label>
                     <Input
                       id="emails-per-user"
                       type="number"
@@ -690,19 +690,19 @@ export default function NewDraftPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Upload className="h-5 w-5" />
-                    Upload Confirmation
+                    Dispatch Sync Confirmation
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="bg-blue-50 p-4 rounded-lg">
-                    <h3 className="font-semibold text-blue-900 mb-2">Ready to Upload</h3>
+                    <h3 className="font-semibold text-blue-900 mb-2">Ready for Outreach Sync</h3>
                     <div className="space-y-2 text-sm text-blue-800">
-                      <p><strong>Draft:</strong> {config.name}</p>
+                      <p><strong>Campaign:</strong> {config.name}</p>
                       <p><strong>Subject:</strong> {config.subject}</p>
-                      <p><strong>Users:</strong> {selectedUsers.length} selected</p>
-                      <p><strong>Contact Lists:</strong> {selectedContacts.length} selected</p>
-                      <p><strong>Emails per User:</strong> {emailsPerUser}</p>
-                      <p><strong>Total Drafts:</strong> {selectedUsers.length * emailsPerUser}</p>
+                      <p><strong>Personas:</strong> {selectedUsers.length} active</p>
+                      <p><strong>Subscriber Lists:</strong> {selectedContacts.length} targeted</p>
+                      <p><strong>Dispatches per Persona:</strong> {emailsPerUser}</p>
+                      <p><strong>Total Queue Size:</strong> {selectedUsers.length * emailsPerUser}</p>
                     </div>
                   </div>
 
@@ -711,8 +711,8 @@ export default function NewDraftPage() {
                       Cancel
                     </Button>
                     <Button onClick={createDraft} disabled={loading} className="flex items-center gap-2">
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                      Create & Upload Draft
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      Finalize & Launch Campaign
                     </Button>
                   </div>
                 </CardContent>
@@ -723,7 +723,7 @@ export default function NewDraftPage() {
           <div className="space-y-6">
             {/* Account Selection */}
             <Card>
-              <CardHeader><CardTitle>Select Accounts</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Select Sending Domains</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {accounts.length === 0 ? (
@@ -761,7 +761,7 @@ export default function NewDraftPage() {
 
             {/* Users of Selected Accounts */}
             <Card>
-              <CardHeader><CardTitle>Users of Selected Accounts ({filteredSelectedUsers.length})</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Active Personas ({filteredSelectedUsers.length})</CardTitle></CardHeader>
               <CardContent>
                 <Input placeholder="Search users..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
                 {accounts.length === 0 ? (
@@ -796,7 +796,7 @@ export default function NewDraftPage() {
 
             {/* Recipients Summary */}
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Recipients Summary</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Outreach reach Summary</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">

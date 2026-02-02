@@ -67,10 +67,10 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">
-                Dashboard
+                Outreach Overview
               </h1>
               <p className="text-lg text-muted-foreground mt-2">
-                Overview of your email infrastructure performance.
+                Aggregated performance metrics across your sending network.
               </p>
             </div>
             <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-4 py-2 rounded-full border shadow-sm">
@@ -98,7 +98,7 @@ export default function Dashboard() {
 
             <Card className="border-none shadow-md hover:shadow-lg transition-shadow bg-white dark:bg-slate-900">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Active Campaigns</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Live Dispatches</CardTitle>
                 <Activity className="h-4 w-4 text-orange-500" />
               </CardHeader>
               <CardContent>
@@ -111,20 +111,20 @@ export default function Dashboard() {
 
             <Card className="border-none shadow-md hover:shadow-lg transition-shadow bg-white dark:bg-slate-900">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Workspace Users</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Sending Personas</CardTitle>
                 <Users className="h-4 w-4 text-purple-500" />
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-slate-900 dark:text-slate-50">{stats?.total_users || 0}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Across {stats?.total_accounts || 0} service accounts
+                  Across {stats?.total_accounts || 0} sending mailboxes
                 </p>
               </CardContent>
             </Card>
 
             <Card className="border-none shadow-md hover:shadow-lg transition-shadow bg-white dark:bg-slate-900">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Success Rate</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Deliverability Rate</CardTitle>
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               </CardHeader>
               <CardContent>
@@ -144,9 +144,9 @@ export default function Dashboard() {
             {/* Main Chart */}
             <Card className="md:col-span-4 border-none shadow-md bg-white dark:bg-slate-900">
               <CardHeader>
-                <CardTitle>Sending Velocity</CardTitle>
+                <CardTitle>Outreach Velocity</CardTitle>
                 <CardDescription>
-                  Daily email volume over the last 7 days
+                  Daily email dispatches over the last 7 days
                 </CardDescription>
               </CardHeader>
               <CardContent className="pl-0">
@@ -176,9 +176,9 @@ export default function Dashboard() {
             {/* Quota / Status Widget */}
             <Card className="md:col-span-3 border-none shadow-md bg-white dark:bg-slate-900">
               <CardHeader>
-                <CardTitle>Quota Usage</CardTitle>
+                <CardTitle>Mailbox Utilization</CardTitle>
                 <CardDescription>
-                  Top account utilization
+                  Top sending persona usage
                 </CardDescription>
               </CardHeader>
               <CardContent>

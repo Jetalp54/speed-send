@@ -23,13 +23,13 @@ import { Button } from './ui/button';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Campaigns', href: '/campaigns', icon: Mail },
-  { name: 'Accounts', href: '/accounts', icon: Building2 },
-  { name: 'Contacts', href: '/contacts', icon: Contact },
-  { name: 'Drafts', href: '/drafts', icon: FileEdit },
-  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { name: 'Users', href: '/users', icon: Users },
-  { name: 'System Reports', href: '/reports', icon: Activity },
+  { name: 'Legacy Mailer', href: '/campaigns', icon: Mail },
+  { name: 'Sending Mailboxes', href: '/accounts', icon: Building2 },
+  { name: 'Subscriber Lists', href: '/contacts', icon: Contact },
+  { name: 'Campaign Center', href: '/drafts', icon: FileEdit },
+  { name: 'Outreach Analytics', href: '/analytics', icon: BarChart3 },
+  { name: 'Team Management', href: '/users', icon: Users },
+  { name: 'System Logs', href: '/reports', icon: Activity },
   { name: 'Tracking Domains', href: '/settings/domains', icon: Globe },
 ];
 

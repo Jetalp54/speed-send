@@ -173,10 +173,10 @@ def get_draft_campaigns(db: Session = Depends(get_db)):
             recipients_count=recipients_count,
             users_count=len(campaign.selected_users),
             emails_per_user=campaign.emails_per_user or 0,
-            # Analytics
-            opens_count=getattr(campaign, 'opens_count', 0) or db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'open').count(),
-            clicks_count=getattr(campaign, 'clicks_count', 0) or db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'click').count(),
-            bounces_count=getattr(campaign, 'bounces_count', 0)
+            # Analytics (Always query real-time tracking table for 100% accuracy)
+            opens_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'open').count(),
+            clicks_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'click').count(),
+            bounces_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'bounce').count()
         ))
     return response
 

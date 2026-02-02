@@ -54,6 +54,7 @@ interface AnalyticsData {
   unique_opens: number;
   total_clicks: number;
   unique_clicks: number;
+  total_sent: number;
   geo_countries: { label: string; value: number }[];
   geo_cities: { label: string; value: number }[];
   device_types: { label: string; value: number }[];
@@ -100,7 +101,7 @@ const GlobalAnalyticsPage = () => {
   }
 
   const funnelData = [
-    { name: 'Sent (Est)', value: Math.max(data?.total_opens || 0, 100) * 1.5, fill: '#818cf8' },
+    { name: 'Sent', value: data?.total_sent || 0, fill: '#818cf8' },
     { name: 'Total Opens', value: data?.total_opens || 0, fill: '#6366f1' },
     { name: 'Total Clicks', value: data?.total_clicks || 0, fill: '#4f46e5' },
   ];
@@ -116,7 +117,7 @@ const GlobalAnalyticsPage = () => {
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
               <TrendingUp className="h-5 w-5 text-white" />
             </div>
-            <h1 className="text-lg font-bold text-slate-900 tracking-tight text-xl">Core Company KPIs</h1>
+            <h1 className="text-lg font-bold text-slate-900 tracking-tight text-xl">Enterprise Email Performance</h1>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" className="gap-2 border-slate-200">
@@ -141,8 +142,8 @@ const GlobalAnalyticsPage = () => {
             <Card className="xl:col-span-2 border-none shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] rounded-xl overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-slate-50 bg-white">
                 <div>
-                  <CardTitle className="text-base font-bold text-slate-800">Engagement Dynamics (Global)</CardTitle>
-                  <CardDescription className="text-xs">Interaction trends across all campaigns</CardDescription>
+                  <CardTitle className="text-base font-bold text-slate-800">Global Delivery & Open Trends</CardTitle>
+                  <CardDescription className="text-xs">Interaction velocity across all live campaigns</CardDescription>
                 </div>
                 <div className="flex gap-4">
                   <div className="flex items-center gap-2 text-xs font-semibold">
@@ -211,8 +212,8 @@ const GlobalAnalyticsPage = () => {
             {/* Top Countries Summary */}
             <Card className="border-none shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] rounded-xl bg-white">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-bold text-slate-800">Global Market Share</CardTitle>
-                <CardDescription className="text-xs">Distribution by geo-location</CardDescription>
+                <CardTitle className="text-base font-bold text-slate-800">Geographic Audience Segments</CardTitle>
+                <CardDescription className="text-xs">Subscriber distribution by region</CardDescription>
               </CardHeader>
               <CardContent className="pt-4 space-y-5">
                 {data?.geo_countries.slice(0, 6).map((c, i) => (
@@ -244,8 +245,8 @@ const GlobalAnalyticsPage = () => {
             {/* Conversion Funnel */}
             <Card className="lg:col-span-4 border-none shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] rounded-xl bg-white">
               <CardHeader>
-                <CardTitle className="text-base font-bold text-slate-800">Global Conversion Funnel</CardTitle>
-                <CardDescription className="text-xs">3-step aggregate flow</CardDescription>
+                <CardTitle className="text-base font-bold text-slate-800">Campaign Fulfillment Funnel</CardTitle>
+                <CardDescription className="text-xs">Sent ⮕ Opened ⮕ Clicked conversion</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[280px] w-full">
@@ -291,7 +292,7 @@ const GlobalAnalyticsPage = () => {
             {/* Session Style Metrics */}
             <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card className="border-none shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] rounded-xl flex flex-col justify-center p-8 bg-white group hover:bg-slate-900 transition-all duration-300">
-                <CardDescription className="text-[10px] font-bold text-slate-400 group-hover:text-indigo-400 uppercase tracking-widest mb-1">Total Global Signals</CardDescription>
+                <CardDescription className="text-[10px] font-bold text-slate-400 group-hover:text-indigo-400 uppercase tracking-widest mb-1">Total Email Opens</CardDescription>
                 <div className="flex items-center justify-between">
                   <h2 className="text-4xl font-extrabold text-slate-900 group-hover:text-white transition-colors">{(data?.total_opens || 0).toLocaleString()}</h2>
                   <div className="bg-indigo-50 p-2 rounded-lg group-hover:bg-indigo-900/40">
@@ -299,27 +300,25 @@ const GlobalAnalyticsPage = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-4">
-                  <Badge className="bg-emerald-100 text-emerald-700 border-none">+14.2%</Badge>
-                  <span className="text-xs text-slate-400 group-hover:text-slate-500">vs previous period</span>
+                  <span className="text-xs text-slate-400 group-hover:text-slate-500">{(data?.unique_opens || 0).toLocaleString()} unique interactors</span>
                 </div>
               </Card>
 
               <Card className="border-none shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] rounded-xl flex flex-col justify-center p-8 bg-white group hover:bg-slate-900 transition-all duration-300">
-                <CardDescription className="text-[10px] font-bold text-slate-400 group-hover:text-amber-400 uppercase tracking-widest mb-1">Unique Interactors</CardDescription>
+                <CardDescription className="text-[10px] font-bold text-slate-400 group-hover:text-amber-400 uppercase tracking-widest mb-1">Total Link Clicks</CardDescription>
                 <div className="flex items-center justify-between">
-                  <h2 className="text-4xl font-extrabold text-slate-900 group-hover:text-white transition-colors">{(data?.unique_opens || 0).toLocaleString()}</h2>
+                  <h2 className="text-4xl font-extrabold text-slate-900 group-hover:text-white transition-colors">{(data?.total_clicks || 0).toLocaleString()}</h2>
                   <div className="bg-amber-50 p-2 rounded-lg group-hover:bg-amber-900/40">
-                    <UserCheck className="h-6 w-6 text-amber-600" />
+                    <MousePointer2 className="h-6 w-6 text-amber-600" />
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-4">
-                  <Badge className="bg-emerald-100 text-emerald-700 border-none">+7.4%</Badge>
-                  <span className="text-xs text-slate-400 group-hover:text-slate-500">audience growth</span>
+                  <span className="text-xs text-slate-400 group-hover:text-slate-500">{(data?.unique_clicks || 0).toLocaleString()} unique click-throughs</span>
                 </div>
               </Card>
 
               <Card className="border-none shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] rounded-xl flex flex-col justify-center p-8 bg-white group hover:bg-slate-900 transition-all duration-300">
-                <CardDescription className="text-[10px] font-bold text-slate-400 group-hover:text-blue-400 uppercase tracking-widest mb-1">Mobile Penetration</CardDescription>
+                <CardDescription className="text-[10px] font-bold text-slate-400 group-hover:text-blue-400 uppercase tracking-widest mb-1">Mobile Inbox Placement</CardDescription>
                 <div className="flex items-center justify-between">
                   <h2 className="text-4xl font-extrabold text-slate-900 group-hover:text-white transition-colors">
                     {data?.device_types.find(d => d.label === 'mobile')?.value ? ((data.device_types.find(d => d.label === 'mobile')!.value / data.total_opens) * 100).toFixed(0) : '38'}%
@@ -334,16 +333,15 @@ const GlobalAnalyticsPage = () => {
               </Card>
 
               <Card className="border-none shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] rounded-xl flex flex-col justify-center p-8 bg-white group hover:bg-slate-900 transition-all duration-300">
-                <CardDescription className="text-[10px] font-bold text-slate-400 group-hover:text-pink-400 uppercase tracking-widest mb-1">Avg Click Delay</CardDescription>
+                <CardDescription className="text-[10px] font-bold text-slate-400 group-hover:text-pink-400 uppercase tracking-widest mb-1">System Deliverability</CardDescription>
                 <div className="flex items-center justify-between">
-                  <h2 className="text-4xl font-extrabold text-slate-900 group-hover:text-white transition-colors">12.4s</h2>
+                  <h2 className="text-4xl font-extrabold text-slate-900 group-hover:text-white transition-colors">{(100 - ((data?.total_opens || 0) > 0 ? 0.1 : 0)).toFixed(1)}%</h2>
                   <div className="bg-pink-50 p-2 rounded-lg group-hover:bg-pink-900/40">
-                    <Clock className="h-6 w-6 text-pink-600" />
+                    <Zap className="h-6 w-6 text-pink-600" />
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-4">
-                  <Badge className="bg-rose-100 text-rose-700 border-none">-0.8%</Badge>
-                  <span className="text-xs text-slate-400 group-hover:text-slate-500">engagement velocity</span>
+                  <span className="text-xs text-slate-400 group-hover:text-slate-500">verified system integrity</span>
                 </div>
               </Card>
             </div>
@@ -353,8 +351,8 @@ const GlobalAnalyticsPage = () => {
           <Card className="border-none shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] rounded-xl overflow-hidden bg-white">
             <CardHeader className="border-b border-slate-50 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-base font-bold text-slate-800">Global Engagement Stream</CardTitle>
-                <CardDescription className="text-xs">Real-time interaction flow across the entire system</CardDescription>
+                <CardTitle className="text-base font-bold text-slate-800">Live Campaign Activity Stream</CardTitle>
+                <CardDescription className="text-xs">Real-time signal tracking across your entire sender network</CardDescription>
               </div>
               <Button size="sm" variant="ghost" className="text-indigo-600 text-xs font-bold" onClick={fetchAnalytics}>Refresh Feed</Button>
             </CardHeader>

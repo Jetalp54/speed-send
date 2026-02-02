@@ -85,6 +85,11 @@ async def get_draft_analytics(draft_id: int, db: Session = Depends(get_db)):
         models.TrackingEvent.event_type == 'click'
     ).distinct().count()
 
+    # 1b. Total Sent (Count of successfully created drafts)
+    total_sent = db.query(models.GmailDraft).filter(
+        models.GmailDraft.draft_campaign_id == draft_id
+    ).count()
+
     # 2. Distributions
     def get_distribution(column):
         results = db.query(column, func.count(column)).filter(
@@ -145,6 +150,7 @@ async def get_draft_analytics(draft_id: int, db: Session = Depends(get_db)):
         unique_opens=unique_opens,
         total_clicks=total_clicks,
         unique_clicks=unique_clicks,
+        total_sent=total_sent,
         geo_countries=geo_countries,
         geo_cities=geo_cities,
         device_types=device_types,
@@ -174,6 +180,12 @@ async def get_global_analytics(db: Session = Depends(get_db)):
     unique_clicks = db.query(models.TrackingEvent.ip_hash).filter(
         models.TrackingEvent.event_type == 'click'
     ).distinct().count()
+
+    # 1b. Global Total Sent
+    # Sum of legacy campaign stats + current draft campaign drafts
+    total_sent_drafts = db.query(models.GmailDraft).count()
+    total_sent_legacy = db.query(func.sum(models.DailyCampaignStats.sent)).scalar() or 0
+    total_sent = total_sent_drafts + total_sent_legacy
 
     # 2. Distributions
     def get_distribution(column):
@@ -228,6 +240,7 @@ async def get_global_analytics(db: Session = Depends(get_db)):
         unique_opens=unique_opens,
         total_clicks=total_clicks,
         unique_clicks=unique_clicks,
+        total_sent=total_sent,
         geo_countries=geo_countries,
         geo_cities=geo_cities,
         device_types=device_types,
