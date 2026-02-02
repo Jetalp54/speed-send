@@ -635,6 +635,21 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
     try:
         logger.info(f"REAL GMAIL API: Starting draft creation for user {user_id}")
         
+        # 0. Pre-Flight: Hydrate "Naked" Pixels (MANDATORY for Analytics)
+        # This ensures pixels inserted by frontend (e.g. via drag-drop) get the campaign ID
+        # even if no custom tracking domain is configured yet.
+        if campaign_id and body_html:
+             import re
+             # Regex to find pixel.png that doesn't have ?c= yet
+             # Matches: src=".../t/pixel.png" or src='.../t/pixel.png'
+             naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
+             
+             def add_campaign_param(match):
+                 return f'{match.group(1)}?c={campaign_id}{match.group(2)}'
+                 
+             body_html = re.sub(naked_pixel_pattern, add_campaign_param, body_html)
+             logger.info(f"✅ Hydrated frontend-inserted pixels with campaign_id={campaign_id}")
+
         # 1. Tracking Replacement (Safe Block)
         try:
             tracking_domain = db.query(models.TrackingDomain).filter(
@@ -650,21 +665,8 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                     pixel_url = f"https://{tracking_domain.domain}/t/pixel.png{pixel_params}"
                     body_html = body_html.replace('[tracking_pixel]', pixel_url)
                     logger.info(f"✅ REPLACED [tracking_pixel] with {pixel_url}")
-                
-                # Fix Frontend-inserted "Naked" Pixels (which lack ?c=...)
-                # The frontend inserts: src="https://domain/t/pixel.png"
-                # We need to append ?c=campaign_id
-                if campaign_id:
-                     import re
-                     # Regex to find pixel.png that doesn't have ?c= yet
-                     # Look for src=".../t/pixel.png" (and not followed by ?)
-                     naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
-                     
-                     def add_campaign_param(match):
-                         return f'{match.group(1)}?c={campaign_id}{match.group(2)}'
-                         
-                     body_html = re.sub(naked_pixel_pattern, add_campaign_param, body_html)
-                     logger.info(f"✅ Hydrated frontend-inserted pixels with campaign_id={campaign_id}")
+
+
                 
                 # Replace links
                 pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
