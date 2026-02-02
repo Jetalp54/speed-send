@@ -26,7 +26,9 @@ async def track_open(opaque_id: str, request: Request):
     """
     Open Tracking Pixel.
     """
-    logger.info(f"📡 TRACKING RECEIVED: Open via Opaque ID {opaque_id}")
+    host = request.headers.get("host")
+    logger.info(f"📡 [TRACKING-REQUEST] Open | Host: {host} | ID: {opaque_id}")
+    
     if request.method == "HEAD":
         return Response(
             content=TRANSPARENT_PIXEL, 
@@ -102,9 +104,15 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
 @router.get("/t/pixel.png")
 @router.head("/t/pixel.png")
 async def track_pixel_explicit(request: Request, c: int = None, d: int = None, r: str = None):
-    logger.info(f"📡 TRACKING RECEIVED: Explicit Pixel for Campaign {c}, Draft {d}")
+    host = request.headers.get("host")
+    logger.info(f"📡 [TRACKING-REQUEST] Explicit Pixel | Host: {host} | c={c}, d={d}")
+    
     if request.method == "HEAD":
-        return Response(content=TRANSPARENT_PIXEL, media_type="image/png")
+        return Response(
+            content=TRANSPARENT_PIXEL, 
+            media_type="image/png",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        )
 
     if c or d:
         try:
