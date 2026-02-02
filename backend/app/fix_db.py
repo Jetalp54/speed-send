@@ -8,8 +8,14 @@ import time
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    print("DATABASE_URL not set. Trying default postgresql://user:password@db/app")
-    DATABASE_URL = "postgresql://user:password@db/app"
+    try:
+        from app.config import settings
+        DATABASE_URL = settings.DATABASE_URL
+        print(f"Using DATABASE_URL from settings: {DATABASE_URL.split('@')[-1]}") # Log safe part
+    except Exception as e:
+        print(f"Could not load settings: {e}")
+        # Fallback to default
+        DATABASE_URL = "postgresql://gmailsaas:gmailsaas123@localhost:5432/gmail_saas"
 
 def fix_schema():
     print(f"Connecting to database...")
