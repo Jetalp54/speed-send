@@ -171,7 +171,8 @@ def log_tracking_event_task(event_data):
 
         event = TrackingEvent(
             event_type=event_data['event_type'],
-            campaign_id=event_data['campaign_id'],
+            campaign_id=event_data.get('campaign_id'),
+            draft_campaign_id=event_data.get('draft_campaign_id'),
             email_log_id=event_data.get('email_log_id'),
             link_map_id=event_data.get('link_map_id'),
             user_agent=event_data.get('user_agent'),
@@ -189,17 +190,27 @@ def log_tracking_event_task(event_data):
         db.add(event)
         
         # --- NEW: Real-time counter updates ---
-        from app.models import Campaign, EmailLog
+        from app.models import Campaign, EmailLog, DraftCampaign
         
         # 1. Update Campaign Stats
-        campaign = db.query(Campaign).filter(Campaign.id == event_data['campaign_id']).first()
-        if campaign:
-            if event_data['event_type'] == 'open':
-                campaign.opens_count = (campaign.opens_count or 0) + 1
-            elif event_data['event_type'] == 'click':
-                campaign.clicks_count = (campaign.clicks_count or 0) + 1
+        if event_data.get('campaign_id'):
+            campaign = db.query(Campaign).filter(Campaign.id == event_data['campaign_id']).first()
+            if campaign:
+                if event_data['event_type'] == 'open':
+                    campaign.opens_count = (campaign.opens_count or 0) + 1
+                elif event_data['event_type'] == 'click':
+                    campaign.clicks_count = (campaign.clicks_count or 0) + 1
         
-        # 2. Update Email Log Stats (if linked)
+        # 2. Update Draft Campaign Stats
+        if event_data.get('draft_campaign_id'):
+            draft = db.query(DraftCampaign).filter(DraftCampaign.id == event_data['draft_campaign_id']).first()
+            if draft:
+                if event_data['event_type'] == 'open':
+                    draft.opens_count = (draft.opens_count or 0) + 1
+                elif event_data['event_type'] == 'click':
+                    draft.clicks_count = (draft.clicks_count or 0) + 1
+        
+        # 3. Update Email Log Stats (if linked)
         email_log_id = event_data.get('email_log_id')
         if email_log_id:
             log = db.query(EmailLog).filter(EmailLog.id == email_log_id).first()

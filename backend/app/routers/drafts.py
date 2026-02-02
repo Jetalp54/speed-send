@@ -175,9 +175,9 @@ def get_draft_campaigns(db: Session = Depends(get_db)):
             users_count=len(campaign.selected_users),
             emails_per_user=campaign.emails_per_user or 0,
             # Analytics
-            opens_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.campaign_id == campaign.id, models.TrackingEvent.event_type == 'open').count(),
-            clicks_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.campaign_id == campaign.id, models.TrackingEvent.event_type == 'click').count(),
-            bounces_count=0 # Placeholder for now, handling bounces is complex via Gmail API
+            opens_count=getattr(campaign, 'opens_count', 0) or db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'open').count(),
+            clicks_count=getattr(campaign, 'clicks_count', 0) or db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'click').count(),
+            bounces_count=getattr(campaign, 'bounces_count', 0)
         ))
     return response
 
@@ -661,13 +661,11 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                 
                 # Replace [tracking_pixel] placeholder
                 if '[tracking_pixel]' in body_html:
-                    pixel_params = f"?c={campaign_id}" if campaign_id else ""
+                    pixel_params = f"?d={campaign_id}" if campaign_id else ""
                     pixel_url = f"https://{tracking_domain.domain}/t/pixel.png{pixel_params}"
                     body_html = body_html.replace('[tracking_pixel]', pixel_url)
                     logger.info(f"✅ REPLACED [tracking_pixel] with {pixel_url}")
 
-
-                
                 # Replace links
                 pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
                 matches = re.findall(pattern, body_html)
@@ -678,7 +676,7 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                         encoded_url = quote(original_url)
                         tracking_params = f"?url={encoded_url}"
                         if campaign_id:
-                            tracking_params += f"&c={campaign_id}"
+                            tracking_params += f"&d={campaign_id}"
                             
                         tracking_url = f"https://{tracking_domain.domain}/t/redirect{tracking_params}"
                         body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)

@@ -284,6 +284,11 @@ class DraftCampaign(Base):
     test_after_email = Column(String(255))
     test_after_count = Column(Integer, default=0)
     
+    # Real-time analytics
+    opens_count = Column(Integer, default=0)
+    clicks_count = Column(Integer, default=0)
+    bounces_count = Column(Integer, default=0)
+    
     # Saved test recipients (Auto-suggestion)
     # Stored as JSON list of strings: ["a@b.com", "c@d.com"]
     saved_test_recipients = Column(JSON, default=list)
@@ -415,7 +420,8 @@ class TrackingEvent(Base):
     id = Column(Integer, primary_key=True, index=True) # BigInteger in Prod
     event_type = Column(String(20), nullable=False) # 'open', 'click', 'unsubscribe'
     
-    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
+    campaign_id = Column(Integer, ForeignKey("campaigns.id"), nullable=True, index=True)
+    draft_campaign_id = Column(Integer, ForeignKey("draft_campaigns.id"), nullable=True, index=True)
     email_log_id = Column(Integer, ForeignKey("email_logs.id"), nullable=True)
     link_map_id = Column(Integer, ForeignKey("link_maps.id"), nullable=True)
     
