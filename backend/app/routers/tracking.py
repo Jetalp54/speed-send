@@ -15,17 +15,30 @@ logger = logging.getLogger("app.routers.tracking")
 
 def get_client_ip(request: Request) -> str:
     """
-    Extract real client IP from headers or request.
+    Extract real client IP from headers or request with trace logging.
     """
-    x_forwarded_for = request.headers.get("x-forwarded-for")
-    if x_forwarded_for:
-        # Get the first IP in the list (client IP)
-        return x_forwarded_for.split(",")[0].strip()
+    headers = dict(request.headers)
     
-    x_real_ip = request.headers.get("x-real-ip")
-    if x_real_ip:
-        return x_real_ip
+    # Priority list of headers commonly used by proxies
+    headers_to_check = [
+        "x-forwarded-for",
+        "x-real-ip",
+        "cf-connecting-ip", # Cloudflare
+        "forwarded"
+    ]
     
+    for header in headers_to_check:
+        val = request.headers.get(header)
+        if val:
+            # For X-Forwarded-For, get the leftmost (client) IP
+            if header == "x-forwarded-for":
+                ip = val.split(",")[0].strip()
+            else:
+                ip = val.strip()
+            
+            if ip and ip != "127.0.0.1":
+                return ip
+
     return request.client.host if request.client else "unknown"
 
 router = APIRouter()
@@ -42,7 +55,11 @@ async def track_open(opaque_id: str, request: Request):
     Open Tracking Pixel.
     """
     host = request.headers.get("host")
-    logger.info(f"📡 [TRACKING-REQUEST] Open | Host: {host} | ID: {opaque_id}")
+    client_ip = get_client_ip(request)
+    logger.info(f"📡 [TRACKING-REQUEST] Open | Host: {host} | IP: {client_ip} | ID: {opaque_id}")
+    
+    # Trace log headers for debugging proxy setup issues
+    logger.debug(f"🔍 [TRACE] Headers: {dict(request.headers)}")
     
     if request.method == "HEAD":
         return Response(
@@ -120,7 +137,11 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
 @router.head("/t/pixel.png")
 async def track_pixel_explicit(request: Request, c: int = None, d: int = None, r: str = None):
     host = request.headers.get("host")
-    logger.info(f"📡 [TRACKING-REQUEST] Explicit Pixel | Host: {host} | c={c}, d={d}")
+    client_ip = get_client_ip(request)
+    logger.info(f"📡 [TRACKING-REQUEST] Explicit Pixel | Host: {host} | IP: {client_ip} | c={c}, d={d}")
+    
+    # Trace log headers
+    logger.debug(f"🔍 [TRACE] Explicit Headers: {dict(request.headers)}")
     
     if request.method == "HEAD":
         return Response(

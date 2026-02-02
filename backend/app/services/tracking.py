@@ -191,20 +191,27 @@ def log_tracking_event_task(event_data):
         )
         
         # --- NEW: Geo-Location Lookup ---
-        if ip_address and ip_address != "127.0.0.1" and not event.geo_country:
+        if ip_address and ip_address not in ["127.0.0.1", "unknown"]:
             try:
+                logger.info(f"📍 Attempting Geo-Location lookup for IP: {ip_address}")
                 # Use a fast, free GeoIP API (ip-api.com)
                 # Note: In heavy production, use a local MaxMind DB
-                response = httpx.get(f"http://ip-api.com/json/{ip_address}?fields=status,country,regionName,city", timeout=2.0)
-                if response.status_code == 200:
-                    geo_data = response.json()
-                    if geo_data.get("status") == "success":
-                        event.geo_country = geo_data.get("country")
-                        event.geo_region = geo_data.get("regionName")
-                        event.geo_city = geo_data.get("city")
-                        logger.info(f"📍 Resolved Location: {event.geo_city}, {event.geo_country}")
+                with httpx.Client(timeout=3.0) as client:
+                    response = client.get(f"http://ip-api.com/json/{ip_address}?fields=status,message,country,regionName,city")
+                    if response.status_code == 200:
+                        geo_data = response.json()
+                        if geo_data.get("status") == "success":
+                            event.geo_country = geo_data.get("country")
+                            event.geo_region = geo_data.get("regionName")
+                            geo_city = geo_data.get("city")
+                            event.geo_city = geo_city
+                            logger.info(f"✅ Resolved Location: {geo_city}, {event.geo_country}")
+                        else:
+                            logger.warning(f"⚠️ GeoIP API returned status {geo_data.get('status')}: {geo_data.get('message')}")
+                    else:
+                        logger.warning(f"⚠️ GeoIP API HTTP error: {response.status_code}")
             except Exception as geo_err:
-                logger.warning(f"⚠️ GeoIP Lookup failed: {geo_err}")
+                logger.warning(f"❌ GeoIP Lookup exception for {ip_address}: {geo_err}")
 
         db.add(event)
         
