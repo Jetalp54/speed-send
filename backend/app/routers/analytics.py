@@ -153,3 +153,86 @@ async def get_draft_analytics(draft_id: int, db: Session = Depends(get_db)):
         timeseries=timeseries,
         recent_events=recent_events
     )
+@router.get("/summary", response_model=schemas.GranularAnalyticsResponse)
+async def get_global_analytics(db: Session = Depends(get_db)):
+    """
+    Global aggregate analytics across all campaigns.
+    """
+    # 1. Base Totals
+    total_opens = db.query(models.TrackingEvent).filter(
+        models.TrackingEvent.event_type == 'open'
+    ).count()
+    
+    unique_opens = db.query(models.TrackingEvent.ip_hash).filter(
+        models.TrackingEvent.event_type == 'open'
+    ).distinct().count()
+    
+    total_clicks = db.query(models.TrackingEvent).filter(
+        models.TrackingEvent.event_type == 'click'
+    ).count()
+    
+    unique_clicks = db.query(models.TrackingEvent.ip_hash).filter(
+        models.TrackingEvent.event_type == 'click'
+    ).distinct().count()
+
+    # 2. Distributions
+    def get_distribution(column):
+        results = db.query(column, func.count(column)).group_by(column).order_by(func.count(column).desc()).limit(10).all()
+        return [schemas.AnalyticsPoint(label=str(r[0]) if r[0] else "Unknown", value=r[1]) for r in results]
+
+    geo_countries = get_distribution(models.TrackingEvent.geo_country)
+    geo_cities = get_distribution(models.TrackingEvent.geo_city)
+    device_types = get_distribution(models.TrackingEvent.device_type)
+    browsers = get_distribution(models.TrackingEvent.browser)
+    os_systems = get_distribution(models.TrackingEvent.os)
+
+    # 3. Time-series (Last 24 hours)
+    now = datetime.utcnow()
+    day_ago = now - timedelta(days=1)
+    
+    timeseries_q = db.query(
+        func.date_trunc('hour', models.TrackingEvent.timestamp).label('hour'),
+        func.count(models.TrackingEvent.id).filter(models.TrackingEvent.event_type == 'open').label('opens'),
+        func.count(models.TrackingEvent.id).filter(models.TrackingEvent.event_type == 'click').label('clicks')
+    ).filter(
+        models.TrackingEvent.timestamp >= day_ago
+    ).group_by('hour').order_by('hour').all()
+
+    timeseries = [
+        schemas.AnalyticsTimeSeries(
+            timestamp=r.hour.isoformat(),
+            opens=r.opens,
+            clicks=r.clicks
+        ) for r in timeseries_q
+    ]
+
+    # 4. Recent Events
+    recent_events_q = db.query(models.TrackingEvent).order_by(models.TrackingEvent.timestamp.desc()).limit(20).all()
+    
+    recent_events = []
+    for e in recent_events_q:
+        recent_events.append({
+            "id": e.id,
+            "event_type": e.event_type,
+            "timestamp": e.timestamp.isoformat(),
+            "geo_country": e.geo_country,
+            "geo_city": e.geo_city,
+            "os": e.os,
+            "browser": e.browser,
+            "device": e.device_type
+        })
+
+    return schemas.GranularAnalyticsResponse(
+        draft_id=0, # 0 means global
+        total_opens=total_opens,
+        unique_opens=unique_opens,
+        total_clicks=total_clicks,
+        unique_clicks=unique_clicks,
+        geo_countries=geo_countries,
+        geo_cities=geo_cities,
+        device_types=device_types,
+        browsers=browsers,
+        os_systems=os_systems,
+        timeseries=timeseries,
+        recent_events=recent_events
+    )
