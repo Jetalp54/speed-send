@@ -153,11 +153,12 @@ class OpaqueSigner:
              logger.warning(f"Failed to unsign token: {str(e)}")
              return None, None
 
-@celery_app.task
+@celery_app.task(name='app.services.tracking.log_tracking_event_task')
 def log_tracking_event_task(event_data):
     """
     Async task to write tracking event to DB.
     """
+    logger.info(f"⚙️ EXECUTING TASK: logging {event_data['event_type']} for Cam:{event_data.get('campaign_id')} Draft:{event_data.get('draft_campaign_id')}")
     db = SessionLocal()
     try:
         # Anonymize IP if present (GDPR compliance)
@@ -195,7 +196,7 @@ def log_tracking_event_task(event_data):
         # 1. Update Campaign Stats
         if event_data.get('campaign_id'):
             campaign = db.query(Campaign).filter(Campaign.id == event_data['campaign_id']).first()
-            if campaign:
+            if campaign and hasattr(campaign, 'opens_count'):
                 if event_data['event_type'] == 'open':
                     campaign.opens_count = (campaign.opens_count or 0) + 1
                 elif event_data['event_type'] == 'click':
@@ -204,7 +205,7 @@ def log_tracking_event_task(event_data):
         # 2. Update Draft Campaign Stats
         if event_data.get('draft_campaign_id'):
             draft = db.query(DraftCampaign).filter(DraftCampaign.id == event_data['draft_campaign_id']).first()
-            if draft:
+            if draft and hasattr(draft, 'opens_count'):
                 if event_data['event_type'] == 'open':
                     draft.opens_count = (draft.opens_count or 0) + 1
                 elif event_data['event_type'] == 'click':
@@ -214,15 +215,16 @@ def log_tracking_event_task(event_data):
         email_log_id = event_data.get('email_log_id')
         if email_log_id:
             log = db.query(EmailLog).filter(EmailLog.id == email_log_id).first()
-            if log:
+            if log and hasattr(log, 'opens_count'):
                 if event_data['event_type'] == 'open':
                     log.opens_count = (log.opens_count or 0) + 1
                 elif event_data['event_type'] == 'click':
                     log.clicks_count = (log.clicks_count or 0) + 1
         
         db.commit()
+        logger.info(f"✅ TRACKING LOGGED: Event recorded in database for email_log_id={email_log_id or 'explicit'}")
     except Exception as e:
-        logger.error(f"Failed to log tracking event: {e}")
+        logger.error(f"❌ Failed to log tracking event: {e}")
         db.rollback()
     finally:
         db.close()

@@ -198,6 +198,9 @@ class Campaign(Base):
     sent_count = Column(Integer, default=0)
     failed_count = Column(Integer, default=0)
     pending_count = Column(Integer, default=0)
+    opens_count = Column(Integer, default=0)
+    clicks_count = Column(Integer, default=0)
+    bounces_count = Column(Integer, default=0)
     
     # Rate limiting
     rate_limit = Column(Integer, default=500)
@@ -258,6 +261,10 @@ class EmailLog(Base):
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     sent_at = Column(DateTime(timezone=True))
+    
+    # Tracking
+    opens_count = Column(Integer, default=0)
+    clicks_count = Column(Integer, default=0)
     
     # Relationships
     campaign = relationship("Campaign", back_populates="email_logs")

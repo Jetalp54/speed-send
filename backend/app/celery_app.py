@@ -13,7 +13,8 @@ celery_app = Celery(
         'app.tasks_drafts_v2', 
         'app.tasks_scheduled_resume', 
         'app.tasks_maintenance',
-        'app.tasks_enterprise'
+        'app.tasks_enterprise',
+        'app.services.tracking'
     ]
 )
 
