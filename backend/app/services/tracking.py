@@ -193,23 +193,38 @@ def log_tracking_event_task(event_data):
         # --- NEW: Real-time counter updates ---
         from app.models import Campaign, EmailLog, DraftCampaign
         
-        # 1. Update Campaign Stats
-        if event_data.get('campaign_id'):
-            campaign = db.query(Campaign).filter(Campaign.id == event_data['campaign_id']).first()
+        c_id = event_data.get('campaign_id')
+        d_id = event_data.get('draft_campaign_id')
+
+        # 1. AUTO-RESOLVE: If c_id is provided but it's actually a Draft, link it
+        if c_id and not d_id:
+            # Check if this ID exists in draft_campaigns
+            is_draft = db.query(DraftCampaign).filter(DraftCampaign.id == c_id).first()
+            if is_draft:
+                d_id = c_id
+                # Update the event record too if needed, but primarily we update the counter
+                event.draft_campaign_id = d_id
+                logger.info(f"🔄 Auto-resolved Campaign ID {c_id} as Draft ID {d_id}")
+
+        # 2. Update Campaign Stats
+        if c_id:
+            campaign = db.query(Campaign).filter(Campaign.id == c_id).first()
             if campaign and hasattr(campaign, 'opens_count'):
                 if event_data['event_type'] == 'open':
                     campaign.opens_count = (campaign.opens_count or 0) + 1
                 elif event_data['event_type'] == 'click':
                     campaign.clicks_count = (campaign.clicks_count or 0) + 1
+                logger.info(f"📈 Updated Campaign {c_id} counters")
         
-        # 2. Update Draft Campaign Stats
-        if event_data.get('draft_campaign_id'):
-            draft = db.query(DraftCampaign).filter(DraftCampaign.id == event_data['draft_campaign_id']).first()
+        # 3. Update Draft Campaign Stats
+        if d_id:
+            draft = db.query(DraftCampaign).filter(DraftCampaign.id == d_id).first()
             if draft and hasattr(draft, 'opens_count'):
                 if event_data['event_type'] == 'open':
                     draft.opens_count = (draft.opens_count or 0) + 1
                 elif event_data['event_type'] == 'click':
                     draft.clicks_count = (draft.clicks_count or 0) + 1
+                logger.info(f"📈 Updated Draft {d_id} counters")
         
         # 3. Update Email Log Stats (if linked)
         email_log_id = event_data.get('email_log_id')

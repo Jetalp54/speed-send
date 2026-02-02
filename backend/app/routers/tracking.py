@@ -118,7 +118,7 @@ async def track_pixel_explicit(request: Request, c: int = None, d: int = None, r
                 'ip': request.client.host
             }
             log_tracking_event_task.delay(event_data)
-            logger.info(f"✅ TRACKING LOGGED: Explicit Open for C:{c} D:{d}")
+            logger.info(f"✅ EXPLICIT OPEN RECEIVED: c={c}, d={d}. Dispatched to worker.")
         except Exception as e:
             logger.error(f"❌ Tracking Error: {e}")
             pass
@@ -152,7 +152,7 @@ async def track_redirect_explicit(request: Request, url: str, c: int = None, d: 
                 'ip': request.client.host
             }
             log_tracking_event_task.delay(event_data)
-            logger.info(f"✅ TRACKING LOGGED: Explicit Click for C:{c} D:{d}")
+            logger.info(f"✅ EXPLICIT CLICK RECEIVED: to {url}, c={c}, d={d}. Dispatched to worker.")
         except Exception as e:
             logger.error(f"❌ Tracking Redirect Error: {e}")
             pass
