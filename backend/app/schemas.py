@@ -270,7 +270,6 @@ class DraftCampaignBase(BaseModel):
     use_custom_headers: bool = False
     custom_headers: Optional[str] = None
     body_format: str = 'html'  # 'html' or 'txt'
-    body_format: str = 'html'  # 'html' or 'txt'
     body_template: Optional[str] = None
     saved_test_recipients: List[str] = []
 

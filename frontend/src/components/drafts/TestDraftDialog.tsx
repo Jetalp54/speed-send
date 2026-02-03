@@ -145,7 +145,10 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
             }
 
         } catch (err: any) {
-            setError(err.message || "Dispatch failed");
+            const errorMsg = typeof err.message === 'object'
+                ? JSON.stringify(err.message)
+                : (err.message || "Dispatch failed");
+            setError(errorMsg);
         } finally {
             setSending(false);
         }

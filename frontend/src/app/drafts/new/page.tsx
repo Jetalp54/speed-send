@@ -91,6 +91,14 @@ const TEMPLATE_TAGS = [
   { tag: '[rndlu_10]', label: 'Random Letters (10)', group: 'Random' },
 ];
 
+const DEFAULT_MIME_HEADERS = `From: [from] <[smtp]>
+Subject: [subject]
+Date: [date]
+To: [to]
+MIME-version: 1.0
+Message-ID: [Message-ID]
+Content-Type: text/html; charset=utf-8`;
+
 export default function NewDraftPage() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -215,7 +223,10 @@ export default function NewDraftPage() {
       showToast('Campaign draft successfully initialized.', 'success');
       router.push('/drafts');
     } catch (error: any) {
-      showToast(error.message || 'Failed to create campaign', 'error');
+      const errorMsg = typeof error.message === 'object'
+        ? JSON.stringify(error.message)
+        : (error.message || 'Failed to create campaign');
+      showToast(errorMsg, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -356,26 +367,27 @@ export default function NewDraftPage() {
                       </div>
                       <Switch
                         checked={config.use_custom_headers}
-                        onCheckedChange={(val) => setConfig(prev => ({ ...prev, use_custom_headers: val }))}
+                        onCheckedChange={(val) => setConfig(prev => ({
+                          ...prev,
+                          use_custom_headers: val,
+                          custom_headers: (val && !prev.custom_headers) ? DEFAULT_MIME_HEADERS : prev.custom_headers
+                        }))}
                       />
                     </div>
                     {config.use_custom_headers && (
                       <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
                         <div className="flex flex-wrap gap-1 mb-2">
                           {[
-                            { t: 'From: [from] <[smtp]>', l: 'From Header' },
-                            { t: 'Subject: [subject]', l: 'Subject Header' },
-                            { t: 'Content-Type: text/html; charset=utf-8', l: 'HTML Type' },
-                            { t: 'List-Unsubscribe: <mailto:unsub@domain.com>', l: 'Unsub' },
-                            { t: 'X-Campaign-ID: [rndn_5]', l: 'Campaign ID' },
-                            { t: 'X-Priority: 1', l: 'High Priority' },
-                            { t: 'X-Report-Abuse-To: abuse@domain.com', l: 'Abuse Report' }
+                            { t: 'Feedback-ID: [rnda_16]', l: 'Feedback-ID' },
+                            { t: 'List-Unsubscribe: <mailto:unsub@domain.com>, <https://domain.com/unsub>', l: 'List-Unsubscribe' },
+                            { t: 'X-Campaign-ID: [rndn_8]', l: 'X-Campaign-ID' },
+                            { t: 'X-Priority: 1 (Highest)', l: 'X-Priority' }
                           ].map(htag => (
                             <Button
                               key={htag.l}
                               variant="outline"
                               size="sm"
-                              className="h-6 text-[9px] px-2 bg-background/50"
+                              className="h-6 text-[9px] px-2 bg-background/50 border-primary/20 hover:bg-primary/5 hover:border-primary/40 text-primary/80"
                               onClick={() => setConfig(prev => ({ ...prev, custom_headers: (prev.custom_headers ? prev.custom_headers + '\n' : '') + htag.t }))}
                             >
                               + {htag.l}

@@ -47,8 +47,9 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         # Custom headers fields
         use_custom_headers=draft_data.use_custom_headers,
         custom_headers=draft_data.custom_headers,
-        body_format=draft_data.body_format,
-        body_template=draft_data.body_template
+        body_template=draft_data.body_template,
+        list_start_index=draft_data.list_start_index,
+        list_send_limit=draft_data.list_send_limit
     )
     db.add(new_draft_campaign)
     db.flush()  # Get the ID before committing
@@ -298,6 +299,10 @@ def update_draft_campaign(draft_id: int, draft_data: schemas.DraftCampaignUpdate
         campaign.test_after_email = draft_data.test_after_email
     if draft_data.test_after_count is not None:
         campaign.test_after_count = draft_data.test_after_count
+    if draft_data.list_start_index is not None:
+        campaign.list_start_index = draft_data.list_start_index
+    if draft_data.list_send_limit is not None:
+        campaign.list_send_limit = draft_data.list_send_limit
     
     db.commit()
     db.refresh(campaign)
@@ -1166,7 +1171,9 @@ def duplicate_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         use_custom_headers=original.use_custom_headers,
         custom_headers=original.custom_headers,
         body_format=original.body_format,
-        body_template=original.body_template
+        body_template=original.body_template,
+        list_start_index=original.list_start_index,
+        list_send_limit=original.list_send_limit
     )
     db.add(new_campaign)
     db.flush()  # Get ID

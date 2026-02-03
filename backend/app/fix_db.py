@@ -78,7 +78,10 @@ def fix_schema():
                 ("campaigns", "tracking_domain_id", "INTEGER"),
                 ("draft_campaigns", "recipient_metadata", "JSONB DEFAULT '{}'"),
                 ("draft_campaigns", "list_start_index", "INTEGER DEFAULT 0"),
-                ("draft_campaigns", "list_send_limit", "INTEGER")
+                ("draft_campaigns", "list_send_limit", "INTEGER"),
+                ("draft_campaigns", "opens_count", "INTEGER DEFAULT 0"),
+                ("draft_campaigns", "clicks_count", "INTEGER DEFAULT 0"),
+                ("draft_campaigns", "bounces_count", "INTEGER DEFAULT 0")
             ]
             for table, col_name, col_type in attr_cols:
                 try:
