@@ -7,10 +7,10 @@ from app.config import settings
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=50,       # Increased from 10 to support 50 persistent connections
+    max_overflow=100,   # Increased from 20 to allow 150 total concurrent bursts
     pool_recycle=3600,
-    pool_timeout=30
+    pool_timeout=60     # Increased timeout to prevent early failures during bursts
 )
 
 # Create session factory

@@ -19,13 +19,29 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
     Get dashboard statistics
     """
     # Total counts
+    from app.models import DraftCampaign, DraftStatus
+    
     total_service_accounts = db.query(ServiceAccount).count()
     total_users = db.query(WorkspaceUser).count()
-    total_campaigns = db.query(Campaign).count()
-    active_campaigns = db.query(Campaign).filter(
+    
+    # Combined Campaign Stats (Legacy + Drafts)
+    legacy_campaigns = db.query(Campaign).count()
+    draft_campaigns = db.query(DraftCampaign).count()
+    total_campaigns = legacy_campaigns + draft_campaigns
+    
+    # Active
+    legacy_active = db.query(Campaign).filter(
         Campaign.status.in_([CampaignStatus.SENDING, CampaignStatus.PAUSED, CampaignStatus.PREPARING])
     ).count()
-    completed_campaigns = db.query(Campaign).filter(Campaign.status == CampaignStatus.COMPLETED).count()
+    draft_active = db.query(DraftCampaign).filter(
+        DraftCampaign.status.in_([DraftStatus.SENDING, DraftStatus.UPLOADING, DraftStatus.PREPARING])
+    ).count()
+    active_campaigns = legacy_active + draft_active
+
+    # Completed
+    legacy_completed = db.query(Campaign).filter(Campaign.status == CampaignStatus.COMPLETED).count()
+    draft_completed = db.query(DraftCampaign).filter(DraftCampaign.status == DraftStatus.COMPLETED).count()
+    completed_campaigns = legacy_completed + draft_completed
     
     # Today's stats
     today = datetime.utcnow().date()

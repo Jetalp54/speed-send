@@ -43,6 +43,38 @@ def get_client_ip(request: Request) -> str:
 
 router = APIRouter()
 
+@router.get("/")
+async def tracking_root():
+    """
+    Landing page for the tracking domain.
+    """
+    return Response(
+        content="""
+        <html>
+            <head>
+                <title>Secure Tracking Link</title>
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f4f6f8; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: #333; }
+                    .container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); text-align: center; max-width: 400px; }
+                    h1 { color: #2d3748; font-size: 24px; margin-bottom: 10px; }
+                    p { color: #718096; line-height: 1.5; margin-bottom: 20px; }
+                    .status-badge { background: #e6fffa; color: #2c7a7b; padding: 6px 12px; border-radius: 20px; font-weight: 600; font-size: 14px; display: inline-block; }
+                    .logo { font-size: 40px; margin-bottom: 15px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="logo">📡</div>
+                    <h1>Link Tracking System</h1>
+                    <p>This is a secure tracking endpoint used for email analytics.</p>
+                    <div class="status-badge">● System Online</div>
+                </div>
+            </body>
+        </html>
+        """,
+        media_type="text/html"
+    )
+
 # 1x1 Transparent PNG
 TRANSPARENT_PIXEL = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="

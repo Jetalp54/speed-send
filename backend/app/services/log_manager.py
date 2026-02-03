@@ -71,6 +71,29 @@ class LogManager:
         Async emission (for FastAPI routers).
         """
         try:
+            # 1. Database Persistence (Reliable check)
+            # Since this is async, we shouldn't block, but for safety in this scope we'll do a quick blocking write.
+            # In high-scale, this should be offloaded to Celery, but for now direct write ensures visibility.
+            from app.database import SessionLocal
+            from app.models import TaskLog
+            
+            try:
+                db = SessionLocal()
+                db_log = TaskLog(
+                    campaign_id=log_entry.get('campaign_id'),
+                    level=log_entry.get('level', 'info'),
+                    message=log_entry.get('message'),
+                    timestamp=datetime.utcnow(),
+                    data=log_entry.get('data')
+                )
+                db.add(db_log)
+                db.commit()
+                db.close()
+            except Exception as e:
+                # Don't crash flow on DB error
+                logger.error(f"DB ASYNC LOGGING ERROR: {e}")
+
+            # 2. Redis Stream
             message = cls._format_log(log_entry)
             
             redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
