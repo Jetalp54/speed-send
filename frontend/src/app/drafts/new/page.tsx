@@ -63,7 +63,7 @@ interface DraftConfig {
   from_name: string;
   selected_account_ids: number[];
   selected_user_ids: number[];
-  selected_list_ids: number[];
+  selected_contact_list_ids: number[];
   use_custom_headers: boolean;
   custom_headers: string;
   distribution_strategy: 'round_robin' | 'even_split';
@@ -110,7 +110,7 @@ export default function NewDraftPage() {
     from_name: '',
     selected_account_ids: [],
     selected_user_ids: [],
-    selected_list_ids: [],
+    selected_contact_list_ids: [],
     use_custom_headers: false,
     custom_headers: '',
     distribution_strategy: 'round_robin',
@@ -160,12 +160,12 @@ export default function NewDraftPage() {
 
   const totalReach = useMemo(() => {
     return contactLists
-      .filter(list => config.selected_list_ids.includes(list.id))
+      .filter(list => config.selected_contact_list_ids.includes(list.id))
       .reduce((sum, list) => sum + (list.contact_count || 0), 0);
-  }, [contactLists, config.selected_list_ids]);
+  }, [contactLists, config.selected_contact_list_ids]);
 
   const handleCreate = async () => {
-    if (!config.name || !config.subject || config.selected_user_ids.length === 0 || config.selected_list_ids.length === 0) {
+    if (!config.name || !config.subject || config.selected_user_ids.length === 0 || config.selected_contact_list_ids.length === 0) {
       showToast('Please fill in all mandatory fields.', 'error');
       return;
     }
@@ -174,7 +174,10 @@ export default function NewDraftPage() {
     try {
       const response = await apiClient.request('/api/v1/drafts', {
         method: 'POST',
-        body: JSON.stringify(config)
+        body: JSON.stringify({
+          ...config,
+          selected_contact_list_ids: config.selected_contact_list_ids
+        })
       });
       if (response.error) throw new Error(response.error);
       showToast('Campaign draft successfully initialized.', 'success');
@@ -428,13 +431,13 @@ export default function NewDraftPage() {
                           <div className="flex items-center space-x-2">
                             <Checkbox
                               id={`list-${list.id}`}
-                              checked={config.selected_list_ids.includes(list.id)}
+                              checked={config.selected_contact_list_ids.includes(list.id)}
                               onCheckedChange={(checked) => {
                                 setConfig(prev => ({
                                   ...prev,
-                                  selected_list_ids: checked
-                                    ? [...prev.selected_list_ids, list.id]
-                                    : prev.selected_list_ids.filter(id => id !== list.id)
+                                  selected_contact_list_ids: checked
+                                    ? [...prev.selected_contact_list_ids, list.id]
+                                    : prev.selected_contact_list_ids.filter(id => id !== list.id)
                                 }));
                               }}
                             />

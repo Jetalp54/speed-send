@@ -112,8 +112,14 @@ def test_preview_email(request: TestEmailRequest, db: Session = Depends(get_db))
         else:
             processed_headers = TemplateEngine.process_template(TemplateEngine.get_default_headers(), context)
         
+        # Determine content source: if HTML is provided, use it, otherwise use body_template
+        content_template = request.body_template or ""
+        # If we want to strictly follow the NewDraftPage logic which separates HTML/Text:
+        # We need to know the format. Since TestEmailRequest doesn't have format, 
+        # let's assume if body_template is provided, it's the intended content.
+        
         processed_body = TemplateEngine.process_template(
-            request.body_template or "",
+            content_template,
             context
         )
         
@@ -236,8 +242,13 @@ def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depe
         else:
             processed_headers = TemplateEngine.process_template(TemplateEngine.get_default_headers(), context)
         
+        # Use campaign's format logic
+        test_content_source = campaign.body_html
+        if campaign.body_format == 'text' and campaign.body_template:
+            test_content_source = campaign.body_template
+            
         processed_body = TemplateEngine.process_template(
-            request.body_template or campaign.body_html or "",
+            request.body_template or test_content_source or "",
             context
         )
         

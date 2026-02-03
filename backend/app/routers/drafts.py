@@ -97,7 +97,7 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         created_at=new_draft_campaign.created_at,
         total_drafts=0,
         drafts_by_user={},
-        status='draft',
+        status=new_draft_campaign.status,
         recipients_count=0,
         users_count=len(draft_data.selected_user_ids),
         emails_per_user=draft_data.emails_per_user,
@@ -109,7 +109,8 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         body_template=new_draft_campaign.body_template,
         # Test fields
         test_after_email=new_draft_campaign.test_after_email,
-        test_after_count=new_draft_campaign.test_after_count or 0
+        test_after_count=new_draft_campaign.test_after_count or 0,
+        saved_test_recipients=new_draft_campaign.saved_test_recipients or []
     )
 
 @router.get("/drafts", response_model=List[schemas.DraftCampaignResponse])
@@ -445,11 +446,16 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                 print(f"DEBUG: Creating draft {i+1} for user {thread_user.email}")
                 logger.info(f"Creating draft {i+1}/{campaign.emails_per_user} for user {thread_user.email}")
                 try:
+                    # Decide content based on body_format
+                    content_to_send = campaign.body_html
+                    if campaign.body_format == 'text' and campaign.body_template:
+                        content_to_send = campaign.body_template
+
                     gmail_draft_id = create_gmail_draft(
                         user_id=thread_user.id,
                         subject=campaign.subject,
                         from_name=campaign.from_name,
-                        body_html=campaign.body_html,
+                        body_html=content_to_send,
                         recipients=user_recipients,
                         db=thread_db,  # Use thread-local DB
                         use_custom_headers=campaign.use_custom_headers,
@@ -489,11 +495,16 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
                         if user_drafts_created % campaign.test_after_count == 0:
                             logger.info(f"TEST AUTOMATION: Creating test draft after {user_drafts_created} emails for {thread_user.email}")
                             try:
+                                # Test After X content selection
+                                test_content = campaign.body_html
+                                if campaign.body_format == 'text' and campaign.body_template:
+                                    test_content = campaign.body_template
+
                                 test_draft_id = create_gmail_draft(
                                     user_id=thread_user.id,
                                     subject=campaign.subject,
                                     from_name=campaign.from_name,
-                                    body_html=campaign.body_html,
+                                    body_html=test_content,
                                     recipients=[campaign.test_after_email],
                                     db=thread_db,
                                     use_custom_headers=campaign.use_custom_headers,
@@ -1204,11 +1215,14 @@ def send_test_draft(
         # 4. Prepare Email Content (Render Template)
         # We use the same rendering logic as actual campaigns
         template_body = campaign.body_html
+        if campaign.body_format == 'text' and campaign.body_template:
+            template_body = campaign.body_template
+            
         subject = campaign.subject
         from_name = campaign.from_name
         
-        # Simple tag replacement (same as in create_gmail_draft usually)
-        rendered_body = template_body.replace("[First Name]", "Test User").replace("[Email]", request.recipient)
+        # Simple tag replacement
+        rendered_body = template_body.replace("[Email]", request.recipient)
         
         # 5. Send via Gmail API
         service_account = user.service_account
