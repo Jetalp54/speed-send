@@ -33,9 +33,9 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { toast } from '@/components/ui/toast';
 import { TestDraftDialog } from '@/components/drafts/TestDraftDialog';
 import { TemplatePreview } from '@/components/drafts/TemplatePreview';
+import { Toast } from '@/components/ui/toast'; // Changed from { toast }
 
 interface User {
   id: number;
@@ -94,6 +94,13 @@ export default function NewDraftPage() {
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [tagGuideOpen, setTagGuideOpen] = useState(false);
 
+  // Toast state
+  const [activeToast, setActiveToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setActiveToast({ message, type });
+  };
+
   const [config, setConfig] = useState<DraftConfig>({
     name: `Campaign ${new Date().toLocaleDateString()}`,
     subject: '',
@@ -122,7 +129,7 @@ export default function NewDraftPage() {
         setContactLists(contactListsRes.data || []);
       } catch (error) {
         console.error('Failed to fetch initial data:', error);
-        toast({ title: 'Error', message: 'Failed to load accounts or lists', type: 'error' });
+        showToast('Failed to load accounts or lists', 'error');
       } finally {
         setLoading(false);
       }
@@ -159,7 +166,7 @@ export default function NewDraftPage() {
 
   const handleCreate = async () => {
     if (!config.name || !config.subject || config.selected_user_ids.length === 0 || config.selected_list_ids.length === 0) {
-      toast({ title: 'Missing Info', message: 'Please fill in all mandatory fields.', type: 'error' });
+      showToast('Please fill in all mandatory fields.', 'error');
       return;
     }
 
@@ -170,10 +177,10 @@ export default function NewDraftPage() {
         body: JSON.stringify(config)
       });
       if (response.error) throw new Error(response.error);
-      toast({ title: 'Success', message: 'Campaign draft successfully initialized.', type: 'success' });
+      showToast('Campaign draft successfully initialized.', 'success');
       router.push('/drafts');
     } catch (error: any) {
-      toast({ title: 'Error', message: error.message || 'Failed to create campaign', type: 'error' });
+      showToast(error.message || 'Failed to create campaign', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -450,7 +457,7 @@ export default function NewDraftPage() {
                     <Label>Delivery Mode</Label>
                     <Select
                       value={config.distribution_strategy}
-                      onValueChange={(val: any) => setConfig(prev => ({ ...prev, distribution_strategy: val }))}
+                      onValueChange={(val: string) => setConfig(prev => ({ ...prev, distribution_strategy: val as any }))}
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -553,6 +560,14 @@ export default function NewDraftPage() {
         body={config.body_format === 'html' ? config.body_html : config.body_template}
         isLoading={false}
       />
+
+      {activeToast && (
+        <Toast
+          message={activeToast.message}
+          type={activeToast.type}
+          onClose={() => setActiveToast(null)}
+        />
+      )}
 
       <style jsx global>{`
                 .custom-scrollbar::-webkit-scrollbar {
