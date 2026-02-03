@@ -663,6 +663,3 @@ const DraftsPage: React.FC = () => {
 };
 
 export default DraftsPage;
-};
-
-export default DraftsPage;
