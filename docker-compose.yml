@@ -54,6 +54,7 @@ services:
       MESSAGE_ID_DOMAIN: ${MESSAGE_ID_DOMAIN:-example.local}
     volumes:
       - service_accounts:/app/service_accounts
+      - ./backend/DB_REPAIR_SCRIPT.py:/app/DB_REPAIR_SCRIPT.py
     ports:
       - "8000:8000"
       - "8001:8000"
