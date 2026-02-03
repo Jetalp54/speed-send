@@ -304,10 +304,9 @@ def log_tracking_event_task(event_data):
                      from app.models import DraftCampaignContact, ContactList, Contact
                      
                      # Find which of the draft's lists contains this recipient
+                     # Simplified: Just check if this email exists in any list linked to this Draft
                      found_contact = db.query(Contact).join(
-                         ContactList, Contact.contact_list_id == ContactList.id
-                     ).join(
-                         DraftCampaignContact, DraftCampaignContact.contact_list_id == ContactList.id
+                         DraftCampaignContact, DraftCampaignContact.contact_list_id == Contact.contact_list_id
                      ).filter(
                          DraftCampaignContact.draft_campaign_id == d_id,
                          Contact.email == recipient_email
@@ -343,6 +342,12 @@ def log_tracking_event_task(event_data):
                              models.Contact.contact_list_id == source_list_id,
                              models.Contact.email == recipient_email
                         ).first()
+
+                        if not orig:
+                            # Fallback: Find contact in ANY list to get details
+                             orig = db.query(models.Contact).filter(
+                                  models.Contact.email == recipient_email
+                             ).first()
                         
                         new_c = models.Contact(
                             contact_list_id=target_list.id,
