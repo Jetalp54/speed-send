@@ -411,10 +411,15 @@ const DraftsPage: React.FC = () => {
                   <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
                     <TrendingUp className="h-5 w-5" />
                   </div>
-                  <div className="text-[10px] font-bold text-emerald-600">OPTIMAL</div>
+                  <div className="text-[10px] font-bold text-emerald-600">DYNAMIC</div>
                 </div>
-                <div className="text-2xl font-black text-slate-900">{summaryStats.successRate}%</div>
-                <p className="text-xs text-slate-400 font-medium mt-1">Campaign Health</p>
+                <div className="flex items-baseline gap-2">
+                  <div className="text-2xl font-black text-slate-900">{summaryStats.successRate}%</div>
+                  <div className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5">
+                    <Activity className="h-3 w-3" /> OPEN RATE
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 font-medium mt-1">Global Health Index</p>
                 <div className="h-1 w-full bg-slate-50 mt-4 rounded-full overflow-hidden">
                   <div className="h-full bg-emerald-500 w-full rounded-full" />
                 </div>
@@ -550,8 +555,8 @@ const DraftsPage: React.FC = () => {
                               <DropdownMenuItem onClick={() => launchDrafts(campaign.id)} className="rounded-lg gap-2 py-2.5 font-bold text-xs cursor-pointer text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700">
                                 <Play className="h-4 w-4" /> Standard Launch
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => resumeNow(campaign.id)} className="rounded-lg gap-2 py-2.5 font-bold text-xs cursor-pointer text-blue-600 focus:bg-blue-50 focus:text-blue-700">
-                                <Rocket className="h-4 w-4" /> Hyper-Resume
+                              <DropdownMenuItem onClick={() => openScheduleModal(campaign.id)} className="rounded-lg gap-2 py-2.5 font-bold text-xs cursor-pointer text-blue-600 focus:bg-blue-50 focus:text-blue-700">
+                                <Rocket className="h-4 w-4" /> Hyper-Resume (ms)
                               </DropdownMenuItem>
                             </>
                           )}
