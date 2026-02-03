@@ -146,14 +146,22 @@ def get_draft_campaigns(db: Session = Depends(get_db)):
                 drafts_by_user[user_email] = drafts_by_user.get(user_email, 0) + 1
         
         # Calculate recipients count from selected contact lists
-        recipients_count = 0
+        total_recipients = 0
         for contact_assoc in campaign.selected_contacts:
             if contact_assoc.contact_list:
-                contacts_in_list = contact_assoc.contact_list.contacts or []
-                recipients_count += len(contacts_in_list)
-                logger.info(f"Contact list {contact_assoc.contact_list.name} has {len(contacts_in_list)} contacts")
+                total_recipients += len(contact_assoc.contact_list.contacts or [])
         
-        logger.info(f"Campaign {campaign.name}: {recipients_count} recipients, {len(campaign.selected_users)} users")
+        # Apply slice
+        recipients_count = total_recipients
+        s_idx = campaign.list_start_index or 0
+        s_limit = campaign.list_send_limit
+        
+        if s_idx > 0:
+            recipients_count = max(0, recipients_count - s_idx)
+        if s_limit and s_limit > 0:
+            recipients_count = min(recipients_count, s_limit)
+
+        logger.info(f"Campaign {campaign.name}: total {total_recipients} recipients, sliced to {recipients_count}")
         logger.info(f"Selected contacts: {len(campaign.selected_contacts)}")
         logger.info(f"Selected users: {len(campaign.selected_users)}")
         for contact_assoc in campaign.selected_contacts:
@@ -214,10 +222,20 @@ def get_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
             drafts_by_user[user_email] = drafts_by_user.get(user_email, 0) + 1
 
     # Calculate recipients count
-    recipients_count = 0
+    total_recipients = 0
     for contact_assoc in campaign.selected_contacts:
         if contact_assoc.contact_list:
-            recipients_count += len(contact_assoc.contact_list.contacts)
+            total_recipients += len(contact_assoc.contact_list.contacts)
+    
+    # Apply slice
+    recipients_count = total_recipients
+    s_idx = campaign.list_start_index or 0
+    s_limit = campaign.list_send_limit
+    
+    if s_idx > 0:
+        recipients_count = max(0, recipients_count - s_idx)
+    if s_limit and s_limit > 0:
+        recipients_count = min(recipients_count, s_limit)
 
     return schemas.DraftCampaignResponse(
         id=campaign.id,

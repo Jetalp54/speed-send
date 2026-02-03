@@ -71,6 +71,14 @@ interface DraftConfig {
   emails_per_user: number;
   list_start_index: number;
   list_send_limit: number | null;
+  test_after_email: string;
+  test_after_count: number;
+}
+
+interface TrackingDomain {
+  id: number;
+  domain: string;
+  status: string;
 }
 
 const TEMPLATE_TAGS = [
@@ -88,6 +96,7 @@ export default function NewDraftPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [contactLists, setContactLists] = useState<ContactList[]>([]);
+  const [trackingDomains, setTrackingDomains] = useState<TrackingDomain[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -119,19 +128,23 @@ export default function NewDraftPage() {
     distribution_strategy: 'round_robin',
     emails_per_user: 50,
     list_start_index: 0,
-    list_send_limit: null
+    list_send_limit: null,
+    test_after_email: '',
+    test_after_count: 0
   });
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [accountsRes, contactListsRes] = await Promise.all([
+        const [accountsRes, contactListsRes, domainsRes] = await Promise.all([
           apiClient.request('/api/v1/accounts'),
-          apiClient.request('/api/v1/contacts/lists')
+          apiClient.request('/api/v1/contacts/lists'),
+          apiClient.request('/api/v1/tracking/domains')
         ]);
 
         setAccounts(accountsRes.data || []);
         setContactLists(contactListsRes.data || []);
+        setTrackingDomains(domainsRes.data || []);
       } catch (error) {
         console.error('Failed to fetch initial data:', error);
         showToast('Failed to load accounts or lists', 'error');
@@ -164,10 +177,19 @@ export default function NewDraftPage() {
   }, [config.selected_account_ids]);
 
   const totalReach = useMemo(() => {
-    return contactLists
+    let fullCount = contactLists
       .filter(list => config.selected_contact_list_ids.includes(list.id))
       .reduce((sum, list) => sum + (list.contact_count || 0), 0);
-  }, [contactLists, config.selected_contact_list_ids]);
+
+    let slicedCount = fullCount;
+    if (config.list_start_index > 0) {
+      slicedCount = Math.max(0, slicedCount - config.list_start_index);
+    }
+    if (config.list_send_limit && config.list_send_limit > 0) {
+      slicedCount = Math.min(slicedCount, config.list_send_limit);
+    }
+    return slicedCount;
+  }, [contactLists, config.selected_contact_list_ids, config.list_start_index, config.list_send_limit]);
 
   const handleCreate = async () => {
     if (!config.name || !config.subject || config.selected_user_ids.length === 0 || config.selected_contact_list_ids.length === 0) {
@@ -310,10 +332,13 @@ export default function NewDraftPage() {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t space-y-4">
+                  <div className="pt-4 border-t space-y-4 bg-muted/5 p-4 rounded-lg border border-dashed border-primary/20">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Header Personalization</Label>
+                        <Label className="flex items-center gap-2">
+                          Header Personalization
+                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/30 text-primary uppercase font-black">Pro</Badge>
+                        </Label>
                         <p className="text-[11px] text-muted-foreground">Inject custom MIME headers (X-Prefix/List-Unsubscribe/etc).</p>
                       </div>
                       <Switch
@@ -322,12 +347,35 @@ export default function NewDraftPage() {
                       />
                     </div>
                     {config.use_custom_headers && (
-                      <Textarea
-                        placeholder="X-Campaign-ID: 123&#10;List-Unsubscribe: <mailto:unsub@domain.com>"
-                        className="h-24 font-mono text-xs bg-muted/30"
-                        value={config.custom_headers}
-                        onChange={(e) => setConfig(prev => ({ ...prev, custom_headers: e.target.value }))}
-                      />
+                      <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          {[
+                            { t: 'From: [from] <[smtp]>', l: 'From Header' },
+                            { t: 'Subject: [subject]', l: 'Subject Header' },
+                            { t: 'Content-Type: text/html; charset=utf-8', l: 'HTML Type' },
+                            { t: 'List-Unsubscribe: <mailto:unsub@domain.com>', l: 'Unsub' },
+                            { t: 'X-Campaign-ID: [rndn_5]', l: 'Campaign ID' },
+                            { t: 'X-Priority: 1', l: 'High Priority' },
+                            { t: 'X-Report-Abuse-To: abuse@domain.com', l: 'Abuse Report' }
+                          ].map(htag => (
+                            <Button
+                              key={htag.l}
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[9px] px-2 bg-background/50"
+                              onClick={() => setConfig(prev => ({ ...prev, custom_headers: (prev.custom_headers ? prev.custom_headers + '\n' : '') + htag.t }))}
+                            >
+                              + {htag.l}
+                            </Button>
+                          ))}
+                        </div>
+                        <Textarea
+                          placeholder="X-Campaign-ID: 123&#10;List-Unsubscribe: <mailto:unsub@domain.com>"
+                          className="h-24 font-mono text-xs bg-muted/30 border-primary/10 focus-visible:ring-primary/20"
+                          value={config.custom_headers}
+                          onChange={(e) => setConfig(prev => ({ ...prev, custom_headers: e.target.value }))}
+                        />
+                      </div>
                     )}
                   </div>
 
@@ -335,7 +383,7 @@ export default function NewDraftPage() {
                     <div className="flex justify-between items-center mb-1">
                       <div className="flex items-center gap-4">
                         <Label>Message Body ({config.body_format.toUpperCase()})</Label>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 items-center">
                           <Button
                             variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2 border-dashed"
                             onClick={() => insertTag('[tracking_pixel]')}
@@ -354,6 +402,17 @@ export default function NewDraftPage() {
                           >
                             <Trash2 className="h-3 w-3" /> UNSUB
                           </Button>
+                          {trackingDomains.find(d => d.status === 'active') ? (
+                            <Badge variant="outline" className="text-[8px] h-4 bg-green-500/10 text-green-600 border-green-500/20 px-1 gap-1">
+                              <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
+                              {trackingDomains.find(d => d.status === 'active')?.domain}
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[8px] h-4 bg-red-500/10 text-red-600 border-red-500/20 px-1 gap-1">
+                              <div className="w-1 h-1 rounded-full bg-red-500" />
+                              No Active Tracking Domain
+                            </Badge>
+                          )}
                         </div>
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => setTagGuideOpen(!tagGuideOpen)} className="h-7 gap-1 text-xs">
@@ -396,20 +455,25 @@ export default function NewDraftPage() {
             <TabsContent value="strategy" className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <User className="h-4 w-4" /> Workspace Source
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2 text-primary">
+                      <User className="h-5 w-5" /> Workspace Source
                     </CardTitle>
+                    <CardDescription>Select identity clusters and personas.</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Service Accounts</Label>
-                      <div className="grid grid-cols-1 gap-2 border rounded-lg p-3 h-40 overflow-y-auto bg-muted/50">
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Service Accounts</Label>
+                        <Badge variant="outline" className="text-[10px] h-5">{accounts.length} Available</Badge>
+                      </div>
+                      <div className="grid grid-cols-1 gap-1.5 border rounded-xl p-3 h-44 overflow-y-auto bg-muted/20 shadow-inner scrollbar-thin">
                         {accounts.map(account => (
-                          <div key={account.id} className="flex items-center space-x-2">
+                          <div key={account.id} className="flex items-center space-x-2 py-1 px-2 rounded-md hover:bg-background/80 transition-all group">
                             <Checkbox
                               id={`acc-${account.id}`}
                               checked={config.selected_account_ids.includes(account.id)}
+                              className="border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                               onCheckedChange={(checked) => {
                                 setConfig(prev => ({
                                   ...prev,
@@ -419,57 +483,74 @@ export default function NewDraftPage() {
                                 }));
                               }}
                             />
-                            <label htmlFor={`acc-${account.id}`} className="text-xs font-medium cursor-pointer">{account.client_email}</label>
+                            <div className="flex flex-col">
+                              <label htmlFor={`acc-${account.id}`} className="text-[11px] font-bold cursor-pointer group-hover:text-primary transition-colors">{account.name || 'Cloud SMT'}</label>
+                              <span className="text-[9px] text-muted-foreground leading-tight italic">{account.client_email}</span>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <Label>Persona Assignment ({users.length} available)</Label>
-                        <div className="flex gap-2 text-[10px] font-bold text-primary">
-                          <button onClick={() => setConfig(prev => ({ ...prev, selected_user_ids: users.map(u => u.id) }))} className="hover:underline">SELECT ALL</button>
-                          <span className="opacity-30">/</span>
-                          <button onClick={() => setConfig(prev => ({ ...prev, selected_user_ids: [] }))} className="hover:underline">NONE</button>
+                        <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Persona Assignment</Label>
+                        <div className="flex gap-2 text-[10px] font-black text-primary/60">
+                          <button onClick={() => setConfig(prev => ({ ...prev, selected_user_ids: users.map(u => u.id) }))} className="hover:text-primary transition-colors">ALL</button>
+                          <span className="opacity-30">|</span>
+                          <button onClick={() => setConfig(prev => ({ ...prev, selected_user_ids: [] }))} className="hover:text-primary transition-colors">NONE</button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 gap-2 border rounded-lg p-3 h-48 overflow-y-auto bg-muted/50">
+                      <div className="grid grid-cols-1 gap-1.5 border rounded-xl p-3 h-52 overflow-y-auto bg-muted/20 shadow-inner scrollbar-thin font-mono">
                         {users.map(user => (
-                          <div key={user.id} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`usr-${user.id}`}
-                              checked={config.selected_user_ids.includes(user.id)}
-                              onCheckedChange={(checked) => {
-                                setConfig(prev => ({
-                                  ...prev,
-                                  selected_user_ids: checked
-                                    ? [...prev.selected_user_ids, user.id]
-                                    : prev.selected_user_ids.filter(id => id !== user.id)
-                                }));
-                              }}
-                            />
-                            <label htmlFor={`usr-${user.id}`} className="text-xs font-medium cursor-pointer">{user.email}</label>
+                          <div key={user.id} className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-background/80 transition-all border border-transparent hover:border-primary/10 group">
+                            <div className="flex items-center space-x-3">
+                              <Checkbox
+                                id={`usr-${user.id}`}
+                                checked={config.selected_user_ids.includes(user.id)}
+                                className="data-[state=checked]:bg-primary"
+                                onCheckedChange={(checked) => {
+                                  setConfig(prev => ({
+                                    ...prev,
+                                    selected_user_ids: checked
+                                      ? [...prev.selected_user_ids, user.id]
+                                      : prev.selected_user_ids.filter(id => id !== user.id)
+                                  }));
+                                }}
+                              />
+                              <label htmlFor={`usr-${user.id}`} className="text-[11px] font-medium cursor-pointer flex items-center gap-2">
+                                <User className="h-3 w-3 opacity-40 group-hover:opacity-100 group-hover:text-primary" />
+                                {user.email}
+                              </label>
+                            </div>
+                            <Badge variant="outline" className="text-[9px] h-4 px-1 opacity-40 group-hover:opacity-100 border-primary/20">Persona</Badge>
                           </div>
                         ))}
+                        {users.length === 0 && (
+                          <div className="h-full flex flex-col items-center justify-center opacity-30 italic text-xs">
+                            Select an account to load personas
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Mail className="h-4 w-4" /> Destination Segments
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2 text-primary">
+                      <Mail className="h-5 w-5" /> Destination Segments
                     </CardTitle>
+                    <CardDescription>Assign recipient clusters to this session.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 gap-2 border rounded-lg p-3 h-96 overflow-y-auto bg-muted/50">
+                    <div className="grid grid-cols-1 gap-1 border rounded-xl p-3 h-[26rem] overflow-y-auto bg-muted/20 shadow-inner scrollbar-thin">
                       {contactLists.map(list => (
-                        <div key={list.id} className="flex items-center justify-between p-2 rounded hover:bg-background transition-colors group">
-                          <div className="flex items-center space-x-2">
+                        <div key={list.id} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-background transition-all border border-transparent hover:border-primary/10 group">
+                          <div className="flex items-center space-x-3">
                             <Checkbox
                               id={`list-${list.id}`}
                               checked={config.selected_contact_list_ids.includes(list.id)}
+                              className="data-[state=checked]:bg-primary"
                               onCheckedChange={(checked) => {
                                 setConfig(prev => ({
                                   ...prev,
@@ -479,9 +560,12 @@ export default function NewDraftPage() {
                                 }));
                               }}
                             />
-                            <label htmlFor={`list-${list.id}`} className="text-xs font-medium cursor-pointer">{list.name}</label>
+                            <div className="flex flex-col">
+                              <label htmlFor={`list-${list.id}`} className="text-[11px] font-bold cursor-pointer transition-colors leading-tight group-hover:text-primary">{list.name}</label>
+                              <span className="text-[8px] uppercase tracking-tighter opacity-40 font-black italic">{list.id} :: CONTACT LIST</span>
+                            </div>
                           </div>
-                          <Badge variant="secondary" className="text-[10px] opacity-60 group-hover:opacity-100">{list.contact_count} rec.</Badge>
+                          <Badge variant="secondary" className="text-[10px] h-5 px-2 bg-primary/5 text-primary border-primary/10 font-black">{list.contact_count} REC.</Badge>
                         </div>
                       ))}
                     </div>
@@ -516,19 +600,55 @@ export default function NewDraftPage() {
                 <CardHeader>
                   <CardTitle className="text-base">Distribution Parameters</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-4 max-w-xs">
-                    <Label>Burst Density (Daily Cap per Persona)</Label>
-                    <div className="flex items-center gap-4">
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-4 border-r pr-8">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Burst Density</Label>
+                      <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">Global Limit</Badge>
+                    </div>
+                    <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-xl border border-dashed hover:border-primary/30 transition-colors">
                       <Input
                         type="number"
                         value={config.emails_per_user}
                         onChange={(e) => setConfig(prev => ({ ...prev, emails_per_user: parseInt(e.target.value) || 1 }))}
-                        className="w-32"
+                        className="w-24 h-10 text-lg font-black text-center bg-background border-primary/20"
                       />
-                      <span className="text-xs text-muted-foreground font-medium">emails / user</span>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold">Emails per Persona</span>
+                        <span className="text-[10px] text-muted-foreground italic leading-tight">Max drafts to generate per cycle</span>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">Sets the maximum number of drafts generated per selected sender account.</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Automation Parameters</Label>
+                      <Badge variant="outline" className="text-[10px] border-orange-500/30 text-orange-600 bg-orange-500/5">Safety Lock</Badge>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 p-4 bg-muted/10 rounded-xl border">
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col flex-1">
+                          <span className="text-[10px] font-bold uppercase tracking-tighter opacity-70">Test Recovery Email</span>
+                          <Input
+                            placeholder="audit@domain.com"
+                            className="h-8 text-xs font-mono mt-1"
+                            value={config.test_after_email}
+                            onChange={(e) => setConfig(prev => ({ ...prev, test_after_email: e.target.value }))}
+                          />
+                        </div>
+                        <div className="flex flex-col w-24">
+                          <span className="text-[10px] font-bold uppercase tracking-tighter opacity-70">Trigger (X)</span>
+                          <Input
+                            type="number"
+                            placeholder="100"
+                            className="h-8 text-xs font-mono mt-1"
+                            value={config.test_after_count}
+                            onChange={(e) => setConfig(prev => ({ ...prev, test_after_count: parseInt(e.target.value) || 0 }))}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[9px] text-muted-foreground italic">Automatically sends a test to the recovery email after every X successful drafts.</p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
