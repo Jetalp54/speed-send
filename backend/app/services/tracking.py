@@ -314,6 +314,14 @@ def log_tracking_event_task(event_data):
                      
                      if found_contact:
                          source_list_id = found_contact.contact_list_id
+                     
+                     # Fallback 2: If still not found, try to find ANY contact with this email
+                     # This handles cases where logical link Draft->List is broken but user exists
+                     if not source_list_id:
+                         any_contact = db.query(models.Contact).filter(models.Contact.email == recipient_email).first()
+                         if any_contact:
+                             source_list_id = any_contact.contact_list_id
+                             logger.info(f"⚠️ Auto-segmentation: Used GLOBAL lookup for {recipient_email} -> List {source_list_id}")
             
              # If we identified a linked source list, copy contact to Action List
              if source_list_id:
