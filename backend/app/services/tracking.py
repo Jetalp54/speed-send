@@ -299,7 +299,9 @@ def log_tracking_event_task(event_data):
              logger.info(f"🔍 Checking Auto-Segmentation for {recipient_email} in Draft {d_id}")
              # If source list not known from log, try to resolve from draft's contacts
              if not source_list_id:
-                 draft_campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == d_id).first()
+                 # Ensure DraftCampaign is imported
+                 from app.models import DraftCampaign
+                 draft_campaign = db.query(DraftCampaign).filter(DraftCampaign.id == d_id).first()
                  if draft_campaign:
                      # Check connection: Draft -> ContactList -> Contact(email)
                      from app.models import DraftCampaignContact, ContactList, Contact
@@ -320,7 +322,7 @@ def log_tracking_event_task(event_data):
                      # Fallback 2: If still not found, try to find ANY contact with this email
                      # This handles cases where logical link Draft->List is broken but user exists
                      if not source_list_id:
-                         any_contact = db.query(models.Contact).filter(models.Contact.email == recipient_email).first()
+                         any_contact = db.query(Contact).filter(Contact.email == recipient_email).first()
                          if any_contact:
                              source_list_id = any_contact.contact_list_id
                              logger.info(f"⚠️ Auto-segmentation: Used GLOBAL lookup for {recipient_email} -> List {source_list_id}")
@@ -329,14 +331,16 @@ def log_tracking_event_task(event_data):
             
              # If we identified a linked source list, copy contact to Action List
              if source_list_id:
-                source_list = db.query(models.ContactList).filter(models.ContactList.id == source_list_id).first()
+                # Ensure imports again just in case
+                from app.models import ContactList, Contact
+                source_list = db.query(ContactList).filter(ContactList.id == source_list_id).first()
                 if source_list:
                     target_list_name = f"{source_list.name}_{event_data['event_type']}"
                     logger.info(f"🎯 Target List Name: {target_list_name}")
                     
-                    target_list = db.query(models.ContactList).filter(models.ContactList.name == target_list_name).first()
+                    target_list = db.query(ContactList).filter(ContactList.name == target_list_name).first()
                     if not target_list:
-                        target_list = models.ContactList(
+                        target_list = ContactList(
                             name=target_list_name,
                             description=f"Auto-segment: {event_data['event_type']} from {source_list.name}"
                         )
@@ -345,25 +349,25 @@ def log_tracking_event_task(event_data):
                         logger.info(f"🆕 Created new segment list: {target_list.id}")
                     
                     # Check if already in target list
-                    existing = db.query(models.Contact).filter(
-                        models.Contact.contact_list_id == target_list.id,
-                        models.Contact.email == recipient_email
+                    existing = db.query(Contact).filter(
+                        Contact.contact_list_id == target_list.id,
+                        Contact.email == recipient_email
                     ).first()
                     
                     if not existing:
                         # Copy contact details from source (if found) or create new partial contact
-                        orig = db.query(models.Contact).filter(
-                             models.Contact.contact_list_id == source_list_id,
-                             models.Contact.email == recipient_email
+                        orig = db.query(Contact).filter(
+                             Contact.contact_list_id == source_list_id,
+                             Contact.email == recipient_email
                         ).first()
 
                         if not orig:
                             # Fallback: Find contact in ANY list to get details
-                             orig = db.query(models.Contact).filter(
-                                  models.Contact.email == recipient_email
+                             orig = db.query(Contact).filter(
+                                  Contact.email == recipient_email
                              ).first()
                         
-                        new_c = models.Contact(
+                        new_c = Contact(
                             contact_list_id=target_list.id,
                             email=recipient_email,
                             first_name=orig.first_name if orig else None,
