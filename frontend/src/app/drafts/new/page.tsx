@@ -192,8 +192,13 @@ export default function NewDraftPage() {
   }, [contactLists, config.selected_contact_list_ids, config.list_start_index, config.list_send_limit]);
 
   const handleCreate = async () => {
-    if (!config.name || !config.subject || config.selected_user_ids.length === 0 || config.selected_contact_list_ids.length === 0) {
-      showToast('Please fill in all mandatory fields.', 'error');
+    const isSubjectValid = config.use_custom_headers || config.subject;
+    if (!config.name || !isSubjectValid || config.selected_user_ids.length === 0 || config.selected_contact_list_ids.length === 0) {
+      if (!isSubjectValid) {
+        showToast('Please provide a Subject Line OR use Custom Headers.', 'error');
+      } else {
+        showToast('Please fill in all mandatory fields (Name, Personas, Segments).', 'error');
+      }
       return;
     }
 
@@ -315,19 +320,27 @@ export default function NewDraftPage() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Identity Name</Label>
+                      <Label className="flex items-center justify-between">
+                        Identity Name
+                        {config.use_custom_headers && <span className="text-[10px] text-primary opacity-60 font-medium tracking-tighter">OPTIONAL (MIME)</span>}
+                      </Label>
                       <Input
                         placeholder="e.g. John from SpeedSend"
                         value={config.from_name}
                         onChange={(e) => setConfig(prev => ({ ...prev, from_name: e.target.value }))}
+                        className={config.use_custom_headers ? "bg-primary/5 border-primary/20" : ""}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Subject Line</Label>
+                      <Label className="flex items-center justify-between">
+                        Subject Line
+                        {config.use_custom_headers && <span className="text-[10px] text-primary opacity-60 font-medium tracking-tighter">OPTIONAL (MIME)</span>}
+                      </Label>
                       <Input
                         placeholder="Enter headline..."
                         value={config.subject}
                         onChange={(e) => setConfig(prev => ({ ...prev, subject: e.target.value }))}
+                        className={config.use_custom_headers ? "bg-primary/5 border-primary/20" : ""}
                       />
                     </div>
                   </div>

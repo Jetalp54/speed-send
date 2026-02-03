@@ -258,7 +258,7 @@ class CampaignResponse(CampaignBase):
 class DraftCampaignBase(BaseModel):
     name: str
     from_name: Optional[str] = None
-    subject: str
+    subject: Optional[str] = None
     body_html: Optional[str] = None
     test_after_email: Optional[str] = None
     test_after_count: int = 0

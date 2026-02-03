@@ -290,7 +290,7 @@ class DraftCampaign(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     from_name = Column(String(255))
-    subject = Column(String(998), nullable=False)
+    subject = Column(String(998), nullable=True)
     body_html = Column(Text)
     status = Column(String(50), default='draft')
     emails_per_user = Column(Integer, default=1)
