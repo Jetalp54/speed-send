@@ -76,6 +76,106 @@ def preview_template(request: TemplatePreviewRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router_preview.post("/drafts/test-preview")
+def test_preview_email(request: TestEmailRequest, db: Session = Depends(get_db)):
+    """
+    Send test email without a draft_id (for preview mode).
+    """
+    from app.encryption import EncryptionService
+    from app.google_api import GoogleWorkspaceService
+    from app.config import settings
+    from googleapiclient.discovery import build
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    import base64
+
+    try:
+        if not request.sender_user_id:
+            raise HTTPException(status_code=400, detail="Sender user ID required")
+        
+        test_user = db.query(models.User).filter(models.User.id == request.sender_user_id).first()
+        if not test_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Setup context
+        context = {
+            'smtp': test_user.email,
+            'from': request.from_name or "Test Sender",
+            'subject': request.subject or "Test Subject",
+            'to': request.recipient,
+            'domain': test_user.email.split('@')[1] if '@' in test_user.email else 'localhost'
+        }
+        
+        # Process templates
+        if request.use_custom_headers and request.custom_headers:
+            processed_headers = TemplateEngine.process_template(request.custom_headers, context)
+        else:
+            processed_headers = TemplateEngine.process_template(TemplateEngine.get_default_headers(), context)
+        
+        processed_body = TemplateEngine.process_template(
+            request.body_template or "",
+            context
+        )
+        
+        service_account = test_user.service_account
+        if not service_account:
+            raise HTTPException(status_code=400, detail="No service account")
+        
+        encryption_service = EncryptionService()
+        service_account_json = encryption_service.decrypt(service_account.encrypted_json)
+        google_service = GoogleWorkspaceService(service_account_json)
+        credentials = google_service.get_delegated_credentials(test_user.email, settings.GMAIL_SCOPES)
+        gmail_service = build('gmail', 'v1', credentials=credentials)
+        
+        # Create email message
+        message = MIMEMultipart('alternative')
+        
+        custom_from = None
+        custom_subject = None
+        other_custom_headers = []
+        
+        if request.use_custom_headers and request.custom_headers:
+            for line in processed_headers.split('\n'):
+                if ':' in line:
+                    key, val = line.split(':', 1)
+                    key = key.strip()
+                    val = val.strip()
+                    if key.lower() == 'from': custom_from = val
+                    elif key.lower() == 'subject': custom_subject = val
+                    elif key.lower() != 'to': other_custom_headers.append((key, val))
+        
+        message['To'] = request.recipient
+        message['From'] = custom_from if custom_from else f"{context['from']} <{test_user.email}>"
+        message['Subject'] = custom_subject if custom_subject else context['subject']
+        
+        for key, value in other_custom_headers:
+            message[key] = value
+        
+        html_part = MIMEText(processed_body, 'html')
+        message.attach(html_part)
+        
+        raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        
+        result = gmail_service.users().messages().send(
+            userId='me',
+            body={'raw': raw_message}
+        ).execute()
+        
+        return {
+            "success": True,
+            "message": f"Pre-campaign test dispatched to {request.recipient}",
+            "message_id": result.get('id'),
+            "preview": {
+                "headers": processed_headers,
+                "body_preview": processed_body[:500] + "..." if len(processed_body) > 500 else processed_body
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Test preview dispatch failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router_preview.post("/drafts/{draft_id}/test-send")
 def send_test_email(draft_id: int, request: TestEmailRequest, db: Session = Depends(get_db)):
     """

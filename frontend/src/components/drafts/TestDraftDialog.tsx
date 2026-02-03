@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, Mail, User } from "lucide-react";
+import { Loader2, Send, Mail, User, Sparkles, Zap, ShieldCheck } from "lucide-react";
 import { apiClient } from "@/lib/api";
 
 interface DraftConfig {
@@ -27,7 +27,6 @@ interface TestDraftDialogProps {
     draftId: number | null;
     open: boolean;
     onClose: () => void;
-    // New optional props for Preview Mode
     config?: DraftConfig;
     availableUsers?: Array<{ id: number; email: string }>;
 }
@@ -46,16 +45,14 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
     const [sending, setSending] = useState(false);
     const [draft, setDraft] = useState<DraftDetails | null>(null);
 
-    // Form State
     const [recipient, setRecipient] = useState('');
     const [senderUserId, setSenderUserId] = useState<string>('');
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
-    // Fetch Details when opened
     useEffect(() => {
         if (open) {
-            setRecipient('');
+            setRecipient(localStorage.getItem('last_test_recipient') || '');
             setSenderUserId('');
             setError(null);
             setSuccess(null);
@@ -63,14 +60,12 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
             if (draftId) {
                 fetchDraftDetails(draftId);
             } else if (config && availableUsers) {
-                // Preview Mode: Use provided config and users
-                // Mock a draft object for UI consistency
                 setDraft({
                     id: 0,
                     name: 'Preview Draft',
                     subject: config.subject,
                     from_name: config.from_name,
-                    saved_test_recipients: [], // TODO: Maybe fetch global saved recipients? For now empty.
+                    saved_test_recipients: JSON.parse(localStorage.getItem('saved_test_recipients') || '[]'),
                     selected_users: availableUsers
                 });
                 if (availableUsers.length > 0) {
@@ -87,13 +82,11 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
             if (response.error) throw new Error(response.error);
             setDraft(response.data);
 
-            // Auto-select first sender if available
-            if (response.data.selected_users && response.data.selected_users.length > 0) {
+            if (response.data.selected_users?.length > 0) {
                 setSenderUserId(response.data.selected_users[0].id.toString());
             }
 
-            // Auto-fill last recipient if available
-            if (response.data.saved_test_recipients && response.data.saved_test_recipients.length > 0) {
+            if (response.data.saved_test_recipients?.length > 0) {
                 setRecipient(response.data.saved_test_recipients[response.data.saved_test_recipients.length - 1]);
             }
         } catch (err: any) {
@@ -111,31 +104,21 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
         setSuccess(null);
 
         try {
-            let endpoint = '';
-            let body = {};
-
-            if (draftId) {
-                // Existing Draft Mode
-                endpoint = `/api/v1/drafts/${draftId}/test-send`;
-                body = {
-                    recipient,
-                    sender_user_id: parseInt(senderUserId),
-                    save_recipient: true
-                };
-            } else if (config) {
-                // Preview Mode
-                endpoint = '/api/v1/drafts/test-preview';
-                body = {
-                    recipient,
-                    sender_user_id: parseInt(senderUserId),
-                    save_recipient: true,
-                    subject: config.subject,
-                    body_html: config.body_html,
-                    from_name: config.from_name,
-                    use_custom_headers: config.use_custom_headers,
-                    custom_headers: config.custom_headers
-                };
-            }
+            let endpoint = draftId ? `/api/v1/drafts/${draftId}/test-send` : '/api/v1/drafts/test-preview';
+            let body = draftId ? {
+                recipient,
+                sender_user_id: parseInt(senderUserId),
+                save_recipient: true
+            } : {
+                recipient,
+                sender_user_id: parseInt(senderUserId),
+                save_recipient: true,
+                subject: config?.subject,
+                body_html: config?.body_html,
+                from_name: config?.from_name,
+                use_custom_headers: config?.use_custom_headers,
+                custom_headers: config?.custom_headers
+            };
 
             const response = await apiClient.request(endpoint, {
                 method: 'POST',
@@ -144,10 +127,15 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
 
             if (response.error) throw new Error(response.error);
 
-            setSuccess(`Test email sent to ${recipient}`);
+            setSuccess(`Test email dispatched successfully to ${recipient}`);
+            localStorage.setItem('last_test_recipient', recipient);
 
-            // Update local saved list if successful (Only for existing draft mode currently persisted)
-            if (draft && draftId && !draft.saved_test_recipients?.includes(recipient)) {
+            const saved = JSON.parse(localStorage.getItem('saved_test_recipients') || '[]');
+            if (!saved.includes(recipient)) {
+                localStorage.setItem('saved_test_recipients', JSON.stringify([...saved, recipient].slice(-5)));
+            }
+
+            if (draft && !draft.saved_test_recipients?.includes(recipient)) {
                 setDraft({
                     ...draft,
                     saved_test_recipients: [...(draft.saved_test_recipients || []), recipient]
@@ -155,7 +143,7 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
             }
 
         } catch (err: any) {
-            setError(err.message || "Failed to send test email");
+            setError(err.message || "Dispatch failed");
         } finally {
             setSending(false);
         }
@@ -163,105 +151,105 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
 
     return (
         <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-            <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                    <DialogTitle>Send Test Email</DialogTitle>
-                    <DialogDescription>
-                        Send a single test email to verify formatting and deliverability.
-                        This mimics a real campaign send using the Gmail API.
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent className="sm:max-w-[500px] bg-[#0a0a0c] border-white/10 text-white backdrop-blur-3xl p-0 overflow-hidden">
+                <div className="h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
 
-                {error && (
-                    <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm border border-red-200">
-                        {error}
-                    </div>
-                )}
+                <div className="p-8 space-y-6">
+                    <DialogHeader>
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="h-8 w-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+                                <Zap className="h-5 w-5 text-indigo-400" />
+                            </div>
+                            <DialogTitle className="text-xl font-bold tracking-tight">Dispatch Validation</DialogTitle>
+                        </div>
+                        <DialogDescription className="text-white/40 text-xs">
+                            Transmit a high-fidelity test dispatch via the Gmail 2026 API to verify creative rendering and inbox placement.
+                        </DialogDescription>
+                    </DialogHeader>
 
-                {success && (
-                    <div className="bg-green-50 text-green-600 p-3 rounded-md text-sm border border-green-200 flex items-center gap-2">
-                        <div className="h-2 w-2 bg-green-500 rounded-full" />
-                        {success}
-                    </div>
-                )}
+                    {error && (
+                        <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-xs border border-red-500/20 flex items-center gap-2">
+                            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                            {error}
+                        </div>
+                    )}
 
-                {loading ? (
-                    <div className="flex justify-center py-8">
-                        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                    </div>
-                ) : !draft ? (
-                    <div className="text-center py-4 text-gray-500">Could not load draft details.</div>
-                ) : (
-                    <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
-                            <Label htmlFor="recipient">Test Recipient</Label>
-                            <div className="relative">
-                                <Mail className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-                                <Input
-                                    id="recipient"
-                                    placeholder="name@example.com"
-                                    className="pl-9"
-                                    value={recipient}
-                                    onChange={(e) => setRecipient(e.target.value)}
-                                />
+                    {success && (
+                        <div className="bg-indigo-500/10 text-indigo-100 p-3 rounded-lg text-xs border border-indigo-500/30 flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4 text-indigo-400" />
+                            {success}
+                        </div>
+                    )}
+
+                    {loading ? (
+                        <div className="flex flex-col items-center justify-center py-12 gap-3">
+                            <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+                            <p className="text-[10px] uppercase font-bold tracking-widest text-white/20">Syncing Workspace...</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            <div className="space-y-3">
+                                <Label className="text-[10px] uppercase font-black text-white/40 tracking-widest">Test Recipient</Label>
+                                <div className="relative group">
+                                    <Mail className="absolute left-3 top-3 h-4 w-4 text-white/20 group-focus-within:text-indigo-400 transition-colors" />
+                                    <Input
+                                        placeholder="target@delivery.com"
+                                        className="bg-black/40 border-white/10 h-11 pl-10 focus:border-indigo-500/50 transition-all placeholder:text-white/10"
+                                        value={recipient}
+                                        onChange={(e) => setRecipient(e.target.value)}
+                                    />
+                                </div>
+
+                                {draft?.saved_test_recipients && draft.saved_test_recipients.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {draft.saved_test_recipients.map((email) => (
+                                            <Badge
+                                                key={email}
+                                                variant="outline"
+                                                className="cursor-pointer bg-white/5 border-white/10 hover:bg-white/10 transition-colors text-[10px] font-medium py-1"
+                                                onClick={() => setRecipient(email)}
+                                            >
+                                                {email}
+                                            </Badge>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Saved Recipients Chips */}
-                            {draft.saved_test_recipients && draft.saved_test_recipients.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mt-1">
-                                    {draft.saved_test_recipients.map((email) => (
-                                        <Badge
-                                            key={email}
-                                            variant="outline"
-                                            className="cursor-pointer hover:bg-gray-100 font-normal text-xs"
-                                            onClick={() => setRecipient(email)}
-                                        >
-                                            {email}
-                                        </Badge>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="grid gap-2">
-                            <Label htmlFor="sender">Sender Account</Label>
-                            <Select value={senderUserId} onValueChange={setSenderUserId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a sender for this test" />
-                                </SelectTrigger>
-                                <SelectContent className="max-h-[200px]">
-                                    {draft.selected_users?.map((user) => (
+                            <div className="space-y-3">
+                                <Label className="text-[10px] uppercase font-black text-white/40 tracking-widest">Sender Authority</Label>
+                                <Select value={senderUserId} onValueChange={setSenderUserId} className="bg-black/40 border-white/10 h-11 text-white">
+                                    <option value="" disabled>Select Sender Persona</option>
+                                    {draft?.selected_users?.map((user) => (
                                         <SelectItem key={user.id} value={user.id.toString()}>
                                             {user.email}
                                         </SelectItem>
                                     ))}
-                                    {(!draft.selected_users || draft.selected_users.length === 0) && (
-                                        <div className="p-2 text-sm text-gray-500 text-center">
-                                            No users selected.
-                                            <br />Please select Accounts/Users first.
-                                        </div>
-                                    )}
-                                </SelectContent>
-                            </Select>
-                            <p className="text-xs text-gray-500">
-                                This email will be sent FROM this user via Gmail API.
-                            </p>
-                        </div>
+                                </Select>
+                            </div>
 
-                        <div className="bg-gray-50 p-3 rounded-md border text-xs text-gray-600 space-y-1 mt-2">
-                            <p><strong>Subject:</strong> {config ? config.subject : draft.subject}</p>
-                            <p><strong>From Name:</strong> {config ? config.from_name : draft.from_name || '(Default)'}</p>
+                            <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] text-white/40 uppercase font-bold">Subject Line</span>
+                                    <Badge variant="outline" className="text-[9px] border-indigo-500/20 text-indigo-400">Live Header</Badge>
+                                </div>
+                                <p className="text-sm font-medium truncate opacity-80">{config?.subject || draft?.subject}</p>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>Close</Button>
-                    <Button onClick={handleSend} disabled={loading || sending || !recipient || !senderUserId}>
-                        {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {sending ? 'Sending...' : 'Send Test Email'}
-                    </Button>
-                </DialogFooter>
+                    <DialogFooter className="pt-4 border-t border-white/5">
+                        <Button variant="ghost" onClick={onClose} className="text-white/40 hover:text-white hover:bg-white/5">Cancel</Button>
+                        <Button
+                            onClick={handleSend}
+                            disabled={loading || sending || !recipient || !senderUserId}
+                            className="bg-white text-black hover:bg-white/90 font-bold px-8 shadow-xl shadow-white/5"
+                        >
+                            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                            {sending ? 'Dispatching...' : 'Fire Test Dispatch'}
+                        </Button>
+                    </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
     );

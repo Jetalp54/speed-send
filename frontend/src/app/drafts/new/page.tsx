@@ -21,14 +21,17 @@ import {
   Eye,
   Send,
   Book,
-  Code
+  Code,
+  Sparkles,
+  Layout,
+  Target,
+  Zap
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TemplateTagsGuide } from '@/components/drafts/TemplateTagsGuide';
 import { TemplatePreview } from '@/components/drafts/TemplatePreview';
 import { TestDraftDialog } from '@/components/drafts/TestDraftDialog';
-
-// API Configuration - Use imported API URL from centralized config
-
 
 interface Account {
   id: number;
@@ -60,7 +63,7 @@ interface DraftConfig {
   from_name: string;
   use_custom_headers: boolean;
   custom_headers: string;
-  body_format: string;
+  body_format: 'html' | 'text';
   body_template: string;
   test_after_email: string;
   test_after_count: number;
@@ -76,7 +79,22 @@ export default function NewDraftPage() {
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<number[]>([]);
   const [emailsPerUser, setEmailsPerUser] = useState<number>(1);
-  const [autoInsertTracking, setAutoInsertTracking] = useState(true); // Auto-insert tracking by default
+  const [userSearch, setUserSearch] = useState('');
+  const [step, setStep] = useState(1);
+  const [notifications, setNotifications] = useState<Array<{ id: string, message: string, type: 'success' | 'error' | 'info' }>>([]);
+
+  const totalReach = useMemo(() => {
+    const selectedLists = contactLists.filter(l => selectedContacts.includes(l.id));
+    const allEmails = new Set<string>();
+    selectedLists.forEach(l => {
+      if (l.contacts) {
+        l.contacts.forEach(c => allEmails.add(c.email));
+      }
+    });
+    return allEmails.size;
+  }, [contactLists, selectedContacts]);
+
+  const [autoInsertTracking, setAutoInsertTracking] = useState(true);
   const [config, setConfig] = useState<DraftConfig>({
     name: '',
     subject: '',
@@ -91,14 +109,8 @@ export default function NewDraftPage() {
   });
 
   const DEFAULT_HEADERS = `MIME-version: 1.0\nContent-type: text/html\nTo: [to]\nfrom: [from] <[smtp]>\nSubject: [subject]\nDate: [date]\nMessage-ID: [Message-ID]`;
-  const [notifications, setNotifications] = useState<Array<{ id: string, message: string, type: 'success' | 'error' | 'info' }>>([]);
-  const [userSearch, setUserSearch] = useState('');
-  const [step, setStep] = useState(1); // 1: Draft Details, 2: Distribution, 3: Upload
-
-  // Template customization state
   const [showTagsGuide, setShowTagsGuide] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
-  const [previewData, setPreviewData] = useState({ headers: '', body: '' });
   const [showTestDialog, setShowTestDialog] = useState(false);
 
   const filteredSelectedUsers = useMemo(() => {
@@ -118,139 +130,50 @@ export default function NewDraftPage() {
 
   const loadAccounts = useCallback(async () => {
     try {
-      console.log(' Loading Google Workspace accounts...');
       const response = await apiClient.request('/api/v1/accounts/');
-      if (response.error) throw new Error(response.error);
-
       if (response.data && Array.isArray(response.data)) {
         setAccounts(response.data);
-        console.log('Accounts loaded successfully:', Array.isArray(response.data) ? response.data.length : 0, 'accounts');
-        showNotification(`Loaded ${(Array.isArray(response.data) ? response.data.length : 0)} Google Workspace accounts`, 'success');
-      } else {
-        console.warn(' Invalid response format:', response.data);
-        setAccounts([]);
-        showNotification('No accounts found. Please add Google Workspace service accounts first.', 'info');
       }
     } catch (error: any) {
-      console.error(' Failed to load accounts:', error);
-      setAccounts([]);
-
-      let errorMessage = 'Failed to load accounts';
-      if (error.response?.status === 404) {
-        errorMessage = 'Backend API not found. Please check if the server is running.';
-      } else if (error.response?.status === 500) {
-        errorMessage = 'Backend server error. Please check server logs.';
-      } else if (error.code === 'ECONNREFUSED') {
-        errorMessage = 'Cannot connect to backend server. Please check if the server is running on port 8000.';
-      } else if (error.message) {
-        errorMessage = `Failed to load accounts: ${error.message}`;
-      }
-
-      showNotification(errorMessage, 'error');
+      showNotification('Failed to load accounts', 'error');
     }
   }, [showNotification]);
 
   const loadUsers = useCallback(async () => {
     try {
-      console.log(' Loading Google Workspace users...');
       const response = await apiClient.request('/api/v1/users/');
-      if (response.error) throw new Error(response.error);
-
       if (response.data && Array.isArray(response.data)) {
         setUsers(response.data);
-        console.log(' Users loaded successfully:', Array.isArray(response.data) ? response.data.length : 0, 'users');
-      } else {
-        console.warn(' Invalid response format:', response.data);
-        setUsers([]);
       }
     } catch (error: any) {
-      console.error(' Failed to load users:', error);
-      setUsers([]);
       showNotification('Failed to load users', 'error');
     }
   }, [showNotification]);
 
   const loadContactLists = useCallback(async () => {
     try {
-      console.log(' Loading contact lists...');
-      // Use the correct contacts/lists endpoint
       const response = await apiClient.request('/api/v1/contacts/lists');
-      if (response.error) throw new Error(response.error);
-
       if (response.data && Array.isArray(response.data)) {
         setContactLists(response.data);
-        console.log(' Contact lists loaded successfully:', Array.isArray(response.data) ? response.data.length : 0, 'lists');
-      } else {
-        console.warn(' Invalid response format:', response.data);
-        setContactLists([]);
       }
     } catch (error: any) {
-      console.error(' Failed to load contact lists:', error);
-      setContactLists([]);
-      let errorMessage = 'Failed to load contact lists';
-      if (error.response?.status === 404) {
-        errorMessage = 'Backend API not found. Please check if the server is running.';
-      } else if (error.response?.status === 500) {
-        errorMessage = 'Backend server error. Please check server logs.';
-      } else if (error.code === 'ECONNREFUSED') {
-        errorMessage = 'Cannot connect to backend server. Please check if the server is running on port 8000.';
-      } else if (error.message) {
-        errorMessage = `Failed to load contact lists: ${error.message}`;
-      }
-      showNotification(errorMessage, 'error');
+      showNotification('Failed to load contact lists', 'error');
     }
   }, [showNotification]);
 
   useEffect(() => {
-    const initializeData = async () => {
-      await Promise.all([loadAccounts(), loadUsers(), loadContactLists()]);
-    };
-    initializeData();
+    loadAccounts();
+    loadUsers();
+    loadContactLists();
   }, [loadAccounts, loadUsers, loadContactLists]);
 
-  // If the user advances to Distribution or Upload steps and lists are empty, refetch defensively
-  useEffect(() => {
-    const refetchIfEmpty = async () => {
-      if (step >= 2) {
-        if (accounts.length === 0) {
-          await loadAccounts();
-        }
-        if (users.length === 0) {
-          await loadUsers();
-        }
-        if (contactLists.length === 0) {
-          await loadContactLists();
-        }
-      }
-    };
-    refetchIfEmpty();
-  }, [step, accounts.length, users.length, contactLists.length, loadAccounts, loadUsers, loadContactLists]);
-
   const createDraft = async () => {
-    // When using custom headers, subject and from_name are optional (tags will be used)
-    const requiresSubject = !config.use_custom_headers;
-    const requiresFromName = !config.use_custom_headers;
-
-    if (!config.name.trim()) {
-      showNotification('Please enter a campaign label.', 'error');
+    if (!config.name.trim() || !config.subject.trim() || (!config.body_html.trim() && !config.body_template.trim())) {
+      showNotification('Please fill in all required fields.', 'error');
       return;
     }
-    if (requiresSubject && !config.subject.trim()) {
-      showNotification('Please enter a subject (or enable custom headers to use tags).', 'error');
-      return;
-    }
-    if (!config.body_html.trim()) {
-      showNotification('Please enter email body.', 'error');
-      return;
-    }
-
-    if (selectedUsers.length === 0) {
-      showNotification('Please select at least one user.', 'error');
-      return;
-    }
-
-    if (selectedContacts.length === 0) {
-      showNotification('Please select at least one contact list.', 'error');
+    if (selectedUsers.length === 0 || selectedContacts.length === 0) {
+      showNotification('Please select users and contact lists.', 'error');
       return;
     }
 
@@ -264,10 +187,6 @@ export default function NewDraftPage() {
         emails_per_user: emailsPerUser
       };
 
-      console.log('🚀 Creating draft with payload:', payload);
-      console.log('✅ use_custom_headers:', payload.use_custom_headers);
-      console.log('✅ custom_headers length:', payload.custom_headers?.length || 0);
-
       const response = await apiClient.request('/api/v1/drafts', {
         method: 'POST',
         body: JSON.stringify(payload)
@@ -275,595 +194,264 @@ export default function NewDraftPage() {
       if (response.error) throw new Error(response.error);
 
       showNotification('Campaign initialized! Now syncing dispatch queue...', 'success');
-
-      // Automatically upload the draft
       await uploadDrafts(response.data.id);
-
     } catch (error: any) {
-      console.error('Create draft error:', error);
-      showNotification(`Failed to create draft: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`, 'error');
+      showNotification(`Failed to create draft: ${error.message}`, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const uploadDrafts = async (draftId: number) => {
-    setLoading(true);
     try {
       const response = await apiClient.request(`/api/v1/drafts/${draftId}/upload`, { method: 'POST' });
       if (response.error) throw new Error(response.error);
-
-      showNotification(`Successfully synced ${response.data.total_drafts} dispatches across ${response.data.users_count} personas!`, 'success');
+      showNotification(`Successfully synced ${response.data.total_drafts} dispatches!`, 'success');
       router.push('/drafts');
     } catch (error: any) {
-      console.error('Upload drafts error:', error);
-      showNotification(`Failed to upload drafts: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`, 'error');
-    } finally {
-      setLoading(false);
+      showNotification(`Failed to sync drafts: ${error.message}`, 'error');
     }
   };
 
   const nextStep = () => {
-    if (step === 1) {
-      // When using custom headers, subject and from_name are optional (tags will be used)
-      const requiresSubject = !config.use_custom_headers;
-      const requiresFromName = !config.use_custom_headers;
-
-      if (!config.name.trim()) {
-        showNotification('Please enter a campaign label.', 'error');
-        return;
-      }
-      if (requiresSubject && !config.subject.trim()) {
-        showNotification('Please enter a subject (or enable custom headers to use tags).', 'error');
-        return;
-      }
-      if (!config.body_html.trim()) {
-        showNotification('Please enter email body.', 'error');
-        return;
-      }
-      setStep(2);
-    } else if (step === 2) {
-      if (selectedUsers.length === 0) {
-        showNotification('Please select at least one user.', 'error');
-        return;
-      }
-      if (selectedContacts.length === 0) {
-        showNotification('Please select at least one contact list.', 'error');
-        return;
-      }
-      setStep(3);
+    if (step === 1 && (!config.name.trim() || !config.subject.trim())) {
+      showNotification('Missing basic campaign info', 'error');
+      return;
     }
+    if (step === 2 && (selectedUsers.length === 0 || selectedContacts.length === 0)) {
+      showNotification('Select targets and personas first', 'error');
+      return;
+    }
+    if (step < 3) setStep(step + 1);
+    else createDraft();
   };
 
   const prevStep = () => {
-    if (step > 1) {
-      setStep(step - 1);
-    }
+    if (step > 1) setStep(step - 1);
   };
 
   return (
-    <div className="flex h-screen bg-background">
-      <div className="flex-1 overflow-auto p-8 space-y-6">
-        <h1 className="text-3xl font-bold">Design Outreach Campaign</h1>
+    <div className="flex h-screen bg-[#0a0a0c] text-white overflow-hidden relative">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(79,70,229,0.15),transparent_50%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_100%,rgba(139,92,246,0.1),transparent_50%)] pointer-events-none" />
 
-        {/* Progress Steps */}
-        <div className="flex items-center space-x-4 mb-6">
-          <div className={`flex items-center space-x-2 ${step >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
-              1
+      <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
+        <header className="h-16 border-b border-white/5 bg-black/20 backdrop-blur-xl flex items-center justify-between px-8 shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+              <Sparkles className="h-6 w-6 text-white" />
             </div>
-            <span>Campaign Creative</span>
-          </div>
-          <div className={`w-8 h-1 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-          <div className={`flex items-center space-x-2 ${step >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
-              2
+            <div>
+              <h1 className="text-xl font-bold tracking-tight">Creative Outreach <span className="text-white/40 font-medium">2026</span></h1>
+              <p className="text-[10px] text-white/40 uppercase tracking-widest font-semibold flex items-center gap-1">
+                <Zap className="h-2 w-2 text-indigo-400" /> Professional Grade
+              </p>
             </div>
-            <span>Sending Strategy</span>
           </div>
-          <div className={`w-8 h-1 ${step >= 3 ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
-          <div className={`flex items-center space-x-2 ${step >= 3 ? 'text-blue-600' : 'text-gray-400'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 3 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
-              3
-            </div>
-            <span>Dispatch Sync</span>
+
+          <div className="flex items-center gap-8">
+            {[
+              { id: 1, label: 'Creative', icon: Sparkles },
+              { id: 2, label: 'Target', icon: Target },
+              { id: 3, label: 'Launch', icon: Send }
+            ].map((s) => (
+              <div key={s.id} className={`flex items-center gap-3 transition-all duration-300 ${step === s.id ? 'opacity-100' : 'opacity-40'}`}>
+                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${step === s.id ? 'bg-indigo-600 border-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.4)]' : 'border-white/10'
+                  }`}>
+                  <s.icon className="h-4 w-4" />
+                </div>
+                <div className="hidden md:block text-left leading-tight">
+                  <p className="text-xs font-bold">{s.label}</p>
+                  <p className="text-[9px] text-white/40 mt-0.5">Step {s.id}</p>
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 space-y-6">
-            {/* Step 1: Draft Details */}
-            {step === 1 && (
-              <Card>
-                <CardHeader><CardTitle>Campaign Creative</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                  <Input
-                    placeholder="Internal Campaign Label (e.g. Q1 Sales Push)"
-                    value={config.name}
-                    onChange={e => setConfig(c => ({ ...c, name: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="Email Subject Line"
-                    value={config.subject}
-                    onChange={e => setConfig(c => ({ ...c, subject: e.target.value }))}
-                  />
-                  <Input
-                    placeholder="From Name (Brand Overlay)"
-                    value={config.from_name}
-                    onChange={e => setConfig(c => ({ ...c, from_name: e.target.value }))}
-                  />
-                  <Textarea
-                    placeholder="Email Body (HTML)"
-                    value={config.body_html}
-                    onChange={e => setConfig(c => ({ ...c, body_html: e.target.value }))}
-                    rows={8}
-                  />
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => router.push('/drafts')} className="text-white/60 hover:text-white">
+              Exit
+            </Button>
+            <Button size="sm" onClick={nextStep} disabled={loading} className="bg-white text-black hover:bg-white/90 font-bold px-6">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {step === 3 ? 'Finalize' : 'Continue'}
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </Button>
+          </div>
+        </header>
 
-                  {/* Auto-Insert Tracking Checkbox */}
-                  <div className="flex items-center gap-2 mt-2">
-                    <Checkbox
-                      id="auto-tracking"
-                      checked={autoInsertTracking}
-                      onCheckedChange={async (checked) => {
-                        setAutoInsertTracking(!!checked);
+        <main className="flex-1 overflow-auto bg-[#0a0a0c]">
+          <div className="max-w-[1600px] mx-auto p-8 h-full">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
+              <div className="lg:col-span-8 flex flex-col gap-6">
+                <Tabs defaultValue="creative" className="w-full">
+                  <TabsList className="bg-white/5 border border-white/10 p-1 rounded-lg self-start mb-6">
+                    <TabsTrigger value="creative" className="flex items-center gap-2 px-6">
+                      <Sparkles className="h-4 w-4" /> Creative Outreach
+                    </TabsTrigger>
+                    <TabsTrigger value="strategy" className="flex items-center gap-2 px-6">
+                      <Layout className="h-4 w-4" /> Sending Strategy
+                    </TabsTrigger>
+                  </TabsList>
 
-                        // If enabling tracking, insert tracking code into HTML
-                        if (checked) {
-                          try {
-                            // Fetch active tracking domain
-                            const response = await apiClient.request('/api/v1/tracking-domains/active');
+                  <TabsContent value="creative" className="mt-0 space-y-6">
+                    <Card className="bg-white/5 border-white/10 backdrop-blur-xl">
+                      <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-sm font-medium text-white/60">Campaign Foundation</CardTitle>
+                        <Badge variant="outline" className="text-[10px] uppercase font-bold text-indigo-400 border-indigo-500/30">Foundation</Badge>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label className="text-xs text-white/40">Campaign Label</Label>
+                            <Input
+                              placeholder="e.g. Q1 Sales Push"
+                              className="bg-black/40 border-white/10"
+                              value={config.name}
+                              onChange={e => setConfig(c => ({ ...c, name: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-white/40">From Name</Label>
+                            <Input
+                              placeholder="e.g. John from Antigravity"
+                              className="bg-black/40 border-white/10"
+                              value={config.from_name}
+                              onChange={e => setConfig(c => ({ ...c, from_name: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs text-white/40">Email Subject</Label>
+                          <Input
+                            placeholder="Subject line..."
+                            className="bg-black/40 border-white/10"
+                            value={config.subject}
+                            onChange={e => setConfig(c => ({ ...c, subject: e.target.value }))}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
 
-                            if (response.error || !response.data?.domain) {
-                              showNotification('No active tracking domain found. Please add one in Tracking Domains page.', 'error');
-                              setAutoInsertTracking(false);
-                              return;
-                            }
+                    <Card className="bg-white/5 border-white/10 backdrop-blur-xl overflow-hidden">
+                      <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-600" />
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-lg font-bold text-white">Email Content</CardTitle>
+                        <div className="flex bg-black/40 p-1 rounded-md border border-white/10">
+                          {['html', 'text'].map((f) => (
+                            <button key={f} onClick={() => setConfig(c => ({ ...c, body_format: f as any }))}
+                              className={`px-3 py-1 rounded text-xs font-bold transition-all ${config.body_format === f ? 'bg-white/10 text-white' : 'text-white/40'}`}>
+                              {f.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {config.body_format === 'html' ? (
+                          <Textarea
+                            placeholder="<html>...</html>"
+                            className="bg-[#050505] border-white/10 font-mono text-xs min-h-[300px]"
+                            value={config.body_html}
+                            onChange={e => setConfig(c => ({ ...c, body_html: e.target.value }))}
+                          />
+                        ) : (
+                          <Textarea
+                            placeholder="Plain text message..."
+                            className="bg-[#050505] border-white/10 text-sm min-h-[300px]"
+                            value={config.body_template}
+                            onChange={e => setConfig(c => ({ ...c, body_template: e.target.value }))}
+                          />
+                        )}
+                        <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg">
+                          <Checkbox id="auto-track" checked={autoInsertTracking} onCheckedChange={(v) => setAutoInsertTracking(!!v)} />
+                          <Label htmlFor="auto-track" className="text-sm font-medium">Auto-Optimize for Tracking</Label>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
 
-                            const trackingDomain = response.data.domain;
-                            let html = config.body_html;
+                  <TabsContent value="strategy" className="mt-0 space-y-6">
+                    <Card className="bg-white/5 border-white/10">
+                      <CardHeader><CardTitle>Distribution Strategy</CardTitle></CardHeader>
+                      <CardContent className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <Label className="text-xs text-white/40 uppercase font-bold">Sender Accounts</Label>
+                            <div className="bg-black/40 border border-white/10 rounded-lg p-2 max-h-[200px] overflow-auto">
+                              {accounts.map(acc => (
+                                <div key={acc.id} className="flex items-center gap-2 p-1">
+                                  <Checkbox checked={selectedAccounts.includes(acc.id)} onCheckedChange={(v) => {
+                                    setSelectedAccounts(p => v ? [...p, acc.id] : p.filter(i => i !== acc.id))
+                                  }} />
+                                  <span className="text-xs truncate">{acc.name || acc.client_email}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-xs text-white/40 uppercase font-bold">Contact Lists</Label>
+                            <div className="bg-black/40 border border-white/10 rounded-lg p-2 max-h-[200px] overflow-auto">
+                              {contactLists.map(list => (
+                                <div key={list.id} className="flex items-center gap-2 p-1">
+                                  <Checkbox checked={selectedContacts.includes(list.id)} onCheckedChange={(v) => {
+                                    setSelectedContacts(p => v ? [...p, list.id] : p.filter(i => i !== list.id))
+                                  }} />
+                                  <span className="text-xs truncate">{list.name} ({list.contacts?.length || 0})</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 pt-4 border-t border-white/5">
+                          <div className="space-y-1">
+                            <Label className="text-xs text-white/40">Emails Per User</Label>
+                            <Input type="number" className="w-24 bg-black/40 border-white/10" value={emailsPerUser} onChange={e => setEmailsPerUser(parseInt(e.target.value) || 1)} />
+                          </div>
+                          <div className="flex-1 bg-indigo-500/10 p-3 rounded-lg border border-indigo-500/20 text-center">
+                            <p className="text-[10px] text-indigo-400 font-bold uppercase">Total Queue forecast</p>
+                            <p className="text-xl font-black">{selectedUsers.length * emailsPerUser}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
+              </div>
 
-                            // Add tracking pixel before </body> or at end
-                            // Use the new standard PNG pixel
-                            const pixelUrl = `https://${trackingDomain}/t/pixel.png`;
-                            const pixelHtml = `<img src="${pixelUrl}" width="1" height="1" style="display:none" alt="">`;
-
-                            if (html.includes('</body>')) {
-                              html = html.replace('</body>', `${pixelHtml}\n</body>`);
-                            } else {
-                              html += `\n${pixelHtml}`;
-                            }
-
-                            // Convert all http/https links to tracking links
-                            html = html.replace(
-                              /href=["'](https?:\/\/[^"']+)["']/gi,
-                              (match, url) => `href="https://${trackingDomain}/t/r?url=${encodeURIComponent(url)}"`
-                            );
-
-                            setConfig(c => ({ ...c, body_html: html }));
-                            showNotification(`Tracking URLs inserted using domain: ${trackingDomain}`, 'success');
-                          } catch (error: any) {
-                            console.error('Failed to insert tracking:', error);
-                            showNotification('Failed to fetch tracking domain', 'error');
-                            setAutoInsertTracking(false);
-                          }
-                        }
-                      }}
-                    />
-                    <Label htmlFor="auto-tracking" className="text-sm">
-                      Auto-insert tracking pixel and links (recommended)
-                    </Label>
-                  </div>
-                  {autoInsertTracking && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Click to insert tracking pixel and convert links to use your tracking domain.
-                    </p>
-                  )}
-
-                  {/* Template Customization Section */}
-                  <div className="border-t pt-4 mt-4 space-y-4">
-                    <h4 className="font-semibold flex items-center gap-2">
-                      <Code className="h-5 w-5" />
-                      Advanced Template Options
-                    </h4>
-
-                    {/* Custom Headers Toggle - Auto-controlled but clickable */}
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="custom-headers"
-                        checked={config.use_custom_headers}
-                        onCheckedChange={(checked) => {
-                          // If checked manually, and empty, fill with default
-                          if (checked && !config.custom_headers) {
-                            setConfig(c => ({ ...c, use_custom_headers: true, custom_headers: DEFAULT_HEADERS }));
-                          } else {
-                            setConfig(c => ({ ...c, use_custom_headers: !!checked }));
-                          }
-                        }}
-                      />
-                      <Label htmlFor="custom-headers">Use Custom Email Headers (Auto-enables when you type)</Label>
+              <div className="lg:col-span-4 space-y-6">
+                <Card className="bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border-white/10 backdrop-blur-2xl">
+                  <CardHeader><CardTitle className="text-white flex items-center gap-2"><Target className="h-4 w-4" /> Target Reach</CardTitle></CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] text-white/40 uppercase font-bold">Unique Reach</p>
+                        <p className="text-3xl font-black">{totalReach.toLocaleString()}</p>
+                      </div>
+                      <Users className="h-8 w-8 text-indigo-400 opacity-50" />
                     </div>
+                    <Button className="w-full h-12 bg-white/5 hover:bg-white/10 border-white/10 font-bold" onClick={() => setShowTestDialog(true)}>
+                      <Zap className="h-4 w-4 mr-2 text-yellow-500" /> Send Test Dispatches
+                    </Button>
+                  </CardContent>
+                </Card>
 
-                    {/* Custom Headers Textarea - Always visible for better UX */}
-                    <Textarea
-                      placeholder={`Custom Email Headers (e.g. ${DEFAULT_HEADERS})`}
-                      value={config.custom_headers}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setConfig(c => ({
-                          ...c,
-                          custom_headers: val,
-                          // FORCE ENABLE if content exists, FORCE DISABLE if empty
-                          use_custom_headers: val.trim().length > 0
-                        }));
-                      }}
-                      rows={6}
-                      className="font-mono text-sm"
-                    />
-
-                    {/* Template Tags & Preview Buttons */}
-                    <div className="flex gap-2 flex-wrap">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setShowTagsGuide(!showTagsGuide)}
-                        className="flex items-center gap-2"
-                      >
-                        <Book className="h-4 w-4" />
-                        {showTagsGuide ? 'Hide' : 'Show'} Template Tags
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setPreviewData({
-                            headers: config.use_custom_headers ? config.custom_headers : '',
-                            body: config.body_html
-                          });
-                          setShowPreview(true);
-                        }}
-                        className="flex items-center gap-2"
-                      >
-                        <Eye className="h-4 w-4" />
-                        Preview Template
-                      </Button>
-                    </div>
-
-                    {/* Template Tags Guide */}
-                    {showTagsGuide && (
-                      <TemplateTagsGuide
-                        onInsertTag={(tag) => {
-                          // Insert tag at cursor position in body
-                          setConfig(c => ({ ...c, body_html: c.body_html + tag }));
-                        }}
-                      />
+                <Card className="bg-white/5 border-white/10 h-[500px] flex flex-col overflow-hidden">
+                  <CardHeader className="py-3 border-b border-white/5"><CardTitle className="text-xs text-white/40">Live Preview</CardTitle></CardHeader>
+                  <CardContent className="flex-1 overflow-auto p-4 text-xs text-white/60">
+                    {config.body_html || config.body_template ? (
+                      <div dangerouslySetInnerHTML={{ __html: config.body_html || config.body_template }} />
+                    ) : (
+                      <div className="h-full flex flex-col items-center justify-center opacity-20">
+                        <Sparkles className="h-10 w-10 mb-2" />
+                        <p className="font-bold text-[10px] uppercase tracking-widest">Design Creative</p>
+                      </div>
                     )}
-                  </div>
-
-                  {/* Deliverability & Warming Section */}
-                  <div className="border-t pt-4 mt-4 space-y-4">
-                    <h4 className="font-semibold flex items-center gap-2">
-                      <Settings className="h-5 w-5" />
-                      Deliverability & Warming
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label>Test Email (After X sends)</Label>
-                        <Input
-                          placeholder="monitor@example.com"
-                          value={config.test_after_email}
-                          onChange={e => setConfig(c => ({ ...c, test_after_email: e.target.value }))}
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">Send a copy here periodically.</p>
-                      </div>
-                      <div>
-                        <Label>Send every X emails</Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          placeholder="0 (Disabled)"
-                          value={config.test_after_count}
-                          onChange={e => setConfig(c => ({ ...c, test_after_count: parseInt(e.target.value) || 0 }))}
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">E.g. 50 = Send test email every 50 drafts.</p>
-                      </div>
-                    </div>
-
-                    {/* Manual Testing Section */}
-                    <div className="border-t pt-4 mt-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-semibold flex items-center gap-2">
-                          <Mail className="h-5 w-5 text-indigo-600" />
-                          Manual Test Email
-                        </h4>
-                        <Button
-                          type="button"
-                          onClick={() => setShowTestDialog(true)}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                        >
-                          <Send className="h-4 w-4 mr-2" />
-                          Send Test Email
-                        </Button>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Send a test email to verify formatting and deliverability before creating the draft.
-                        Choose a sender account and recipient in the popup.
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 2: Distribution Logic */}
-            {step === 2 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5" />
-                    Sending Strategy
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* User Selection */}
-                    <div>
-                      <Label className="text-base font-medium">Select Sending Personas</Label>
-                      <div className="max-h-64 overflow-y-auto border rounded-md p-3 mt-2">
-                        {users.filter(u => selectedAccounts.includes(u.service_account_id)).map(user => (
-                          <div key={user.id} className="flex items-center space-x-2 py-1">
-                            <Checkbox
-                              id={`user-${user.id}`}
-                              checked={selectedUsers.includes(user.id)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setSelectedUsers(prev => [...prev, user.id]);
-                                } else {
-                                  setSelectedUsers(prev => prev.filter(id => id !== user.id));
-                                }
-                              }}
-                            />
-                            <Label htmlFor={`user-${user.id}`} className="text-sm">
-                              {user.email}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {selectedUsers.length} users selected
-                      </p>
-                    </div>
-
-                    {/* Contact Lists Selection */}
-                    <div>
-                      <Label className="text-base font-medium">Target Subscriber Lists</Label>
-                      <div className="max-h-64 overflow-y-auto border rounded-md p-3 mt-2">
-                        {contactLists.map(list => (
-                          <div key={list.id} className="flex items-center space-x-2 py-1">
-                            <Checkbox
-                              id={`contact-${list.id}`}
-                              checked={selectedContacts.includes(list.id)}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  setSelectedContacts(prev => [...prev, list.id]);
-                                } else {
-                                  setSelectedContacts(prev => prev.filter(id => id !== list.id));
-                                }
-                              }}
-                            />
-                            <Label htmlFor={`contact-${list.id}`} className="text-sm">
-                              {list.name} ({list.contacts.length} contacts)
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {selectedContacts.length} contact lists selected
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Emails Per User */}
-                  <div>
-                    <Label htmlFor="emails-per-user">Dispatches Per Persona</Label>
-                    <Input
-                      id="emails-per-user"
-                      type="number"
-                      min="1"
-                      value={emailsPerUser}
-                      onChange={(e) => setEmailsPerUser(parseInt(e.target.value) || 1)}
-                      className="w-32"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Each user will receive {emailsPerUser} draft(s)
-                    </p>
-                    <p className="text-xs text-blue-600 mt-1">
-                      Total drafts: {selectedUsers.length * emailsPerUser}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 3: Upload Confirmation */}
-            {step === 3 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Upload className="h-5 w-5" />
-                    Dispatch Sync Confirmation
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h3 className="font-semibold text-blue-900 mb-2">Ready for Outreach Sync</h3>
-                    <div className="space-y-2 text-sm text-blue-800">
-                      <p><strong>Campaign:</strong> {config.name}</p>
-                      <p><strong>Subject:</strong> {config.subject}</p>
-                      <p><strong>Personas:</strong> {selectedUsers.length} active</p>
-                      <p><strong>Subscriber Lists:</strong> {selectedContacts.length} targeted</p>
-                      <p><strong>Dispatches per Persona:</strong> {emailsPerUser}</p>
-                      <p><strong>Total Queue Size:</strong> {selectedUsers.length * emailsPerUser}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => router.push('/drafts')}>
-                      Cancel
-                    </Button>
-                    <Button onClick={createDraft} disabled={loading} className="flex items-center gap-2">
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                      Finalize & Launch Campaign
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          <div className="space-y-6">
-            {/* Account Selection */}
-            <Card>
-              <CardHeader><CardTitle>Select Sending Domains</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {accounts.length === 0 ? (
-                    <div className="border rounded-md p-3 bg-muted/30 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span>No accounts found.</span>
-                        <Button size="sm" variant="outline" onClick={loadAccounts}>Reload</Button>
-                      </div>
-                      <p className="mt-1 text-muted-foreground">If this persists, ensure service accounts exist via the Accounts page.</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="max-h-48 overflow-auto border rounded-md p-2 space-y-2">
-                        {accounts.map(acc => (
-                          <div key={acc.id} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`acc-${acc.id}`}
-                              checked={selectedAccounts.includes(acc.id)}
-                              onCheckedChange={checked => {
-                                setSelectedAccounts(prev => checked ? [...prev, acc.id] : prev.filter(id => id !== acc.id))
-                              }}
-                            />
-                            <Label htmlFor={`acc-${acc.id}`} className="font-normal text-sm">
-                              {acc.name || acc.client_email}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs text-muted-foreground">{selectedAccounts.length} of {accounts.length} accounts selected.</p>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Users of Selected Accounts */}
-            <Card>
-              <CardHeader><CardTitle>Active Personas ({filteredSelectedUsers.length})</CardTitle></CardHeader>
-              <CardContent>
-                <Input placeholder="Search users..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
-                {accounts.length === 0 ? (
-                  <div className="text-sm text-muted-foreground mt-2">Select accounts first to view users.</div>
-                ) : (
-                  <div className="max-h-48 overflow-auto border rounded-md mt-2">
-                    {filteredSelectedUsers.map(u => (
-                      <div key={u.id} className="flex items-center space-x-2 py-1">
-                        <Checkbox
-                          id={`user-${u.id}`}
-                          checked={selectedUsers.includes(u.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedUsers(prev => [...prev, u.id]);
-                            } else {
-                              setSelectedUsers(prev => prev.filter(id => id !== u.id));
-                            }
-                          }}
-                        />
-                        <Label htmlFor={`user-${u.id}`} className="text-sm">
-                          {u.email}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  {selectedUsers.length} users selected
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Recipients Summary */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Outreach reach Summary</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Total Recipients:</span>
-                    <span className="font-medium">
-                      {contactLists
-                        .filter(list => selectedContacts.includes(list.id))
-                        .reduce((total, list) => total + list.contacts.length, 0)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Selected Users:</span>
-                    <span className="font-medium">{selectedUsers.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Emails per User:</span>
-                    <span className="font-medium">{emailsPerUser}</span>
-                  </div>
-                  <div className="flex justify-between border-t pt-2">
-                    <span className="font-medium">Total Drafts:</span>
-                    <span className="font-medium text-blue-600">
-                      {selectedUsers.length * emailsPerUser}
-                    </span>
-                  </div>
-                </div>
-                {contactLists.length === 0 && (
-                  <div className="mt-3 flex items-center justify-between border rounded-md p-2 bg-muted/30 text-sm">
-                    <span>No contact lists found.</span>
-                    <Button size="sm" variant="outline" onClick={loadContactLists}>Reload</Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Step Navigation */}
-            <div className="sticky top-0 space-y-2">
-              {step > 1 && (
-                <Button variant="outline" onClick={prevStep} className="w-full">
-                  Previous
-                </Button>
-              )}
-              {step < 3 && (
-                <Button onClick={nextStep} className="w-full flex items-center gap-2">
-                  Next
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              )}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </div>
-        </div>
-
-        {notifications.map(notification => (
-          <Alert key={notification.id} className={`fixed top-5 right-5 max-w-sm z-50 ${notification.type === 'success' ? 'border-green-200 bg-green-50 text-green-800' :
-            notification.type === 'error' ? 'border-red-200 bg-red-50 text-red-800' :
-              'border-blue-200 bg-blue-50 text-blue-800'
-            }`}>
-            <AlertDescription>{notification.message}</AlertDescription>
-          </Alert>
-        ))}
-
-        {/* Template Preview Modal */}
-        <TemplatePreview
-          isOpen={showPreview}
-          onClose={() => setShowPreview(false)}
-          headers={previewData.headers}
-          body={previewData.body}
-        />
+        </main>
       </div>
 
       <TestDraftDialog
@@ -873,6 +461,13 @@ export default function NewDraftPage() {
         availableUsers={users.filter(u => selectedAccounts.includes(u.service_account_id))}
         onClose={() => setShowTestDialog(false)}
       />
+
+      {notifications.map(n => (
+        <div key={n.id} className={`fixed bottom-8 right-8 px-4 py-3 rounded-lg border backdrop-blur-xl z-50 text-sm font-medium animate-in slide-in-from-right-10 ${n.type === 'success' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-200' : 'bg-red-500/10 border-red-500/30 text-red-200'
+          }`}>
+          {n.message}
+        </div>
+      ))}
     </div>
   );
 }
