@@ -220,6 +220,13 @@ def log_tracking_event_task(event_data):
                 logger.warning(f"❌ GeoIP Lookup exception for {ip_address}: {geo_err}")
 
         db.add(event)
+        try:
+            db.commit() # Commit event IMMEDIATELY so it counts
+            db.refresh(event)
+        except Exception as e:
+            logger.error(f"❌ Failed to commit tracking event: {e}")
+            db.rollback()
+            return
         
         # --- NEW: Real-time counter updates ---
         from app.models import Campaign, EmailLog, DraftCampaign
@@ -349,10 +356,14 @@ def log_tracking_event_task(event_data):
                         db.add(new_c)
                         logger.info(f"👥 Segments: {recipient_email} -> {target_list_name}")
         
-        db.commit()
-        logger.info(f"✅ TRACKING LOGGED: Event recorded in database for email_log_id={email_log_id or 'explicit'}")
+        try:
+            db.commit()
+            logger.info(f"✅ STATS UPDATED: Event recorded in database for email_log_id={email_log_id or 'explicit'}")
+        except Exception as e:
+            logger.error(f"❌ Failed to update stats/segments: {e}")
+            db.rollback() # Only rolls back stats updates
     except Exception as e:
-        logger.error(f"❌ Failed to log tracking event: {e}")
-        db.rollback()
+        logger.error(f"❌ Failed to log tracking event (outer): {e}")
+        # db.rollback() # Handled inside
     finally:
         db.close()
