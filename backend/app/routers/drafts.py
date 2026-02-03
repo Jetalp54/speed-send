@@ -41,7 +41,7 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         from_name=draft_data.from_name,
         body_html=draft_data.body_html,
         status=DraftStatus.CREATED,
-        emails_per_user=draft_data.emails_per_user,
+        emails_per_user=1,
         test_after_email=draft_data.test_after_email,
         test_after_count=draft_data.test_after_count,
         # Custom headers fields
@@ -103,7 +103,7 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         status=new_draft_campaign.status,
         recipients_count=0,
         users_count=len(draft_data.selected_user_ids),
-        emails_per_user=draft_data.emails_per_user,
+        emails_per_user=1,
         # Content fields
         body_html=new_draft_campaign.body_html,
         use_custom_headers=new_draft_campaign.use_custom_headers,
@@ -712,7 +712,7 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
              naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
              
              def add_campaign_param(match):
-                 return f'{match.group(1)}?d={campaign_id}{match.group(2)}'
+                 return f'{match.group(1)}?c={campaign_id}{match.group(2)}'
                  
              body_html = re.sub(naked_pixel_pattern, add_campaign_param, body_html)
              logger.info(f"✅ Hydrated frontend-inserted pixels with draft_campaign_id={campaign_id}")
@@ -728,8 +728,10 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                 
                 # Replace [tracking_pixel] placeholder
                 if '[tracking_pixel]' in body_html:
-                    pixel_params = f"?d={campaign_id}" if campaign_id else ""
-                    pixel_url = f"https://{tracking_domain.domain}/t/pixel.png{pixel_params}"
+                    pixel_params = f"?c={campaign_id}" if campaign_id else ""
+                    # Use settings.TRACKING_DOMAIN if available
+                    base_url = settings.TRACKING_DOMAIN.rstrip('/') if settings.TRACKING_DOMAIN else f"https://{tracking_domain.domain}"
+                    pixel_url = f"{base_url}/t/pixel.png{pixel_params}"
                     body_html = body_html.replace('[tracking_pixel]', pixel_url)
                     logger.info(f"✅ REPLACED [tracking_pixel] with {pixel_url}")
 
@@ -743,9 +745,11 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                         encoded_url = quote(original_url)
                         tracking_params = f"?url={encoded_url}"
                         if campaign_id:
-                            tracking_params += f"&d={campaign_id}"
+                            tracking_params += f"&c={campaign_id}"
                             
-                        tracking_url = f"https://{tracking_domain.domain}/t/redirect{tracking_params}"
+                        # Use settings.TRACKING_DOMAIN if available
+                        base_url = settings.TRACKING_DOMAIN.rstrip('/') if settings.TRACKING_DOMAIN else f"https://{tracking_domain.domain}"
+                        tracking_url = f"{base_url}/t/redirect{tracking_params}"
                         body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
 
                 # Replace [unsubscribe] placeholder

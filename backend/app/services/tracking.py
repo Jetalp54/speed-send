@@ -37,10 +37,7 @@ def inject_tracking_links(db, html_content: str, campaign_id: int, email_log_id:
                 logger.info(f"Using campaign tracking domain: {base_url}")
     
     # 1. Open Pixel
-    
-    # 1. Open Pixel
-    open_token = OpaqueSigner.sign(email_log_id)
-    pixel_html = f'<img src="{base_url}/t/o/{open_token}.png" width="1" height="1" style="display:none;" alt="" />'
+    pixel_html = f'<img src="{base_url}/t/pixel.png?c={campaign_id}" width="1" height="1" style="display:none;" alt="" />'
     
     if "</body>" in html_content:
         html_content = html_content.replace("</body>", f"{pixel_html}</body>")

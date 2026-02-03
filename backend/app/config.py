@@ -23,8 +23,8 @@ class Settings(BaseSettings):
     API_BASE_URL: str = "http://localhost:8000" # Base URL for tracking links (fallback)
     
     # External Tracking Server (IMPORTANT: Set this in production)
-    TRACKING_DOMAIN: Optional[str] = None  # e.g., "https://track.yourdomain.com"
-    USE_EXTERNAL_TRACKING: bool = False  # Set to True to use external tracking server
+    TRACKING_DOMAIN: Optional[str] = "https://track.equityflow.cv"  # e.g., "https://track.yourdomain.com"
+    USE_EXTERNAL_TRACKING: bool = True  # Set to True to use external tracking server
     
     # CORS
     BACKEND_CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:8000"]

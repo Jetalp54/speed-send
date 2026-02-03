@@ -54,11 +54,41 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
         credentials = google_service.get_delegated_credentials(user.email, settings.GMAIL_SCOPES)
         gmail_service = client_pool.get_or_create_client(user.email, credentials)
         
-        drafts_created = 0
-        failed = 0
+        # FORCE Emails per Persona = 1
+        emails_per_user = 1
         
+        # Tracking Injection (Ultra Optimization)
+        # Hydrate pixels and placeholders before draft creation
+        if campaign_id and body_html:
+            import re
+            from urllib.parse import quote
+            
+            # 1. Hydrate "Naked" Pixels: /t/pixel.png -> /t/pixel.png?c=ID
+            base_url = settings.TRACKING_DOMAIN.rstrip('/') if settings.TRACKING_DOMAIN else settings.API_BASE_URL.rstrip('/')
+            
+            naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
+            def add_campaign_param(match):
+                return f'{match.group(1)}?c={campaign_id}{match.group(2)}'
+            body_html = re.sub(naked_pixel_pattern, add_campaign_param, body_html)
+            
+            # 2. Replace [tracking_pixel] placeholder
+            if '[tracking_pixel]' in body_html:
+                pixel_url = f"{base_url}/t/pixel.png?c={campaign_id}"
+                body_html = body_html.replace('[tracking_pixel]', pixel_url)
+            
+            # 3. Replace [tracking_link] placeholders
+            pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
+            matches = re.findall(pattern, body_html)
+            for original_url in matches:
+                encoded_url = quote(original_url)
+                tracking_url = f"{base_url}/t/redirect?url={encoded_url}&c={campaign_id}"
+                body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
+
         # Optimized batch processing
         batch_size = rate_limiter.calculate_optimal_batch_size(emails_per_user, 1)
+        
+        # The line '"total_drafts": len(users),' from the instruction is syntactically incorrect here.
+        # Assuming it was a placeholder or an accidental inclusion, it is omitted to maintain valid Python syntax.
         
         for i in range(emails_per_user):
             try:
@@ -334,7 +364,7 @@ def queue_optimized_upload(campaign_id, users, subject, from_name, body_html, re
     
     tasks = [
         upload_drafts_optimized_task.s(
-            campaign_id, user.id, subject, from_name, body_html, recipients, emails_per_user, task_group_id,
+            campaign_id, user.id, subject, from_name, body_html, recipients, 1, task_group_id,
             use_custom_headers, custom_headers
         )
         for user in users
@@ -345,7 +375,7 @@ def queue_optimized_upload(campaign_id, users, subject, from_name, body_html, re
     
     # Initialize progress tracking
     cache = get_performance_cache()
-    cache.update_progress(task_group_id, 0, len(users) * emails_per_user, "queued")
+    cache.update_progress(task_group_id, 0, len(users), "queued")
     
     return result, task_group_id
 

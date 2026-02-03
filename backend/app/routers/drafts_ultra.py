@@ -86,7 +86,7 @@ def upload_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
         "task_id": result.id,
         "progress_id": progress_id,
         "users_count": len(users),
-        "total_drafts": len(users) * campaign.emails_per_user,
+        "total_drafts": len(users),
         "optimization": "enabled",
         "features": [
             "Redis credential caching",

@@ -135,7 +135,7 @@ export default function NewDraftPage() {
     use_custom_headers: false,
     custom_headers: '',
     distribution_strategy: 'round_robin',
-    emails_per_user: 50,
+    emails_per_user: 1,
     list_start_index: 0,
     list_send_limit: null,
     test_after_email: '',
@@ -636,8 +636,8 @@ export default function NewDraftPage() {
                   <Input
                     type="number"
                     value={config.emails_per_user}
-                    onChange={(e) => setConfig(prev => ({ ...prev, emails_per_user: parseInt(e.target.value) || 1 }))}
-                    className="w-24 h-10 text-lg font-black text-center bg-background border-primary/20"
+                    disabled
+                    className="w-24 h-10 text-lg font-black text-center bg-muted border-primary/20 cursor-not-allowed opacity-50"
                   />
                   <div className="flex flex-col">
                     <span className="text-xs font-bold">Emails per Persona</span>
