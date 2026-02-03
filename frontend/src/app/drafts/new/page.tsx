@@ -1,473 +1,574 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { serviceAccountsApi, usersApi, dataListsApi, contactsApi, API_URL, apiClient } from '@/lib/api';
+import {
+  Layout,
+  Trash2,
+  Plus,
+  Send,
+  Search,
+  Target,
+  Zap,
+  Mail,
+  User,
+  ArrowRight,
+  Sparkles,
+  Eye,
+  Code,
+  MessageSquare,
+  Save,
+  LineChart,
+  ChevronRight,
+  HelpCircle
+} from 'lucide-react';
+import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import {
-  Upload,
-  Users,
-  Mail,
-  Settings,
-  Loader2,
-  Save,
-  ArrowRight,
-  Eye,
-  Send,
-  Book,
-  Code,
-  Sparkles,
-  Layout,
-  Target,
-  Zap
-} from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TemplateTagsGuide } from '@/components/drafts/TemplateTagsGuide';
-import { TemplatePreview } from '@/components/drafts/TemplatePreview';
+import { toast } from '@/components/ui/toast';
 import { TestDraftDialog } from '@/components/drafts/TestDraftDialog';
-
-interface Account {
-  id: number;
-  name: string;
-  client_email: string;
-  domain: string;
-  status: string;
-  total_users: number;
-}
+import { TemplatePreview } from '@/components/drafts/TemplatePreview';
 
 interface User {
   id: number;
   email: string;
-  name: string;
-  is_active: boolean;
-  service_account_id: number;
+}
+
+interface Account {
+  id: number;
+  email: string;
 }
 
 interface ContactList {
   id: number;
   name: string;
-  contacts: Array<{ email: string }>;
+  description: string;
+  contact_count: number;
 }
 
 interface DraftConfig {
   name: string;
   subject: string;
   body_html: string;
-  from_name: string;
-  use_custom_headers: boolean;
-  custom_headers: string;
   body_format: 'html' | 'text';
   body_template: string;
-  test_after_email: string;
-  test_after_count: number;
+  from_name: string;
+  selected_account_ids: number[];
+  selected_user_ids: number[];
+  selected_list_ids: number[];
+  use_custom_headers: boolean;
+  custom_headers: string;
+  distribution_strategy: 'round_robin' | 'even_split';
+  emails_per_user: number;
 }
+
+const TEMPLATE_TAGS = [
+  { tag: '[smtp]', label: 'Sender Email', group: 'System' },
+  { tag: '[from]', label: 'Friendly From', group: 'System' },
+  { tag: '[subject]', label: 'Subject Line', group: 'System' },
+  { tag: '[to]', label: 'Recipient Email', group: 'System' },
+  { tag: '[rndn_5]', label: 'Random Digits (5)', group: 'Random' },
+  { tag: '[rnda_8]', label: 'Random Alphanumeric (8)', group: 'Random' },
+  { tag: '[rndlu_10]', label: 'Random Letters (10)', group: 'Random' },
+];
 
 export default function NewDraftPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [contactLists, setContactLists] = useState<ContactList[]>([]);
-  const [selectedAccounts, setSelectedAccounts] = useState<number[]>([]);
-  const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
-  const [selectedContacts, setSelectedContacts] = useState<number[]>([]);
-  const [emailsPerUser, setEmailsPerUser] = useState<number>(1);
-  const [userSearch, setUserSearch] = useState('');
-  const [step, setStep] = useState(1);
-  const [notifications, setNotifications] = useState<Array<{ id: string, message: string, type: 'success' | 'error' | 'info' }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  const totalReach = useMemo(() => {
-    const selectedLists = contactLists.filter(l => selectedContacts.includes(l.id));
-    const allEmails = new Set<string>();
-    selectedLists.forEach(l => {
-      if (l.contacts) {
-        l.contacts.forEach(c => allEmails.add(c.email));
-      }
-    });
-    return allEmails.size;
-  }, [contactLists, selectedContacts]);
+  // UI State
+  const [activeTab, setActiveTab] = useState('creative');
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [tagGuideOpen, setTagGuideOpen] = useState(false);
 
-  const [autoInsertTracking, setAutoInsertTracking] = useState(true);
   const [config, setConfig] = useState<DraftConfig>({
-    name: '',
+    name: `Campaign ${new Date().toLocaleDateString()}`,
     subject: '',
     body_html: '',
-    from_name: '',
-    use_custom_headers: false,
-    custom_headers: '',
     body_format: 'html',
     body_template: '',
-    test_after_email: '',
-    test_after_count: 0
+    from_name: '',
+    selected_account_ids: [],
+    selected_user_ids: [],
+    selected_list_ids: [],
+    use_custom_headers: false,
+    custom_headers: '',
+    distribution_strategy: 'round_robin',
+    emails_per_user: 1
   });
 
-  const DEFAULT_HEADERS = `MIME-version: 1.0\nContent-type: text/html\nTo: [to]\nfrom: [from] <[smtp]>\nSubject: [subject]\nDate: [date]\nMessage-ID: [Message-ID]`;
-  const [showTagsGuide, setShowTagsGuide] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showTestDialog, setShowTestDialog] = useState(false);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [accountsRes, contactListsRes] = await Promise.all([
+          apiClient.request('/api/v1/accounts'),
+          apiClient.request('/api/v1/contacts/lists')
+        ]);
 
-  const filteredSelectedUsers = useMemo(() => {
-    const q = userSearch.trim().toLowerCase();
-    const base = users.filter(u => selectedAccounts.includes(u.service_account_id));
-    if (!q) return base;
-    return base.filter(u => u.email.toLowerCase().includes(q));
-  }, [users, selectedAccounts, userSearch]);
-
-  const showNotification = useCallback((message: string, type: 'success' | 'error' | 'info') => {
-    const id = Date.now().toString();
-    setNotifications(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 5000);
+        setAccounts(accountsRes.data || []);
+        setContactLists(contactListsRes.data || []);
+      } catch (error) {
+        console.error('Failed to fetch initial data:', error);
+        toast({ title: 'Error', message: 'Failed to load accounts or lists', type: 'error' });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
-  const loadAccounts = useCallback(async () => {
-    try {
-      const response = await apiClient.request('/api/v1/accounts/');
-      if (response.data && Array.isArray(response.data)) {
-        setAccounts(response.data);
-      }
-    } catch (error: any) {
-      showNotification('Failed to load accounts', 'error');
-    }
-  }, [showNotification]);
-
-  const loadUsers = useCallback(async () => {
-    try {
-      const response = await apiClient.request('/api/v1/users/');
-      if (response.data && Array.isArray(response.data)) {
-        setUsers(response.data);
-      }
-    } catch (error: any) {
-      showNotification('Failed to load users', 'error');
-    }
-  }, [showNotification]);
-
-  const loadContactLists = useCallback(async () => {
-    try {
-      const response = await apiClient.request('/api/v1/contacts/lists');
-      if (response.data && Array.isArray(response.data)) {
-        setContactLists(response.data);
-      }
-    } catch (error: any) {
-      showNotification('Failed to load contact lists', 'error');
-    }
-  }, [showNotification]);
-
   useEffect(() => {
-    loadAccounts();
-    loadUsers();
-    loadContactLists();
-  }, [loadAccounts, loadUsers, loadContactLists]);
-
-  const createDraft = async () => {
-    if (!config.name.trim() || !config.subject.trim() || (!config.body_html.trim() && !config.body_template.trim())) {
-      showNotification('Please fill in all required fields.', 'error');
-      return;
-    }
-    if (selectedUsers.length === 0 || selectedContacts.length === 0) {
-      showNotification('Please select users and contact lists.', 'error');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const payload = {
-        ...config,
-        selected_account_ids: selectedAccounts,
-        selected_user_ids: selectedUsers,
-        selected_contact_list_ids: selectedContacts,
-        emails_per_user: emailsPerUser
+    if (config.selected_account_ids.length > 0) {
+      const fetchUsers = async () => {
+        try {
+          const responses = await Promise.all(
+            config.selected_account_ids.map(id =>
+              apiClient.request(`/api/v1/accounts/${id}/users`)
+            )
+          );
+          const allUsers = responses.flatMap(res => res.data || []);
+          setUsers(allUsers);
+        } catch (error) {
+          console.error('Failed to fetch users:', error);
+        }
       };
+      fetchUsers();
+    } else {
+      setUsers([]);
+    }
+  }, [config.selected_account_ids]);
 
+  const totalReach = useMemo(() => {
+    return contactLists
+      .filter(list => config.selected_list_ids.includes(list.id))
+      .reduce((sum, list) => sum + (list.contact_count || 0), 0);
+  }, [contactLists, config.selected_list_ids]);
+
+  const handleCreate = async () => {
+    if (!config.name || !config.subject || config.selected_user_ids.length === 0 || config.selected_list_ids.length === 0) {
+      toast({ title: 'Missing Info', message: 'Please fill in all mandatory fields.', type: 'error' });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
       const response = await apiClient.request('/api/v1/drafts', {
         method: 'POST',
-        body: JSON.stringify(payload)
+        body: JSON.stringify(config)
       });
       if (response.error) throw new Error(response.error);
-
-      showNotification('Campaign initialized! Now syncing dispatch queue...', 'success');
-      await uploadDrafts(response.data.id);
-    } catch (error: any) {
-      showNotification(`Failed to create draft: ${error.message}`, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const uploadDrafts = async (draftId: number) => {
-    try {
-      const response = await apiClient.request(`/api/v1/drafts/${draftId}/upload`, { method: 'POST' });
-      if (response.error) throw new Error(response.error);
-      showNotification(`Successfully synced ${response.data.total_drafts} dispatches!`, 'success');
+      toast({ title: 'Success', message: 'Campaign draft successfully initialized.', type: 'success' });
       router.push('/drafts');
     } catch (error: any) {
-      showNotification(`Failed to sync drafts: ${error.message}`, 'error');
+      toast({ title: 'Error', message: error.message || 'Failed to create campaign', type: 'error' });
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const nextStep = () => {
-    if (step === 1 && (!config.name.trim() || !config.subject.trim())) {
-      showNotification('Missing basic campaign info', 'error');
-      return;
-    }
-    if (step === 2 && (selectedUsers.length === 0 || selectedContacts.length === 0)) {
-      showNotification('Select targets and personas first', 'error');
-      return;
-    }
-    if (step < 3) setStep(step + 1);
-    else createDraft();
+  const insertTag = (tag: string) => {
+    const target = config.body_format === 'html' ? 'body_html' : 'body_template';
+    setConfig(prev => ({
+      ...prev,
+      [target]: prev[target as keyof DraftConfig] + tag
+    }));
   };
 
-  const prevStep = () => {
-    if (step > 1) setStep(step - 1);
-  };
+  if (loading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-12 w-12 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <p className="text-sm font-medium text-muted-foreground animate-pulse">Initializing Workspace...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-screen bg-[#0a0a0c] text-white overflow-hidden relative">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(79,70,229,0.15),transparent_50%)] pointer-events-none" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_0%_100%,rgba(139,92,246,0.1),transparent_50%)] pointer-events-none" />
-
-      <div className="flex-1 flex flex-col relative z-10 overflow-hidden">
-        <header className="h-16 border-b border-white/5 bg-black/20 backdrop-blur-xl flex items-center justify-between px-8 shrink-0">
+    <div className="flex flex-col min-h-screen bg-background">
+      {/* Action Bar */}
+      <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Sparkles className="h-6 w-6 text-white" />
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Zap className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight">Creative Outreach <span className="text-white/40 font-medium">2026</span></h1>
-              <p className="text-[10px] text-white/40 uppercase tracking-widest font-semibold flex items-center gap-1">
-                <Zap className="h-2 w-2 text-indigo-400" /> Professional Grade
+              <Input
+                value={config.name}
+                onChange={(e) => setConfig(prev => ({ ...prev, name: e.target.value }))}
+                className="h-8 border-none bg-transparent p-0 text-lg font-bold focus-visible:ring-0 w-64"
+              />
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                High Velocity Outreach <ChevronRight className="h-3 w-3" /> New Campaign
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-8">
-            {[
-              { id: 1, label: 'Creative', icon: Sparkles },
-              { id: 2, label: 'Target', icon: Target },
-              { id: 3, label: 'Launch', icon: Send }
-            ].map((s) => (
-              <div key={s.id} className={`flex items-center gap-3 transition-all duration-300 ${step === s.id ? 'opacity-100' : 'opacity-40'}`}>
-                <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${step === s.id ? 'bg-indigo-600 border-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.4)]' : 'border-white/10'
-                  }`}>
-                  <s.icon className="h-4 w-4" />
-                </div>
-                <div className="hidden md:block text-left leading-tight">
-                  <p className="text-xs font-bold">{s.label}</p>
-                  <p className="text-[9px] text-white/40 mt-0.5">Step {s.id}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/drafts')} className="text-white/60 hover:text-white">
-              Exit
+            <Button variant="outline" onClick={() => setPreviewOpen(true)} className="gap-2">
+              <Eye className="h-4 w-4" /> Full Preview
             </Button>
-            <Button size="sm" onClick={nextStep} disabled={loading} className="bg-white text-black hover:bg-white/90 font-bold px-6">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {step === 3 ? 'Finalize' : 'Continue'}
-              <ArrowRight className="h-4 w-4 ml-2" />
+            <Button variant="outline" onClick={() => setTestDialogOpen(true)} className="gap-2">
+              <Send className="h-4 w-4" /> Send Test
+            </Button>
+            <Button onClick={handleCreate} disabled={submitting} className="gap-2 px-6">
+              {submitting ? <Layout className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Initialize Campaign
             </Button>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className="flex-1 overflow-auto bg-[#0a0a0c]">
-          <div className="max-w-[1600px] mx-auto p-8 h-full">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
-              <div className="lg:col-span-8 flex flex-col gap-6">
-                <Tabs defaultValue="creative" className="w-full">
-                  <TabsList className="bg-white/5 border border-white/10 p-1 rounded-lg self-start mb-6">
-                    <TabsTrigger value="creative" className="flex items-center gap-2 px-6">
-                      <Sparkles className="h-4 w-4" /> Creative Outreach
-                    </TabsTrigger>
-                    <TabsTrigger value="strategy" className="flex items-center gap-2 px-6">
-                      <Layout className="h-4 w-4" /> Sending Strategy
-                    </TabsTrigger>
-                  </TabsList>
+      <main className="flex-1 overflow-hidden p-6 container grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-                  <TabsContent value="creative" className="mt-0 space-y-6">
-                    <Card className="bg-white/5 border-white/10 backdrop-blur-xl">
-                      <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-sm font-medium text-white/60">Campaign Foundation</CardTitle>
-                        <Badge variant="outline" className="text-[10px] uppercase font-bold text-indigo-400 border-indigo-500/30">Foundation</Badge>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label className="text-xs text-white/40">Campaign Label</Label>
-                            <Input
-                              placeholder="e.g. Q1 Sales Push"
-                              className="bg-black/40 border-white/10"
-                              value={config.name}
-                              onChange={e => setConfig(c => ({ ...c, name: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs text-white/40">From Name</Label>
-                            <Input
-                              placeholder="e.g. John from Antigravity"
-                              className="bg-black/40 border-white/10"
-                              value={config.from_name}
-                              onChange={e => setConfig(c => ({ ...c, from_name: e.target.value }))}
-                            />
-                          </div>
-                        </div>
+        {/* Left & Center: Configuration Workspace */}
+        <div className="lg:col-span-8 flex flex-col gap-6 h-[calc(100vh-10rem)] overflow-y-auto pr-2 custom-scrollbar">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="creative" className="gap-2">
+                <Sparkles className="h-4 w-4" /> Creative Outreach
+              </TabsTrigger>
+              <TabsTrigger value="strategy" className="gap-2">
+                <Target className="h-4 w-4" /> Distribution Strategy
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="creative" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle>Creative Content</CardTitle>
+                      <CardDescription>Design your message and define identity parameters.</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2 bg-muted p-1 rounded-md">
+                      <Button
+                        variant={config.body_format === 'html' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setConfig(prev => ({ ...prev, body_format: 'html' }))}
+                        className="h-8"
+                      >HTML</Button>
+                      <Button
+                        variant={config.body_format === 'text' ? 'secondary' : 'ghost'}
+                        size="sm"
+                        onClick={() => setConfig(prev => ({ ...prev, body_format: 'text' }))}
+                        className="h-8"
+                      >Text</Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Identity Name</Label>
+                      <Input
+                        placeholder="e.g. John from SpeedSend"
+                        value={config.from_name}
+                        onChange={(e) => setConfig(prev => ({ ...prev, from_name: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Subject Line</Label>
+                      <Input
+                        placeholder="Enter headline..."
+                        value={config.subject}
+                        onChange={(e) => setConfig(prev => ({ ...prev, subject: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 relative">
+                    <div className="flex justify-between items-center mb-1">
+                      <Label>Message Body ({config.body_format.toUpperCase()})</Label>
+                      <Button variant="ghost" size="sm" onClick={() => setTagGuideOpen(!tagGuideOpen)} className="h-7 gap-1 text-xs">
+                        <HelpCircle className="h-3 w-3" /> Tag Guide
+                      </Button>
+                    </div>
+                    <Textarea
+                      placeholder={config.body_format === 'html' ? "Enter HTML source..." : "Enter plain text message..."}
+                      className="min-h-[300px] font-mono text-sm leading-relaxed"
+                      value={config.body_format === 'html' ? config.body_html : config.body_template}
+                      onChange={(e) => setConfig(prev => ({
+                        ...prev,
+                        [config.body_format === 'html' ? 'body_html' : 'body_template']: e.target.value
+                      }))}
+                    />
+                    {tagGuideOpen && (
+                      <div className="absolute top-10 right-4 w-64 bg-card border rounded-lg shadow-xl p-4 z-10 animate-in slide-in-from-right-2">
+                        <h4 className="text-xs font-bold uppercase mb-3 flex items-center gap-2">
+                          <Code className="h-3 w-3" /> Tag Insertion
+                        </h4>
                         <div className="space-y-2">
-                          <Label className="text-xs text-white/40">Email Subject</Label>
-                          <Input
-                            placeholder="Subject line..."
-                            className="bg-black/40 border-white/10"
-                            value={config.subject}
-                            onChange={e => setConfig(c => ({ ...c, subject: e.target.value }))}
-                          />
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-white/5 border-white/10 backdrop-blur-xl overflow-hidden">
-                      <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-600" />
-                      <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle className="text-lg font-bold text-white">Email Content</CardTitle>
-                        <div className="flex bg-black/40 p-1 rounded-md border border-white/10">
-                          {['html', 'text'].map((f) => (
-                            <button key={f} onClick={() => setConfig(c => ({ ...c, body_format: f as any }))}
-                              className={`px-3 py-1 rounded text-xs font-bold transition-all ${config.body_format === f ? 'bg-white/10 text-white' : 'text-white/40'}`}>
-                              {f.toUpperCase()}
+                          {TEMPLATE_TAGS.map(tag => (
+                            <button
+                              key={tag.tag}
+                              onClick={() => insertTag(tag.tag)}
+                              className="flex justify-between items-center w-full p-2 text-[11px] rounded hover:bg-muted transition-colors"
+                            >
+                              <code className="text-primary font-bold">{tag.tag}</code>
+                              <span className="text-muted-foreground">{tag.label}</span>
                             </button>
                           ))}
                         </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {config.body_format === 'html' ? (
-                          <Textarea
-                            placeholder="<html>...</html>"
-                            className="bg-[#050505] border-white/10 font-mono text-xs min-h-[300px]"
-                            value={config.body_html}
-                            onChange={e => setConfig(c => ({ ...c, body_html: e.target.value }))}
-                          />
-                        ) : (
-                          <Textarea
-                            placeholder="Plain text message..."
-                            className="bg-[#050505] border-white/10 text-sm min-h-[300px]"
-                            value={config.body_template}
-                            onChange={e => setConfig(c => ({ ...c, body_template: e.target.value }))}
-                          />
-                        )}
-                        <div className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-lg">
-                          <Checkbox id="auto-track" checked={autoInsertTracking} onCheckedChange={(v) => setAutoInsertTracking(!!v)} />
-                          <Label htmlFor="auto-track" className="text-sm font-medium">Auto-Optimize for Tracking</Label>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value="strategy" className="mt-0 space-y-6">
-                    <Card className="bg-white/5 border-white/10">
-                      <CardHeader><CardTitle>Distribution Strategy</CardTitle></CardHeader>
-                      <CardContent className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-2">
-                            <Label className="text-xs text-white/40 uppercase font-bold">Sender Accounts</Label>
-                            <div className="bg-black/40 border border-white/10 rounded-lg p-2 max-h-[200px] overflow-auto">
-                              {accounts.map(acc => (
-                                <div key={acc.id} className="flex items-center gap-2 p-1">
-                                  <Checkbox checked={selectedAccounts.includes(acc.id)} onCheckedChange={(v) => {
-                                    setSelectedAccounts(p => v ? [...p, acc.id] : p.filter(i => i !== acc.id))
-                                  }} />
-                                  <span className="text-xs truncate">{acc.name || acc.client_email}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-xs text-white/40 uppercase font-bold">Contact Lists</Label>
-                            <div className="bg-black/40 border border-white/10 rounded-lg p-2 max-h-[200px] overflow-auto">
-                              {contactLists.map(list => (
-                                <div key={list.id} className="flex items-center gap-2 p-1">
-                                  <Checkbox checked={selectedContacts.includes(list.id)} onCheckedChange={(v) => {
-                                    setSelectedContacts(p => v ? [...p, list.id] : p.filter(i => i !== list.id))
-                                  }} />
-                                  <span className="text-xs truncate">{list.name} ({list.contacts?.length || 0})</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 pt-4 border-t border-white/5">
-                          <div className="space-y-1">
-                            <Label className="text-xs text-white/40">Emails Per User</Label>
-                            <Input type="number" className="w-24 bg-black/40 border-white/10" value={emailsPerUser} onChange={e => setEmailsPerUser(parseInt(e.target.value) || 1)} />
-                          </div>
-                          <div className="flex-1 bg-indigo-500/10 p-3 rounded-lg border border-indigo-500/20 text-center">
-                            <p className="text-[10px] text-indigo-400 font-bold uppercase">Total Queue forecast</p>
-                            <p className="text-xl font-black">{selectedUsers.length * emailsPerUser}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                </Tabs>
-              </div>
-
-              <div className="lg:col-span-4 space-y-6">
-                <Card className="bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border-white/10 backdrop-blur-2xl">
-                  <CardHeader><CardTitle className="text-white flex items-center gap-2"><Target className="h-4 w-4" /> Target Reach</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[10px] text-white/40 uppercase font-bold">Unique Reach</p>
-                        <p className="text-3xl font-black">{totalReach.toLocaleString()}</p>
-                      </div>
-                      <Users className="h-8 w-8 text-indigo-400 opacity-50" />
-                    </div>
-                    <Button className="w-full h-12 bg-white/5 hover:bg-white/10 border-white/10 font-bold" onClick={() => setShowTestDialog(true)}>
-                      <Zap className="h-4 w-4 mr-2 text-yellow-500" /> Send Test Dispatches
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-white/5 border-white/10 h-[500px] flex flex-col overflow-hidden">
-                  <CardHeader className="py-3 border-b border-white/5"><CardTitle className="text-xs text-white/40">Live Preview</CardTitle></CardHeader>
-                  <CardContent className="flex-1 overflow-auto p-4 text-xs text-white/60">
-                    {config.body_html || config.body_template ? (
-                      <div dangerouslySetInnerHTML={{ __html: config.body_html || config.body_template }} />
-                    ) : (
-                      <div className="h-full flex flex-col items-center justify-center opacity-20">
-                        <Sparkles className="h-10 w-10 mb-2" />
-                        <p className="font-bold text-[10px] uppercase tracking-widest">Design Creative</p>
                       </div>
                     )}
+                  </div>
+
+                  <div className="pt-4 border-t space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Header Personalization</Label>
+                        <p className="text-[11px] text-muted-foreground">Inject custom MIME headers for better deliverability.</p>
+                      </div>
+                      <Switch
+                        checked={config.use_custom_headers}
+                        onCheckedChange={(val) => setConfig(prev => ({ ...prev, use_custom_headers: val }))}
+                      />
+                    </div>
+                    {config.use_custom_headers && (
+                      <Textarea
+                        placeholder="X-Custom-Header: value..."
+                        className="h-24 font-mono text-xs"
+                        value={config.custom_headers}
+                        onChange={(e) => setConfig(prev => ({ ...prev, custom_headers: e.target.value }))}
+                      />
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="strategy" className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <User className="h-4 w-4" /> Workspace Source
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Service Accounts</Label>
+                      <div className="grid grid-cols-1 gap-2 border rounded-lg p-3 h-40 overflow-y-auto bg-muted/50">
+                        {accounts.map(account => (
+                          <div key={account.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`acc-${account.id}`}
+                              checked={config.selected_account_ids.includes(account.id)}
+                              onCheckedChange={(checked) => {
+                                setConfig(prev => ({
+                                  ...prev,
+                                  selected_account_ids: checked
+                                    ? [...prev.selected_account_ids, account.id]
+                                    : prev.selected_account_ids.filter(id => id !== account.id)
+                                }));
+                              }}
+                            />
+                            <label htmlFor={`acc-${account.id}`} className="text-xs font-medium cursor-pointer">{account.email}</label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Persona Assignment ({users.length} available)</Label>
+                      <div className="grid grid-cols-1 gap-2 border rounded-lg p-3 h-48 overflow-y-auto bg-muted/50">
+                        {users.map(user => (
+                          <div key={user.id} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`usr-${user.id}`}
+                              checked={config.selected_user_ids.includes(user.id)}
+                              onCheckedChange={(checked) => {
+                                setConfig(prev => ({
+                                  ...prev,
+                                  selected_user_ids: checked
+                                    ? [...prev.selected_user_ids, user.id]
+                                    : prev.selected_user_ids.filter(id => id !== user.id)
+                                }));
+                              }}
+                            />
+                            <label htmlFor={`usr-${user.id}`} className="text-xs font-medium cursor-pointer">{user.email}</label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Mail className="h-4 w-4" /> Destination Segments
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 gap-2 border rounded-lg p-3 h-96 overflow-y-auto bg-muted/50">
+                      {contactLists.map(list => (
+                        <div key={list.id} className="flex items-center justify-between p-2 rounded hover:bg-background transition-colors group">
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`list-${list.id}`}
+                              checked={config.selected_list_ids.includes(list.id)}
+                              onCheckedChange={(checked) => {
+                                setConfig(prev => ({
+                                  ...prev,
+                                  selected_list_ids: checked
+                                    ? [...prev.selected_list_ids, list.id]
+                                    : prev.selected_list_ids.filter(id => id !== list.id)
+                                }));
+                              }}
+                            />
+                            <label htmlFor={`list-${list.id}`} className="text-xs font-medium cursor-pointer">{list.name}</label>
+                          </div>
+                          <Badge variant="secondary" className="text-[10px] opacity-60 group-hover:opacity-100">{list.contact_count} rec.</Badge>
+                        </div>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
               </div>
-            </div>
-          </div>
-        </main>
-      </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Load Balancing</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <Label>Delivery Mode</Label>
+                    <Select
+                      value={config.distribution_strategy}
+                      onValueChange={(val: any) => setConfig(prev => ({ ...prev, distribution_strategy: val }))}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="round_robin">Round Robin (Cyclic)</SelectItem>
+                        <SelectItem value="even_split">Even Split (Linear)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">Round robin ensures uniform saturation across active personas.</p>
+                  </div>
+                  <div className="space-y-4">
+                    <Label>Burst Density (Daily Cap)</Label>
+                    <Input
+                      type="number"
+                      value={config.emails_per_user}
+                      onChange={(e) => setConfig(prev => ({ ...prev, emails_per_user: parseInt(e.target.value) }))}
+                    />
+                    <p className="text-[11px] text-muted-foreground">Global dispatch limit per assigned persona per session.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        {/* Right Pane: Real-Time Insights & Mini Preview */}
+        <div className="lg:col-span-4 space-y-6">
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-bold uppercase tracking-wider text-primary">Intelligence Hub</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-3xl font-black tracking-tighter text-foreground">{totalReach.toLocaleString()}</p>
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Total Net Reach</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-bold text-foreground">{(config.selected_user_ids.length * config.emails_per_user).toLocaleString()}</p>
+                  <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">Cap Forecast</p>
+                </div>
+              </div>
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-500"
+                  style={{ width: `${Math.min(100, (config.selected_user_ids.length * config.emails_per_user / (totalReach || 1)) * 100)}%` }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="h-[calc(100vh-22rem)] flex flex-col overflow-hidden">
+            <CardHeader className="border-b bg-muted/30">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-sm">Live Context Render</CardTitle>
+                <Badge variant="outline" className="text-[10px] uppercase font-bold text-primary border-primary/20">Simulation</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="flex-1 p-0 overflow-auto bg-muted/10">
+              <div className="p-6">
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground w-12">From:</span>
+                    <span className="text-xs font-medium">{config.from_name || 'System Identity'} &lt;sender@workspace.com&gt;</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase text-muted-foreground w-12">Sub:</span>
+                    <span className="text-xs font-bold">{config.subject || 'Simulation Subject...'}</span>
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-background p-4 min-h-[400px] shadow-sm">
+                  {config.body_format === 'html' ? (
+                    <div
+                      className="text-sm prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: config.body_html || '<div class="opacity-20 flex flex-col items-center justify-center pt-24"><Sparkles class="h-12 w-12 mb-4" /><p class="font-bold uppercase tracking-widest text-[10px]">Awaiting Creative...</p></div>' }}
+                    />
+                  ) : (
+                    <pre className="text-sm font-mono whitespace-pre-wrap text-foreground/80">
+                      {config.body_template || 'Awaiting plain text creative input...'}
+                    </pre>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </main>
 
       <TestDraftDialog
-        open={showTestDialog}
+        open={testDialogOpen}
+        onClose={() => setTestDialogOpen(false)}
         draftId={null}
         config={config}
-        availableUsers={users.filter(u => selectedAccounts.includes(u.service_account_id))}
-        onClose={() => setShowTestDialog(false)}
+        availableUsers={users}
       />
 
-      {notifications.map(n => (
-        <div key={n.id} className={`fixed bottom-8 right-8 px-4 py-3 rounded-lg border backdrop-blur-xl z-50 text-sm font-medium animate-in slide-in-from-right-10 ${n.type === 'success' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-200' : 'bg-red-500/10 border-red-500/30 text-red-200'
-          }`}>
-          {n.message}
-        </div>
-      ))}
+      <TemplatePreview
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        headers={config.custom_headers}
+        body={config.body_format === 'html' ? config.body_html : config.body_template}
+        isLoading={false}
+      />
+
+      <style jsx global>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: hsl(var(--muted-foreground) / 0.2);
+                    border-radius: 10px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: hsl(var(--muted-foreground) / 0.4);
+                }
+            `}</style>
     </div>
   );
 }

@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectItem } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Send, Mail, User, Sparkles, Zap, ShieldCheck } from "lucide-react";
 import { apiClient } from "@/lib/api";
@@ -18,6 +18,8 @@ import { apiClient } from "@/lib/api";
 interface DraftConfig {
     subject: string;
     body_html: string;
+    body_template?: string;
+    body_format: 'html' | 'text';
     from_name: string;
     use_custom_headers: boolean;
     custom_headers: string;
@@ -114,7 +116,7 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
                 sender_user_id: parseInt(senderUserId),
                 save_recipient: true,
                 subject: config?.subject,
-                body_html: config?.body_html,
+                body_template: config?.body_format === 'html' ? config?.body_html : config?.body_template,
                 from_name: config?.from_name,
                 use_custom_headers: config?.use_custom_headers,
                 custom_headers: config?.custom_headers
@@ -151,50 +153,48 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
 
     return (
         <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
-            <DialogContent className="sm:max-w-[500px] bg-[#0a0a0c] border-white/10 text-white backdrop-blur-3xl p-0 overflow-hidden">
-                <div className="h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-
-                <div className="p-8 space-y-6">
-                    <DialogHeader>
-                        <div className="flex items-center gap-3 mb-2">
-                            <div className="h-8 w-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-                                <Zap className="h-5 w-5 text-indigo-400" />
-                            </div>
-                            <DialogTitle className="text-xl font-bold tracking-tight">Dispatch Validation</DialogTitle>
+            <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Zap className="h-5 w-5 text-primary" />
                         </div>
-                        <DialogDescription className="text-white/40 text-xs">
-                            Transmit a high-fidelity test dispatch via the Gmail 2026 API to verify creative rendering and inbox placement.
-                        </DialogDescription>
-                    </DialogHeader>
+                        <DialogTitle className="text-xl font-bold tracking-tight">Dispatch Validation</DialogTitle>
+                    </div>
+                    <DialogDescription>
+                        Transmit a high-fidelity test dispatch via the Gmail API to verify creative rendering and inbox placement.
+                    </DialogDescription>
+                </DialogHeader>
 
+                <div className="py-4 space-y-6">
                     {error && (
-                        <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-xs border border-red-500/20 flex items-center gap-2">
-                            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                        <div className="bg-destructive/10 text-destructive p-3 rounded-lg text-xs border border-destructive/20 flex items-center gap-2">
+                            <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
                             {error}
                         </div>
                     )}
 
                     {success && (
-                        <div className="bg-indigo-500/10 text-indigo-100 p-3 rounded-lg text-xs border border-indigo-500/30 flex items-center gap-2">
-                            <ShieldCheck className="h-4 w-4 text-indigo-400" />
+                        <div className="bg-primary/10 text-primary p-3 rounded-lg text-xs border border-primary/20 flex items-center gap-2">
+                            <ShieldCheck className="h-4 w-4" />
                             {success}
                         </div>
                     )}
 
                     {loading ? (
                         <div className="flex flex-col items-center justify-center py-12 gap-3">
-                            <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
-                            <p className="text-[10px] uppercase font-bold tracking-widest text-white/20">Syncing Workspace...</p>
+                            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                            <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Syncing Workspace...</p>
                         </div>
                     ) : (
                         <div className="space-y-6">
                             <div className="space-y-3">
-                                <Label className="text-[10px] uppercase font-black text-white/40 tracking-widest">Test Recipient</Label>
+                                <Label className="text-[10px] uppercase font-black text-muted-foreground tracking-widest">Test Recipient</Label>
                                 <div className="relative group">
-                                    <Mail className="absolute left-3 top-3 h-4 w-4 text-white/20 group-focus-within:text-indigo-400 transition-colors" />
+                                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                                     <Input
                                         placeholder="target@delivery.com"
-                                        className="bg-black/40 border-white/10 h-11 pl-10 focus:border-indigo-500/50 transition-all placeholder:text-white/10"
+                                        className="h-11 pl-10"
                                         value={recipient}
                                         onChange={(e) => setRecipient(e.target.value)}
                                     />
@@ -205,8 +205,8 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
                                         {draft.saved_test_recipients.map((email) => (
                                             <Badge
                                                 key={email}
-                                                variant="outline"
-                                                className="cursor-pointer bg-white/5 border-white/10 hover:bg-white/10 transition-colors text-[10px] font-medium py-1"
+                                                variant="secondary"
+                                                className="cursor-pointer hover:bg-muted-foreground/10 transition-colors text-[10px] font-medium py-1"
                                                 onClick={() => setRecipient(email)}
                                             >
                                                 {email}
@@ -217,8 +217,8 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
                             </div>
 
                             <div className="space-y-3">
-                                <Label className="text-[10px] uppercase font-black text-white/40 tracking-widest">Sender Authority</Label>
-                                <Select value={senderUserId} onValueChange={setSenderUserId} className="bg-black/40 border-white/10 h-11 text-white">
+                                <Label className="text-[10px] uppercase font-black text-muted-foreground tracking-widest">Sender Authority</Label>
+                                <Select value={senderUserId} onValueChange={setSenderUserId}>
                                     <option value="" disabled>Select Sender Persona</option>
                                     {draft?.selected_users?.map((user) => (
                                         <SelectItem key={user.id} value={user.id.toString()}>
@@ -228,28 +228,28 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
                                 </Select>
                             </div>
 
-                            <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                            <div className="p-4 rounded-xl border bg-muted/30 space-y-2">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-[10px] text-white/40 uppercase font-bold">Subject Line</span>
-                                    <Badge variant="outline" className="text-[9px] border-indigo-500/20 text-indigo-400">Live Header</Badge>
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold">Subject Line</span>
+                                    <Badge variant="outline" className="text-[9px] border-primary/20 text-primary uppercase">Live Header</Badge>
                                 </div>
                                 <p className="text-sm font-medium truncate opacity-80">{config?.subject || draft?.subject}</p>
                             </div>
                         </div>
                     )}
-
-                    <DialogFooter className="pt-4 border-t border-white/5">
-                        <Button variant="ghost" onClick={onClose} className="text-white/40 hover:text-white hover:bg-white/5">Cancel</Button>
-                        <Button
-                            onClick={handleSend}
-                            disabled={loading || sending || !recipient || !senderUserId}
-                            className="bg-white text-black hover:bg-white/90 font-bold px-8 shadow-xl shadow-white/5"
-                        >
-                            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                            {sending ? 'Dispatching...' : 'Fire Test Dispatch'}
-                        </Button>
-                    </DialogFooter>
                 </div>
+
+                <DialogFooter className="pt-4 border-t">
+                    <Button variant="ghost" onClick={onClose} className="text-muted-foreground">Cancel</Button>
+                    <Button
+                        onClick={handleSend}
+                        disabled={loading || sending || !recipient || !senderUserId}
+                        className="font-bold px-8"
+                    >
+                        {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        {sending ? 'Dispatching...' : 'Fire Test Dispatch'}
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
