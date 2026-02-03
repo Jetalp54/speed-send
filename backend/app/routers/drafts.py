@@ -719,18 +719,22 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
 
         # 1. Tracking Replacement (Safe Block)
         try:
-            tracking_domain = db.query(models.TrackingDomain).filter(
-                models.TrackingDomain.status == 'active'
-            ).first()
+            # Use settings.TRACKING_DOMAIN if available, else look for active domain in DB
+            base_url = settings.TRACKING_DOMAIN.rstrip('/') if settings.TRACKING_DOMAIN else None
             
-            if tracking_domain:
-                logger.info(f"🔍 Found active tracking domain: {tracking_domain.domain}")
+            if not base_url:
+                tracking_domain = db.query(models.TrackingDomain).filter(
+                    models.TrackingDomain.status == 'active'
+                ).first()
+                if tracking_domain:
+                    base_url = f"https://{tracking_domain.domain}"
+            
+            if base_url:
+                logger.info(f"🔍 Using tracking base URL: {base_url}")
                 
                 # Replace [tracking_pixel] placeholder
                 if '[tracking_pixel]' in body_html:
                     pixel_params = f"?c={campaign_id}" if campaign_id else ""
-                    # Use settings.TRACKING_DOMAIN if available
-                    base_url = settings.TRACKING_DOMAIN.rstrip('/') if settings.TRACKING_DOMAIN else f"https://{tracking_domain.domain}"
                     pixel_url = f"{base_url}/t/pixel.png{pixel_params}"
                     body_html = body_html.replace('[tracking_pixel]', pixel_url)
                     logger.info(f"✅ REPLACED [tracking_pixel] with {pixel_url}")
@@ -747,23 +751,21 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                         if campaign_id:
                             tracking_params += f"&c={campaign_id}"
                             
-                        # Use settings.TRACKING_DOMAIN if available
-                        base_url = settings.TRACKING_DOMAIN.rstrip('/') if settings.TRACKING_DOMAIN else f"https://{tracking_domain.domain}"
                         tracking_url = f"{base_url}/t/redirect{tracking_params}"
                         body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
 
                 # Replace [unsubscribe] placeholder
                 if '[unsubscribe]' in body_html:
-                    pixel_params = f"?d={campaign_id}" if campaign_id else ""
+                    unsub_params = f"?c={campaign_id}" if campaign_id else ""
                     # If we have a single recipient, we can add it here for semi-tracking
                     if recipients and len(recipients) == 1:
-                        pixel_params += f"&r={quote(recipients[0])}"
+                        unsub_params += f"&r={quote(recipients[0])}"
                     
-                    unsub_url = f"https://{tracking_domain.domain}/t/u/link{pixel_params}"
+                    unsub_url = f"{base_url}/t/u/link{unsub_params}"
                     body_html = body_html.replace('[unsubscribe]', unsub_url)
                     logger.info(f"✅ REPLACED [unsubscribe] with {unsub_url}")
             else:
-                logger.warning("⚠️ NO ACTIVE TRACKING DOMAIN FOUND - Placeholders will NOT be replaced!")
+                logger.warning("⚠️ NO TRACKING DOMAIN CONFIGURED - Placeholders will NOT be replaced!")
         except Exception as e:
             logger.error(f"❌ Tracking replacement failed: {e}")
             # Continue execution - do not fail draft creation
