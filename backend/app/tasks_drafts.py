@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 @celery_app.task(bind=True, max_retries=2)
-def upload_drafts_for_user_task(self, campaign_id, user_id, subject, from_name, body_html, recipients, emails_per_user):
+def upload_drafts_for_user_task(self, campaign_id, user_id, subject, from_name, body_html, recipients, emails_per_user, recipient_metadata=None):
     """
     Celery task: Upload drafts for ONE user.
     This task runs in parallel with other user tasks (gevent allows 1000s of concurrent tasks).
@@ -29,13 +29,24 @@ def upload_drafts_for_user_task(self, campaign_id, user_id, subject, from_name, 
         
         for i in range(emails_per_user):
             try:
+                # Get contact_list_id for this recipient from metadata
+                contact_list_id = None
+                if recipient_metadata:
+                    # Taking the first recipient's list ID specifically if it's broad, 
+                    # but create_gmail_draft takes a list of recipients.
+                    # In this setup, recipients is a list (usually len=1 or 50).
+                    # We'll take the first one as representative.
+                    contact_list_id = recipient_metadata.get(recipients[0])
+
                 gmail_draft_id = create_gmail_draft(
                     user_id=user_id,
                     subject=subject,
                     from_name=from_name,
                     body_html=body_html,
                     recipients=recipients,
-                    db=db
+                    db=db,
+                    campaign_id=campaign_id,
+                    contact_list_id=contact_list_id
                 )
                 
                 draft = models.GmailDraft(
@@ -43,7 +54,8 @@ def upload_drafts_for_user_task(self, campaign_id, user_id, subject, from_name, 
                     user_id=user_id,
                     gmail_draft_id=gmail_draft_id,
                     status='created',
-                    recipients=recipients
+                    recipients=recipients,
+                    contact_list_id=contact_list_id
                 )
                 db.add(draft)
                 drafts_created += 1
@@ -117,6 +129,25 @@ def launch_drafts_for_user_task(self, user_id, draft_ids):
                     draft.status = 'sent'
                     draft.sent_at = datetime.utcnow()
                     draft.gmail_message_id = response.get('id')
+                    
+                    # --- NEW: Create EmailLog for Unified Tracking ---
+                    # This allows opens/clicks to be linked to a specific recipient
+                    try:
+                        for recipient_email in (draft.recipients or []):
+                            email_log = models.EmailLog(
+                                campaign_id=None, # It's a Draft Campaign
+                                service_account_id=service_account.id,
+                                sender_email=user.email,
+                                recipient_email=recipient_email,
+                                message_id=response.get('id'),
+                                status=models.EmailStatus.SENT,
+                                sent_at=datetime.utcnow(),
+                                contact_list_id=draft.contact_list_id
+                            )
+                            db.add(email_log)
+                        db.flush()
+                    except Exception as log_err:
+                        logger.error(f"Failed to create EmailLog for draft {draft_id}: {log_err}")
                 sent_count += 1
         
         # Process drafts in batches of 100 (Gmail API limit)
@@ -154,14 +185,14 @@ def launch_drafts_for_user_task(self, user_id, draft_ids):
         db.close()
 
 
-def queue_upload_tasks(campaign_id, users, subject, from_name, body_html, recipients, emails_per_user):
+def queue_upload_tasks(campaign_id, users, subject, from_name, body_html, recipients, emails_per_user, recipient_metadata=None):
     """
     Queue upload tasks for ALL users in parallel.
     Returns: Celery GroupResult for monitoring progress.
     """
     tasks = [
         upload_drafts_for_user_task.s(
-            campaign_id, user.id, subject, from_name, body_html, recipients, emails_per_user
+            campaign_id, user.id, subject, from_name, body_html, recipients, emails_per_user, recipient_metadata
         )
         for user in users
     ]

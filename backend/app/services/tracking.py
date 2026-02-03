@@ -201,6 +201,19 @@ def log_tracking_event_task(event_data):
                             geo_city = geo_data.get("city")
                             event.geo_city = geo_city
                             logger.info(f"✅ Resolved Location: {geo_city}, {event.geo_country}")
+                            
+                            # --- NEW: Update Contact Metadata ---
+                            if email_log_id:
+                                log = db.query(models.EmailLog).filter(models.EmailLog.id == email_log_id).first()
+                                if log:
+                                    contact = db.query(models.Contact).filter(models.Contact.email == log.recipient_email).first()
+                                    if contact:
+                                        contact.geo_country = event.geo_country
+                                        contact.geo_city = event.geo_city
+                                        # ISP Detection (Heuristic or API if available)
+                                        # For now, we take from geo_data if provided by IP-API
+                                        contact.isp = geo_data.get("isp", "Unknown")
+                                        logger.info(f"📍 Updated Contact {contact.email} with Geo/ISP")
                         else:
                             logger.warning(f"⚠️ GeoIP API returned status {geo_data.get('status')}: {geo_data.get('message')}")
                     else:
@@ -254,12 +267,62 @@ def log_tracking_event_task(event_data):
         # 3. Update Email Log Stats (if linked)
         email_log_id = event_data.get('email_log_id')
         if email_log_id:
+            from app.models import EmailLog, ContactList, Contact
             log = db.query(EmailLog).filter(EmailLog.id == email_log_id).first()
-            if log and hasattr(log, 'opens_count'):
+            if log:
+                # Update counters on the log itself
                 if event_data['event_type'] == 'open':
                     log.opens_count = (log.opens_count or 0) + 1
                 elif event_data['event_type'] == 'click':
                     log.clicks_count = (log.clicks_count or 0) + 1
+                elif event_data['event_type'] == 'unsubscribe':
+                    if hasattr(log, 'unsubscribes_count'):
+                        log.unsubscribes_count = (log.unsubscribes_count or 0) + 1
+                
+                # --- AUTO-SEGMENTATION LOGIC ---
+                source_list_id = getattr(log, 'contact_list_id', None)
+                if not source_list_id and d_id:
+                    draft_campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == d_id).first()
+                    if draft_campaign and draft_campaign.recipient_metadata:
+                        source_list_id = draft_campaign.recipient_metadata.get(log.recipient_email)
+                
+                if source_list_id:
+                    source_list = db.query(ContactList).filter(ContactList.id == source_list_id).first()
+                    if source_list:
+                        target_list_name = f"{source_list.name}_{event_data['event_type']}"
+                        
+                        target_list = db.query(ContactList).filter(ContactList.name == target_list_name).first()
+                        if not target_list:
+                            target_list = ContactList(
+                                name=target_list_name,
+                                description=f"Auto-segment: {event_data['event_type']} from {source_list.name}"
+                            )
+                            db.add(target_list)
+                            db.flush()
+                        
+                        existing = db.query(Contact).filter(
+                            Contact.contact_list_id == target_list.id,
+                            Contact.email == log.recipient_email
+                        ).first()
+                        
+                        if not existing:
+                            orig = db.query(Contact).filter(
+                                Contact.contact_list_id == source_list_id,
+                                Contact.email == log.recipient_email
+                            ).first()
+                            
+                            new_c = Contact(
+                                contact_list_id=target_list.id,
+                                email=log.recipient_email,
+                                first_name=orig.first_name if orig else None,
+                                last_name=orig.last_name if orig else None,
+                                isp=orig.isp if orig else None,
+                                geo_country=orig.geo_country if orig else None,
+                                geo_city=orig.geo_city if orig else None,
+                                tags=orig.tags if orig else []
+                            )
+                            db.add(new_c)
+                            logger.info(f"👥 Segments: {log.recipient_email} -> {target_list_name}")
         
         db.commit()
         logger.info(f"✅ TRACKING LOGGED: Event recorded in database for email_log_id={email_log_id or 'explicit'}")

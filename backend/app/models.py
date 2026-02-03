@@ -140,6 +140,12 @@ class Contact(Base):
     first_name = Column(String(255))
     last_name = Column(String(255))
     
+    # Metadata & Tags
+    isp = Column(String(255))
+    geo_country = Column(String(2))
+    geo_city = Column(String(100))
+    tags = Column(JSON, default=list)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -223,9 +229,13 @@ class Campaign(Base):
     # Celery task tracking
     celery_task_id = Column(String(255), index=True)
     
+    # Tracking Domain
+    tracking_domain_id = Column(Integer, ForeignKey("tracking_domains.id"))
+    
     # Relationships
     sender_accounts = relationship("ServiceAccount", secondary="campaign_senders", back_populates="campaigns")
     email_logs = relationship("EmailLog", back_populates="campaign", cascade="all, delete-orphan")
+    tracking_domain = relationship("TrackingDomain")
     
     # Optimistic locking
     version = Column(Integer, default=1, nullable=False)
@@ -262,9 +272,13 @@ class EmailLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     sent_at = Column(DateTime(timezone=True))
     
+    # Attribution
+    contact_list_id = Column(Integer, ForeignKey("contact_lists.id"))
+    
     # Tracking
     opens_count = Column(Integer, default=0)
     clicks_count = Column(Integer, default=0)
+    unsubscribes_count = Column(Integer, default=0)
     
     # Relationships
     campaign = relationship("Campaign", back_populates="email_logs")
@@ -298,7 +312,13 @@ class DraftCampaign(Base):
     
     # Saved test recipients (Auto-suggestion)
     # Stored as JSON list of strings: ["a@b.com", "c@d.com"]
-    saved_test_recipients = Column(JSON, default=list)
+    # saved_test_recipients = Column(JSON, default=list) # Removed redundant JSON to avoid conflict if any, but wait
+    
+    # Metadata for attribution
+    # Map of recipient -> source_contact_list_id
+    recipient_metadata = Column(JSON, default=dict) 
+    
+    # saved_test_recipients = Column(JSON, default=list)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -356,6 +376,7 @@ class GmailDraft(Base):
     gmail_message_id = Column(String(255))
     status = Column(String(50), default='created')
     recipients = Column(JSON)
+    contact_list_id = Column(Integer, ForeignKey("contact_lists.id"))
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

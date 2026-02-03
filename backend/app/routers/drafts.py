@@ -614,7 +614,7 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
         }
     )
 
-def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: str, recipients: List[str], db: Session, use_custom_headers: bool = False, custom_headers: str = None, campaign_id: int = None) -> str:
+def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: str, recipients: List[str], db: Session, use_custom_headers: bool = False, custom_headers: str = None, campaign_id: int = None, contact_list_id: int = None) -> str:
     """
     Create a Gmail draft using Google Cloud API.
     """
@@ -679,6 +679,17 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                             
                         tracking_url = f"https://{tracking_domain.domain}/t/redirect{tracking_params}"
                         body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
+
+                # Replace [unsubscribe] placeholder
+                if '[unsubscribe]' in body_html:
+                    pixel_params = f"?d={campaign_id}" if campaign_id else ""
+                    # If we have a single recipient, we can add it here for semi-tracking
+                    if recipients and len(recipients) == 1:
+                        pixel_params += f"&r={quote(recipients[0])}"
+                    
+                    unsub_url = f"https://{tracking_domain.domain}/t/u/link{pixel_params}"
+                    body_html = body_html.replace('[unsubscribe]', unsub_url)
+                    logger.info(f"✅ REPLACED [unsubscribe] with {unsub_url}")
             else:
                 logger.warning("⚠️ NO ACTIVE TRACKING DOMAIN FOUND - Placeholders will NOT be replaced!")
         except Exception as e:

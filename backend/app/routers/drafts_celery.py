@@ -43,12 +43,21 @@ def upload_drafts_async(draft_id: int, db: Session = Depends(get_db)):
             if contact_list:
                 contact_assoc.contact_list.contacts = contact_list.contacts
     
-    # Get all recipients
+    # Get all recipients and build metadata
     all_recipients = []
+    recipient_metadata = {} # email -> contact_list_id
     for contact_assoc in campaign.selected_contacts:
         if contact_assoc.contact_list:
             contacts = contact_assoc.contact_list.contacts or []
-            all_recipients.extend([contact.email for contact in contacts])
+            list_id = contact_assoc.contact_list.id
+            for contact in contacts:
+                all_recipients.append(contact.email)
+                recipient_metadata[contact.email] = list_id
+    
+    # Save metadata to campaign
+    campaign.recipient_metadata = recipient_metadata
+    db.add(campaign)
+    db.commit()
     
     if not all_recipients:
         raise HTTPException(status_code=400, detail="No recipients found")

@@ -354,6 +354,8 @@ export default function ContactsPage() {
                       </TableHead>
                       <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Segment / Identity</TableHead>
                       <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Population</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Geography</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">ISP / Carrier</TableHead>
                       <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Est. Health</TableHead>
                       <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Last Activity</TableHead>
                       <TableHead className="text-right pr-4 text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Actions</TableHead>
@@ -377,7 +379,12 @@ export default function ContactsPage() {
                               <Users className="h-5 w-5" />
                             </div>
                             <div>
-                              <p className="font-black text-slate-900 leading-none mb-1 group-hover:text-indigo-600 transition-colors uppercase text-[13px] tracking-tight">{list.name}</p>
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="font-black text-slate-900 leading-none group-hover:text-indigo-600 transition-colors uppercase text-[13px] tracking-tight">{list.name}</p>
+                                {list.name.includes('_open') && <Badge className="bg-emerald-50 text-emerald-600 hover:bg-emerald-50 border-none text-[8px] font-black px-1.5 py-0 h-4 uppercase">OPENERS</Badge>}
+                                {list.name.includes('_click') && <Badge className="bg-indigo-50 text-indigo-600 hover:bg-indigo-50 border-none text-[8px] font-black px-1.5 py-0 h-4 uppercase">CLICKERS</Badge>}
+                                {list.name.includes('_unsub') && <Badge className="bg-rose-50 text-rose-600 hover:bg-rose-50 border-none text-[8px] font-black px-1.5 py-0 h-4 uppercase">UNSUB</Badge>}
+                              </div>
                               <p className="text-[10px] font-bold text-slate-400 line-clamp-1 italic">{list.description || 'Staging Environment List'}</p>
                             </div>
                           </div>
@@ -386,6 +393,17 @@ export default function ContactsPage() {
                           <Badge variant="secondary" className="bg-slate-100 text-slate-700 border-none font-bold text-[10px] tabular-nums">
                             {list.contacts?.length || 0} LEADS
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-slate-700 uppercase">{list.contacts?.[0]?.geo_country || 'US'}</span>
+                            <span className="text-[9px] font-bold text-slate-400 truncate max-w-[80px]">{list.contacts?.[0]?.geo_city || 'Global'}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter truncate max-w-[100px]">
+                            {list.contacts?.[0]?.isp || 'Standard'}
+                          </span>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">

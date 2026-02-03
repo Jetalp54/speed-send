@@ -136,6 +136,35 @@ async def track_click(opaque_id: str, request: Request, db: Session = Depends(ge
 
 # --- EXPLICIT TRACKING ---
 
+@router.get("/t/u/{opaque_id}")
+async def track_unsubscribe(opaque_id: str, request: Request, db: Session = Depends(get_db)):
+    """
+    Unsubscribe Tracking.
+    """
+    logger.info(f"📡 TRACKING RECEIVED: Unsubscribe via Opaque ID {opaque_id}")
+    
+    email_log_id, _ = OpaqueSigner.unsign(opaque_id)
+    if not email_log_id:
+        return Response(content="Invalid unsubscribe link", status_code=400)
+
+    email_log = db.query(models.EmailLog).filter(models.EmailLog.id == email_log_id).first()
+    if email_log:
+        event_data = {
+            'event_type': 'unsubscribe',
+            'campaign_id': email_log.campaign_id,
+            'email_log_id': email_log_id,
+            'user_agent': request.headers.get('user-agent'),
+            'ip': get_client_ip(request)
+        }
+        log_tracking_event_task.delay(event_data)
+        logger.info(f"✅ TRACKING LOGGED: Unsubscribe for Campaign {email_log.campaign_id}")
+
+    # Standard "You have been unsubscribed" page or redirect
+    return Response(
+        content="<html><body><div style='text-align:center; padding: 50px;'><h1>Unsubscribed</h1><p>You have been successfully removed from our mailing list.</p></div></body></html>",
+        media_type="text/html"
+    )
+
 @router.get("/t/pixel.png")
 @router.head("/t/pixel.png")
 async def track_pixel_explicit(request: Request, c: int = None, d: int = None, r: str = None):
