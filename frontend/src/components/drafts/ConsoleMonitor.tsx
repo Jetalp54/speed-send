@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Terminal, Trash2, ChevronDown, ChevronUp, Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Terminal, Trash2, ChevronDown, ChevronUp, Activity, AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,7 @@ const ConsoleMonitor: React.FC = () => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [connected, setConnected] = useState(false);
     const [isMinimized, setIsMinimized] = useState(true);
+    const [filterId, setFilterId] = useState<string | null>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
     const [lastLogId, setLastLogId] = useState(0);
     const [errorCount, setErrorCount] = useState(0);
@@ -99,13 +100,22 @@ const ConsoleMonitor: React.FC = () => {
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Process Monitor</span>
                             </div>
 
-                            {logs.length > 0 && (
-                                <div className="flex items-center gap-2 border-l border-slate-800 pl-4">
-                                    <span className="text-[10px] font-bold text-slate-500">
-                                        Latest: <span className="text-slate-300">{logs[logs.length - 1].message.slice(0, 60)}...</span>
-                                    </span>
+                            <div className="flex items-center gap-2 border-l border-slate-800 pl-4">
+                                <div className="flex items-center gap-2 bg-slate-900/50 px-2 py-1 rounded border border-slate-800">
+                                    <Activity className="h-3 w-3 text-indigo-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Filter by Campaign ID..."
+                                        className="bg-transparent border-none text-[10px] font-black text-slate-300 focus:ring-0 w-32 outline-none p-0 placeholder:text-slate-600"
+                                        value={filterId || ''}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onChange={(e) => setFilterId(e.target.value || null)}
+                                    />
+                                    {filterId && (
+                                        <X className="h-3 w-3 text-slate-500 cursor-pointer hover:text-white" onClick={(e) => { e.stopPropagation(); setFilterId(null); }} />
+                                    )}
                                 </div>
-                            )}
+                            </div>
                         </div>
 
                         <div className="flex items-center gap-3">
@@ -130,23 +140,25 @@ const ConsoleMonitor: React.FC = () => {
 
                     <CardContent className="p-0 bg-black/40">
                         <div className="h-[350px] overflow-y-auto p-4 font-mono text-xs space-y-1.5 scrollbar-thin scrollbar-thumb-slate-700">
-                            {logs.length === 0 ? (
+                            {logs.filter(l => !filterId || l.message.includes(` ${filterId} `) || l.campaign_id?.toString() === filterId).length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-slate-600 gap-3 opacity-50">
                                     <Terminal className="h-8 w-8" />
-                                    <p className="font-bold tracking-widest uppercase text-[10px]">Awaiting system signals...</p>
+                                    <p className="font-bold tracking-widest uppercase text-[10px]">{filterId ? `No signals for ID: ${filterId}` : 'Awaiting system signals...'}</p>
                                 </div>
                             ) : (
-                                logs.map((log, i) => (
-                                    <div key={i} className="flex gap-4 group hover:bg-white/5 p-1 rounded transition-colors">
-                                        <span className="text-slate-600 w-20 shrink-0 tabular-nums">
-                                            {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                                        </span>
-                                        <span className={`${getColorClass(log.level)} break-all leading-relaxed`}>
-                                            <span className="font-black uppercase mr-2 opacity-50">[{log.level}]</span>
-                                            {log.message}
-                                        </span>
-                                    </div>
-                                ))
+                                logs
+                                    .filter(l => !filterId || l.message.includes(` ${filterId} `) || l.campaign_id?.toString() === filterId)
+                                    .map((log, i) => (
+                                        <div key={i} className="flex gap-4 group hover:bg-white/5 p-1 rounded transition-colors">
+                                            <span className="text-slate-600 w-20 shrink-0 tabular-nums">
+                                                {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                                            </span>
+                                            <span className={`${getColorClass(log.level)} break-all leading-relaxed`}>
+                                                <span className="font-black uppercase mr-2 opacity-50">[{log.level}]</span>
+                                                {log.message}
+                                            </span>
+                                        </div>
+                                    ))
                             )}
                             <div ref={bottomRef} />
                         </div>

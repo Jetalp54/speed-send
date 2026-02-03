@@ -355,73 +355,88 @@ const DraftsPage: React.FC = () => {
 
           {/* Quick Metrics Grid */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white overflow-hidden group hover:translate-y-[-2px] transition-all duration-300">
+            <Card className="border-none shadow-[0_8px_30px_rgba(0,0,0,0.04)] bg-white overflow-hidden group hover:translate-y-[-2px] transition-all duration-300 relative border-l-4 border-l-indigo-500">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                  <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 transition-transform group-hover:scale-110 duration-500">
                     <Activity className="h-5 w-5" />
                   </div>
-                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-none text-[10px] font-bold">LIVE</Badge>
-                </div>
-                <div className="text-2xl font-black text-slate-900">{summaryStats.activeDispatches}</div>
-                <p className="text-xs text-slate-400 font-medium mt-1">Active Dispatches</p>
-                <div className="h-1 w-full bg-slate-50 mt-4 rounded-full overflow-hidden">
-                  <div className="h-full bg-indigo-500 w-2/3 rounded-full" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white overflow-hidden group hover:translate-y-[-2px] transition-all duration-300">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
-                    <Target className="h-5 w-5" />
-                  </div>
-                  <div className="flex items-center gap-1 text-[10px] font-bold text-blue-600">
-                    <ArrowUpRight className="h-3 w-3" /> TOTAL
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-slate-900">{summaryStats.totalReach.toLocaleString()}</div>
-                <p className="text-xs text-slate-400 font-medium mt-1">Aggregated Reach</p>
-                <div className="h-1 w-full bg-slate-50 mt-4 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 w-1/2 rounded-full" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white overflow-hidden group hover:translate-y-[-2px] transition-all duration-300">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="p-2 rounded-lg bg-purple-50 text-purple-600">
-                    <Mail className="h-5 w-5" />
-                  </div>
-                  <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-none text-[10px] font-bold">STAGED</Badge>
-                </div>
-                <div className="text-2xl font-black text-slate-900">{summaryStats.totalReady.toLocaleString()}</div>
-                <p className="text-xs text-slate-400 font-medium mt-1">Dispatches Ready</p>
-                <div className="h-1 w-full bg-slate-50 mt-4 rounded-full overflow-hidden">
-                  <div className="h-full bg-purple-500 w-3/4 rounded-full" />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white overflow-hidden group hover:translate-y-[-2px] transition-all duration-300">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
-                    <TrendingUp className="h-5 w-5" />
-                  </div>
-                  <div className="text-[10px] font-bold text-emerald-600">DYNAMIC</div>
+                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-none text-[10px] font-black px-2 py-0.5 animate-pulse">LIVE SYSTEM</Badge>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <div className="text-2xl font-black text-slate-900">{summaryStats.successRate}%</div>
-                  <div className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5">
-                    <Activity className="h-3 w-3" /> OPEN RATE
+                  <div className="text-3xl font-black text-slate-900 tabular-nums tracking-tighter">{summaryStats.activeDispatches}</div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">In Orbit</span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-bold mt-1">Concurrently Sending Batches</p>
+                <div className="mt-4 flex gap-1 h-1.5">
+                  <div className="flex-1 bg-indigo-500 rounded-full" />
+                  <div className="flex-1 bg-indigo-500/40 rounded-full" />
+                  <div className="flex-1 bg-indigo-500/20 rounded-full" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-[0_8px_30px_rgba(0,0,0,0.04)] bg-white overflow-hidden group hover:translate-y-[-2px] transition-all duration-300 relative border-l-4 border-l-blue-500">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 transition-transform group-hover:scale-110 duration-500">
+                    <Target className="h-5 w-5" />
+                  </div>
+                  <div className="flex items-center gap-1 text-[10px] font-black text-blue-600 uppercase">
+                    <ArrowUpRight className="h-3 w-3" /> 12% MoM
                   </div>
                 </div>
-                <p className="text-xs text-slate-400 font-medium mt-1">Global Health Index</p>
-                <div className="h-1 w-full bg-slate-50 mt-4 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 w-full rounded-full" />
+                <div className="flex items-baseline gap-2">
+                  <div className="text-3xl font-black text-slate-900 tabular-nums tracking-tighter">{summaryStats.totalReach.toLocaleString()}</div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Reached</span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-bold mt-1">Aggregated Contact Ecosystem</p>
+                <div className="mt-4 flex gap-1 h-1.5">
+                  <div className="flex-1 bg-blue-500 rounded-full" />
+                  <div className="flex-1 bg-blue-500/40 rounded-full" />
+                  <div className="flex-1 bg-blue-500/20 rounded-full" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-[0_8px_30px_rgba(0,0,0,0.04)] bg-white overflow-hidden group hover:translate-y-[-2px] transition-all duration-300 relative border-l-4 border-l-purple-500">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="p-2.5 rounded-xl bg-purple-50 text-purple-600 transition-transform group-hover:scale-110 duration-500">
+                    <Mail className="h-5 w-5" />
+                  </div>
+                  <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-none text-[10px] font-black px-2 py-0.5">READY</Badge>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <div className="text-3xl font-black text-slate-900 tabular-nums tracking-tighter">{summaryStats.totalReady.toLocaleString()}</div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Staged</span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-bold mt-1">Awaiting Google API Dispatch</p>
+                <div className="mt-4 flex gap-1 h-1.5">
+                  <div className="flex-1 bg-purple-500 rounded-full" />
+                  <div className="flex-1 bg-purple-500/40 rounded-full" />
+                  <div className="flex-1 bg-purple-500/20 rounded-full" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-none shadow-[0_8px_30px_rgba(0,0,0,0.04)] bg-white overflow-hidden group hover:translate-y-[-2px] transition-all duration-300 relative border-l-4 border-l-emerald-500">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 transition-transform group-hover:scale-110 duration-500">
+                    <TrendingUp className="h-5 w-5" />
+                  </div>
+                  <div className="text-[10px] font-black text-emerald-600 uppercase animate-pulse">OPTIMIZED</div>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <div className="text-3xl font-black text-slate-900 tabular-nums tracking-tighter">{summaryStats.successRate}%</div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Health Index</span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-bold mt-1">Predictive Open/Reach Coefficient</p>
+                <div className="mt-4 flex gap-1 h-1.5">
+                  <div className="flex-1 bg-emerald-500 rounded-full" />
+                  <div className="flex-1 bg-emerald-500/40 rounded-full" />
+                  <div className="flex-1 bg-emerald-500/20 rounded-full" />
                 </div>
               </CardContent>
             </Card>
@@ -518,6 +533,16 @@ const DraftsPage: React.FC = () => {
                   >
                     {selectedIds.includes(campaign.id) && <Activity className="h-3 w-3 text-white" />}
                   </div>
+
+                  {/* Active Pulse Indicator */}
+                  {(campaign.status === 'sending' || campaign.status === 'launched') && (
+                    <div className="absolute top-0 right-0 p-4">
+                      <div className="flex items-center gap-1.5 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20 animate-in fade-in zoom-in duration-700">
+                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-[8px] font-black text-emerald-600 uppercase tracking-tighter">Live Dispatch</span>
+                      </div>
+                    </div>
+                  )}
 
                   <CardHeader className={`p-6 pb-4 transition-all duration-300 ${selectedIds.includes(campaign.id) ? 'pl-14' : 'group-hover:pl-14'}`}>
                     <div className="flex justify-between items-start mb-4">

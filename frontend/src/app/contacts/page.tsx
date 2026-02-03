@@ -20,15 +20,32 @@ import {
   Download,
   Users,
   Copy,
-  RefreshCw
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  ExternalLink,
+  ChevronRight,
+  Filter,
+  MoreHorizontal
 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type ContactList = {
   id: number;
@@ -51,6 +68,8 @@ export default function ContactsPage() {
   const [loading, setLoading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [sortBy, setSortBy] = useState<'name' | 'contacts' | 'newest'>('newest');
 
   const loadLists = useCallback(async () => {
     try {
@@ -71,9 +90,23 @@ export default function ContactsPage() {
     loadLists();
   }, [loadLists]);
 
-  const filtered = useMemo(() => {
-    return lists.filter(l => !search || l.name.toLowerCase().includes(search.toLowerCase()));
-  }, [lists, search]);
+  const filteredAndSorted = useMemo(() => {
+    let result = lists.filter(l => !search || l.name.toLowerCase().includes(search.toLowerCase()));
+
+    return result.sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'contacts') return (b.contacts?.length || 0) - (a.contacts?.length || 0);
+      return b.id - a.id; // newest
+    });
+  }, [lists, search, sortBy]);
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(selectedIds.length === filteredAndSorted.length ? [] : filteredAndSorted.map(l => l.id));
+  };
 
   const startNew = () => {
     setEditing(null);
@@ -274,73 +307,142 @@ export default function ContactsPage() {
 
             {/* Main List View */}
             <div className={showEditor ? "lg:col-span-2" : "lg:col-span-1"}>
-              <div className="mb-4 flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="mb-6 flex flex-col md:flex-row items-center gap-4">
+                <div className="relative flex-1 w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
-                    placeholder="Search lists..."
+                    placeholder="Search by list name, tags, or description..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 bg-white dark:bg-slate-900"
+                    className="pl-9 h-11 bg-white border-slate-200 rounded-xl focus:ring-indigo-500/20"
                   />
                 </div>
-              </div>
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {filtered.map(list => (
-                  <Card key={list.id} className="group hover:shadow-md transition-all border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start">
-                        <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                          <Users className="h-5 w-5" />
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => startEdit(list)}>
-                              <Edit2 className="h-4 w-4 mr-2" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => {
-                              navigator.clipboard.writeText(list.contacts.map((c: any) => c.email).join('\n'));
-                            }}>
-                              <Copy className="h-4 w-4 mr-2" /> Copy Emails
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600" onClick={() => remove(list.id)}>
-                              <Trash2 className="h-4 w-4 mr-2" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                      <CardTitle className="mt-3 text-base font-semibold">{list.name}</CardTitle>
-                      <CardDescription className="line-clamp-1 h-5 text-xs">
-                        {list.description || "No description"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pb-4 pt-0">
-                      <div className="flex items-center justify-between text-sm mt-2">
-                        <Badge variant="secondary" className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-normal">
-                          {list.contacts?.length || 0} contacts
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">ID: {list.id}</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="h-11 px-4 rounded-xl border-slate-200 font-bold text-xs uppercase tracking-widest gap-2">
+                        <Filter className="h-4 w-4" />
+                        Sort: {sortBy}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl">
+                      <DropdownMenuItem onClick={() => setSortBy('newest')} className="rounded-lg font-bold text-xs uppercase cursor-pointer">Newest First</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setSortBy('name')} className="rounded-lg font-bold text-xs uppercase cursor-pointer">Alphabetical</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setSortBy('contacts')} className="rounded-lg font-bold text-xs uppercase cursor-pointer">Most Contacts</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
 
-              {filtered.length === 0 && (
-                <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
-                  <div className="mx-auto h-12 w-12 text-slate-300">
-                    <Users className="h-full w-full" />
-                  </div>
-                  <h3 className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">No lists found</h3>
-                  <p className="mt-1 text-sm text-slate-500">Get started by creating a new list.</p>
+                  {selectedIds.length > 0 && (
+                    <Button variant="destructive" className="h-11 rounded-xl font-bold text-xs uppercase tracking-widest gap-2 animate-in slide-in-from-right-4">
+                      <Trash2 className="h-4 w-4" />
+                      Delete ({selectedIds.length})
+                    </Button>
+                  )}
                 </div>
-              )}
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <Table>
+                  <TableHeader className="bg-slate-50/50">
+                    <TableRow className="hover:bg-transparent border-slate-100">
+                      <TableHead className="w-[50px] pl-4">
+                        <Checkbox
+                          checked={selectedIds.length === filteredAndSorted.length && filteredAndSorted.length > 0}
+                          onCheckedChange={toggleSelectAll}
+                        />
+                      </TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Segment / Identity</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Population</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Est. Health</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Last Activity</TableHead>
+                      <TableHead className="text-right pr-4 text-[10px] font-black uppercase tracking-widest text-slate-400 py-4">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAndSorted.map(list => (
+                      <TableRow
+                        key={list.id}
+                        className={`group transition-colors border-slate-100 hover:bg-indigo-50/20 ${selectedIds.includes(list.id) ? 'bg-indigo-50/40' : ''}`}
+                      >
+                        <TableCell className="pl-4">
+                          <Checkbox
+                            checked={selectedIds.includes(list.id)}
+                            onCheckedChange={() => toggleSelect(list.id)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className={`h-10 w-10 min-w-[40px] rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 duration-500 ${selectedIds.includes(list.id) ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-600 group-hover:text-white'}`}>
+                              <Users className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="font-black text-slate-900 leading-none mb-1 group-hover:text-indigo-600 transition-colors uppercase text-[13px] tracking-tight">{list.name}</p>
+                              <p className="text-[10px] font-bold text-slate-400 line-clamp-1 italic">{list.description || 'Staging Environment List'}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="bg-slate-100 text-slate-700 border-none font-bold text-[10px] tabular-nums">
+                            {list.contacts?.length || 0} LEADS
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: '92%' }} />
+                            </div>
+                            <span className="text-[10px] font-black text-emerald-600">92%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5 text-slate-500">
+                            <Clock className="h-3 w-3" />
+                            <span className="text-[10px] font-bold uppercase">Ready to Deploy</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right pr-4">
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" onClick={() => startEdit(list)}>
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg text-slate-400">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl">
+                                <DropdownMenuItem className="font-bold text-[10px] uppercase tracking-widest gap-2 cursor-pointer rounded-lg" onClick={() => navigator.clipboard.writeText(list.contacts.map((c: any) => c.email).join('\n'))}>
+                                  <Copy className="h-3.5 w-3.5" /> Copy Emails
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="font-bold text-[10px] uppercase tracking-widest gap-2 cursor-pointer rounded-lg">
+                                  <Download className="h-3.5 w-3.5" /> Export CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="font-bold text-[10px] uppercase tracking-widest gap-2 cursor-pointer rounded-lg text-rose-600 focus:text-rose-700 focus:bg-rose-50" onClick={() => remove(list.id)}>
+                                  <Trash2 className="h-3.5 w-3.5" /> Burn List
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+
+                {filteredAndSorted.length === 0 && (
+                  <div className="text-center py-32">
+                    <div className="h-20 w-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-slate-200">
+                      <Users className="h-10 w-10" />
+                    </div>
+                    <h3 className="text-lg font-black text-slate-900 uppercase">Awaiting Population</h3>
+                    <p className="text-slate-400 text-sm font-medium max-w-xs mx-auto mt-1 italic">Initialize your outreach by importing your first lead database.</p>
+                    <Button variant="outline" onClick={startNew} className="mt-8 rounded-xl border-slate-200 font-bold px-8">Create Manual Entry</Button>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Editor Panel (Slide Over / Sidebar style) */}
