@@ -639,15 +639,15 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
         # even if no custom tracking domain is configured yet.
         if campaign_id and body_html:
              import re
-             # Regex to find pixel.png that doesn't have ?c= yet
+             # Regex to find pixel.png that doesn't have ?d= yet
              # Matches: src=".../t/pixel.png" or src='.../t/pixel.png'
              naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
              
              def add_campaign_param(match):
-                 return f'{match.group(1)}?c={campaign_id}{match.group(2)}'
+                 return f'{match.group(1)}?d={campaign_id}{match.group(2)}'
                  
              body_html = re.sub(naked_pixel_pattern, add_campaign_param, body_html)
-             logger.info(f"✅ Hydrated frontend-inserted pixels with campaign_id={campaign_id}")
+             logger.info(f"✅ Hydrated frontend-inserted pixels with draft_campaign_id={campaign_id}")
 
         # 1. Tracking Replacement (Safe Block)
         try:

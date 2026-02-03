@@ -40,12 +40,22 @@ import {
   Filter,
   Share2,
   MoreVertical,
+  UserCheck,
+  ChevronDown,
+  LayoutGrid,
   Zap,
-  UserCheck
+  Rocket
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
+} from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
 import { format } from 'date-fns';
 
@@ -71,21 +81,54 @@ const GlobalAnalyticsPage = () => {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<any[]>([]);
+  const [selectedDraftId, setSelectedDraftId] = useState<number>(0); // 0 = Global
+  const [fetchingData, setFetchingData] = useState(false);
 
   useEffect(() => {
-    fetchAnalytics();
+    fetchInitialData();
   }, []);
 
-  const fetchAnalytics = async () => {
+  const fetchInitialData = async () => {
+    setLoading(true);
+    await Promise.all([
+      fetchAnalytics(0),
+      fetchDrafts()
+    ]);
+    setLoading(false);
+  };
+
+  const fetchDrafts = async () => {
     try {
-      const response = await apiClient.request(`/api/v1/analytics/summary`);
+      const response = await apiClient.request('/api/v1/drafts');
+      if (response.error) throw new Error(response.error);
+      setDrafts(response.data || []);
+    } catch (err) {
+      console.error('Failed to fetch drafts for selector:', err);
+    }
+  };
+
+  const fetchAnalytics = async (draftId: number) => {
+    setFetchingData(true);
+    try {
+      const endpoint = draftId === 0
+        ? `/api/v1/analytics/summary`
+        : `/api/v1/analytics/draft/${draftId}`;
+
+      const response = await apiClient.request(endpoint);
       if (response.error) throw new Error(response.error);
       setData(response.data);
+      setError(null);
     } catch (err: any) {
-      setError(err.message || 'Failed to load global analytics');
+      setError(err.message || 'Failed to load analytics');
     } finally {
-      setLoading(false);
+      setFetchingData(false);
     }
+  };
+
+  const handleDraftChange = (id: number) => {
+    setSelectedDraftId(id);
+    fetchAnalytics(id);
   };
 
   if (loading) {
@@ -120,15 +163,58 @@ const GlobalAnalyticsPage = () => {
             <h1 className="text-lg font-bold text-slate-900 tracking-tight text-xl">Enterprise Email Performance</h1>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" className="gap-2 border-slate-200">
-              <Filter className="h-4 w-4 text-slate-500" />
-              Filter
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 border-slate-200 min-w-[200px] justify-between shadow-sm hover:bg-slate-50 transition-all">
+                  <div className="flex items-center gap-2">
+                    {selectedDraftId === 0 ? <LayoutGrid className="h-4 w-4 text-slate-500" /> : <Rocket className="h-4 w-4 text-indigo-600" />}
+                    <span className="truncate max-w-[140px] font-medium">
+                      {selectedDraftId === 0 ? 'Global Performance' : drafts.find(d => d.id === selectedDraftId)?.name || 'Campaign Details'}
+                    </span>
+                  </div>
+                  <ChevronDown className="h-4 w-4 text-slate-400" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[280px] p-2">
+                <div className="px-2 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select Scope</div>
+                <DropdownMenuItem onClick={() => handleDraftChange(0)} className="gap-3 py-2 cursor-pointer focus:bg-indigo-50 focus:text-indigo-700 rounded-md">
+                  <LayoutGrid className="h-4 w-4" />
+                  <div className="flex flex-col">
+                    <span className="font-bold">Global Performance</span>
+                    <span className="text-[10px] opacity-70 text-slate-500">Aggregate metrics across all campaigns</span>
+                  </div>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="my-2" />
+                <div className="px-2 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Active Outreach Campaigns</div>
+                {drafts.length > 0 ? (
+                  <ScrollArea className="h-[240px]">
+                    {drafts.map((draft) => (
+                      <DropdownMenuItem
+                        key={draft.id}
+                        onClick={() => handleDraftChange(draft.id)}
+                        className="gap-3 py-2 cursor-pointer focus:bg-indigo-50 focus:text-indigo-700 rounded-md"
+                      >
+                        <Rocket className={`h-4 w-4 ${selectedDraftId === draft.id ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        <div className="flex flex-col">
+                          <span className="font-bold truncate max-w-[180px]">{draft.name}</span>
+                          <span className="text-[10px] opacity-70 text-slate-500 italic">ID: #{draft.id} • {draft.status}</span>
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </ScrollArea>
+                ) : (
+                  <div className="p-4 text-xs text-slate-400 text-center italic">No active campaigns available</div>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="h-6 w-[1px] bg-slate-200 mx-1" />
+
+            <Button variant="outline" size="sm" className="gap-2 border-slate-200 text-slate-600 hidden md:flex">
+              <Share2 className="h-4 w-4" />
+              Export
             </Button>
-            <Button variant="outline" size="sm" className="gap-2 border-slate-200">
-              <Share2 className="h-4 w-4 text-slate-500" />
-              Share
-            </Button>
-            <Button variant="ghost" size="icon" className="text-slate-400">
+            <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-600">
               <MoreVertical className="h-5 w-5" />
             </Button>
           </div>
@@ -354,7 +440,15 @@ const GlobalAnalyticsPage = () => {
                 <CardTitle className="text-base font-bold text-slate-800">Live Campaign Activity Stream</CardTitle>
                 <CardDescription className="text-xs">Real-time signal tracking across your entire sender network</CardDescription>
               </div>
-              <Button size="sm" variant="ghost" className="text-indigo-600 text-xs font-bold" onClick={fetchAnalytics}>Refresh Feed</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-indigo-600 text-xs font-bold"
+                onClick={() => fetchAnalytics(selectedDraftId)}
+                disabled={fetchingData}
+              >
+                {fetchingData ? 'Updating...' : 'Refresh Feed'}
+              </Button>
             </CardHeader>
             <CardContent className="p-0">
               <ScrollArea className="h-[400px]">
