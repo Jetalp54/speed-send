@@ -67,6 +67,8 @@ const DraftsPage: React.FC = () => {
   const [testDraftId, setTestDraftId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('latest');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [summaryStats, setSummaryStats] = useState({
     activeDispatches: 0,
     totalReach: 0,
@@ -109,12 +111,19 @@ const DraftsPage: React.FC = () => {
     }
   };
 
-  const filteredCampaigns = draftCampaigns.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.subject.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredCampaigns = draftCampaigns
+    .filter(c => {
+      const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.subject.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || c.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'latest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (sortBy === 'reach') return (b.recipients_count || 0) - (a.recipients_count || 0);
+      if (sortBy === 'healthy') return (b.opens_count || 0) - (a.opens_count || 0);
+      return 0;
+    });
 
   const launchDrafts = async (draftId: number) => {
     setLoading(true);
@@ -215,15 +224,72 @@ const DraftsPage: React.FC = () => {
     }
   };
 
-  const deleteDraft = async (draftId: number) => {
+  const deleteDraft = async (draft_id: number) => {
     if (!confirm('Are you sure you want to delete this draft?')) return;
-
     try {
-      const response = await draftsApi.delete(draftId);
-      if (response.error) throw new Error(response.error);
-      setDraftCampaigns(prev => prev.filter(d => d.id !== draftId));
+      const response = await draftsApi.delete(draft_id);
+      if (response.error) throw new Error(response.error as string);
+      setDraftCampaigns(prev => prev.filter(d => d.id !== draft_id));
+      setSelectedIds(prev => prev.filter(id => id !== draft_id));
     } catch (err: any) {
-      setError(`Failed to delete draft: ${err.response?.data?.detail || err.message}`);
+      setError(`Failed to delete draft: ${err.message}`);
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredCampaigns.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredCampaigns.map(c => c.id));
+    }
+  };
+
+  const bulkDelete = async () => {
+    if (!confirm(`Are you sure you want to delete ${selectedIds.length} campaigns?`)) return;
+    setLoading(true);
+    try {
+      await Promise.all(selectedIds.map(id => draftsApi.delete(id)));
+      setDraftCampaigns(prev => prev.filter(c => !selectedIds.includes(c.id)));
+      setSelectedIds([]);
+      alert(`✅ Successfully deleted ${selectedIds.length} campaigns.`);
+    } catch (err: any) {
+      setError(`Bulk delete failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const bulkLaunch = async () => {
+    if (!confirm(`Ready to launch ${selectedIds.length} campaigns simultaneously?`)) return;
+    setLoading(true);
+    try {
+      await Promise.all(selectedIds.map(id => apiClient.request(`/api/v1/drafts/${id}/launch-ultra`, { method: 'POST' })));
+      setSelectedIds([]);
+      fetchDraftCampaigns();
+      alert(`🚀 Launch sequence initiated for ${selectedIds.length} campaigns.`);
+    } catch (err: any) {
+      setError(`Bulk launch failed: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const bulkDuplicate = async () => {
+    if (!confirm(`Duplicate ${selectedIds.length} selected campaigns?`)) return;
+    setLoading(true);
+    try {
+      await Promise.all(selectedIds.map(id => apiClient.request(`/api/v1/drafts/${id}/duplicate`, { method: 'POST' })));
+      setSelectedIds([]);
+      fetchDraftCampaigns();
+      alert(`✅ Successfully duplicated ${selectedIds.length} campaigns.`);
+    } catch (err: any) {
+      setError(`Bulk duplication failed: ${err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -248,8 +314,6 @@ const DraftsPage: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-[#F0F2F5] selection:bg-indigo-100 font-sans">
-      <Sidebar />
-
       <div className="flex-1 overflow-auto bg-[#F0F2F5] pb-12">
         {/* Enterprise Header */}
         <div className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between sticky top-0 z-30 shadow-sm backdrop-blur-md bg-white/80">
@@ -374,19 +438,23 @@ const DraftsPage: React.FC = () => {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="bg-white border-none shadow-sm rounded-xl px-4 gap-2 h-11 text-sm font-bold text-slate-600">
-                    <FilterIcon className="h-4 w-4 text-slate-400" />
-                    Status: <span className="text-indigo-600 capitalize">{statusFilter}</span>
+                    <TrendingUp className="h-4 w-4 text-slate-400" />
+                    Sort: <span className="text-indigo-600 capitalize">{sortBy}</span>
                     <ChevronDown className="h-4 w-4 text-slate-400" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 p-2 rounded-xl border-none shadow-xl">
-                  {['all', 'created', 'ready', 'sending', 'completed', 'failed'].map((status) => (
+                  {[
+                    { val: 'latest', label: 'Latest Outreach' },
+                    { val: 'reach', label: 'Highest Reach' },
+                    { val: 'healthy', label: 'Open Performance' }
+                  ].map((s) => (
                     <DropdownMenuItem
-                      key={status}
-                      onClick={() => setStatusFilter(status)}
+                      key={s.val}
+                      onClick={() => setSortBy(s.val)}
                       className="rounded-lg font-bold text-xs uppercase tracking-wider py-2 cursor-pointer focus:bg-indigo-50 focus:text-indigo-700"
                     >
-                      {status}
+                      {s.label}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -394,8 +462,16 @@ const DraftsPage: React.FC = () => {
 
               <div className="h-6 w-[1px] bg-slate-200 mx-2 hidden md:block" />
 
+              <Button
+                onClick={toggleSelectAll}
+                variant="ghost"
+                className={`rounded-xl px-4 h-11 text-sm font-bold transition-all ${selectedIds.length === filteredCampaigns.length ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-100'}`}
+              >
+                {selectedIds.length === filteredCampaigns.length ? 'Deselect All' : 'Select All'}
+              </Button>
+
               <p className="text-xs text-slate-400 font-bold tracking-widest uppercase">
-                Showing {filteredCampaigns.length} Results
+                {selectedIds.length > 0 ? `${selectedIds.length} Selected` : `Showing ${filteredCampaigns.length} Results`}
               </p>
             </div>
           </div>
@@ -423,8 +499,22 @@ const DraftsPage: React.FC = () => {
           ) : (
             <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
               {filteredCampaigns.map((campaign) => (
-                <Card key={campaign.id} className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white rounded-2xl overflow-hidden hover:shadow-[0_20px_40px_rgba(0,0,0,0.08)] transition-all duration-500 group border-t-4 border-t-transparent hover:border-t-indigo-500 flex flex-col">
-                  <CardHeader className="p-6 pb-4">
+                <Card
+                  key={campaign.id}
+                  className={`border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white rounded-2xl overflow-hidden hover:shadow-[0_20px_40px_rgba(0,0,0,0.08)] transition-all duration-500 group border-t-4 flex flex-col relative ${selectedIds.includes(campaign.id) ? 'border-t-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/10' : 'border-t-transparent hover:border-t-indigo-500'}`}
+                >
+                  {/* Selection Overlay */}
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelect(campaign.id);
+                    }}
+                    className={`absolute top-4 left-4 z-20 w-6 h-6 rounded-lg border-2 cursor-pointer transition-all flex items-center justify-center ${selectedIds.includes(campaign.id) ? 'bg-indigo-600 border-indigo-600 shadow-md shadow-indigo-200' : 'bg-white border-slate-200 opacity-0 group-hover:opacity-100 hover:border-indigo-400'}`}
+                  >
+                    {selectedIds.includes(campaign.id) && <Activity className="h-3 w-3 text-white" />}
+                  </div>
+
+                  <CardHeader className={`p-6 pb-4 transition-all duration-300 ${selectedIds.includes(campaign.id) ? 'pl-14' : 'group-hover:pl-14'}`}>
                     <div className="flex justify-between items-start mb-4">
                       {getStatusBadge(campaign.status)}
                       <DropdownMenu>
@@ -658,6 +748,55 @@ const DraftsPage: React.FC = () => {
 
       {/* Live Process Monitor Terminal */}
       <ConsoleMonitor />
+
+      {/* ULTRA: Floating Bulk Action Toolbar */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl px-6 py-4 flex items-center gap-6">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selected Outreach</span>
+              <span className="text-white font-black text-lg">{selectedIds.length} Campaigns</span>
+            </div>
+
+            <div className="h-10 w-[1px] bg-slate-700" />
+
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={bulkLaunch}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl h-12 gap-2 px-6"
+              >
+                <Rocket className="h-4 w-4" />
+                Launch Selected
+              </Button>
+              <Button
+                onClick={bulkDuplicate}
+                variant="outline"
+                className="bg-white/10 hover:bg-white/20 border-white/10 text-white font-bold rounded-xl h-12 gap-2"
+              >
+                <Copy className="h-4 w-4" />
+                Duplicate
+              </Button>
+              <Button
+                onClick={bulkDelete}
+                variant="destructive"
+                className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 font-bold rounded-xl h-12 gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Burn
+              </Button>
+            </div>
+
+            <div className="h-10 w-[1px] bg-slate-700" />
+
+            <button
+              onClick={() => setSelectedIds([])}
+              className="p-2 rounded-lg hover:bg-white/10 text-slate-400 transition-colors"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
