@@ -44,7 +44,8 @@ interface User {
 
 interface Account {
   id: number;
-  email: string;
+  name: string;
+  client_email: string;
 }
 
 interface ContactList {
@@ -68,6 +69,8 @@ interface DraftConfig {
   custom_headers: string;
   distribution_strategy: 'round_robin' | 'even_split';
   emails_per_user: number;
+  list_start_index: number;
+  list_send_limit: number | null;
 }
 
 const TEMPLATE_TAGS = [
@@ -114,7 +117,9 @@ export default function NewDraftPage() {
     use_custom_headers: false,
     custom_headers: '',
     distribution_strategy: 'round_robin',
-    emails_per_user: 1
+    emails_per_user: 50,
+    list_start_index: 0,
+    list_send_limit: null
   });
 
   useEffect(() => {
@@ -191,9 +196,13 @@ export default function NewDraftPage() {
 
   const insertTag = (tag: string) => {
     const target = config.body_format === 'html' ? 'body_html' : 'body_template';
+    let tagToInsert = tag;
+    if (tag === '[tracking_link]') {
+      tagToInsert = '[tracking_link]https://[/tracking_link]';
+    }
     setConfig(prev => ({
       ...prev,
-      [target]: prev[target as keyof DraftConfig] + tag
+      [target]: prev[target as keyof DraftConfig] + tagToInsert
     }));
   };
 
@@ -301,16 +310,59 @@ export default function NewDraftPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2 relative">
+                  <div className="pt-4 border-t space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Header Personalization</Label>
+                        <p className="text-[11px] text-muted-foreground">Inject custom MIME headers (X-Prefix/List-Unsubscribe/etc).</p>
+                      </div>
+                      <Switch
+                        checked={config.use_custom_headers}
+                        onCheckedChange={(val) => setConfig(prev => ({ ...prev, use_custom_headers: val }))}
+                      />
+                    </div>
+                    {config.use_custom_headers && (
+                      <Textarea
+                        placeholder="X-Campaign-ID: 123&#10;List-Unsubscribe: <mailto:unsub@domain.com>"
+                        className="h-24 font-mono text-xs bg-muted/30"
+                        value={config.custom_headers}
+                        onChange={(e) => setConfig(prev => ({ ...prev, custom_headers: e.target.value }))}
+                      />
+                    )}
+                  </div>
+
+                  <div className="space-y-2 relative pt-4 border-t">
                     <div className="flex justify-between items-center mb-1">
-                      <Label>Message Body ({config.body_format.toUpperCase()})</Label>
+                      <div className="flex items-center gap-4">
+                        <Label>Message Body ({config.body_format.toUpperCase()})</Label>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2 border-dashed"
+                            onClick={() => insertTag('[tracking_pixel]')}
+                          >
+                            <LineChart className="h-3 w-3" /> PIXEL
+                          </Button>
+                          <Button
+                            variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2 border-dashed"
+                            onClick={() => insertTag('[tracking_link]')}
+                          >
+                            <Plus className="h-3 w-3" /> LINK
+                          </Button>
+                          <Button
+                            variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2 border-dashed text-destructive border-destructive/20"
+                            onClick={() => insertTag('[unsubscribe]')}
+                          >
+                            <Trash2 className="h-3 w-3" /> UNSUB
+                          </Button>
+                        </div>
+                      </div>
                       <Button variant="ghost" size="sm" onClick={() => setTagGuideOpen(!tagGuideOpen)} className="h-7 gap-1 text-xs">
                         <HelpCircle className="h-3 w-3" /> Tag Guide
                       </Button>
                     </div>
                     <Textarea
                       placeholder={config.body_format === 'html' ? "Enter HTML source..." : "Enter plain text message..."}
-                      className="min-h-[300px] font-mono text-sm leading-relaxed"
+                      className="min-h-[400px] font-mono text-sm leading-relaxed shadow-inner"
                       value={config.body_format === 'html' ? config.body_html : config.body_template}
                       onChange={(e) => setConfig(prev => ({
                         ...prev,
@@ -318,11 +370,11 @@ export default function NewDraftPage() {
                       }))}
                     />
                     {tagGuideOpen && (
-                      <div className="absolute top-10 right-4 w-64 bg-card border rounded-lg shadow-xl p-4 z-10 animate-in slide-in-from-right-2">
+                      <div className="absolute top-20 right-4 w-64 bg-card border rounded-lg shadow-xl p-4 z-10 animate-in slide-in-from-right-2">
                         <h4 className="text-xs font-bold uppercase mb-3 flex items-center gap-2">
                           <Code className="h-3 w-3" /> Tag Insertion
                         </h4>
-                        <div className="space-y-2">
+                        <div className="space-y-1">
                           {TEMPLATE_TAGS.map(tag => (
                             <button
                               key={tag.tag}
@@ -335,27 +387,6 @@ export default function NewDraftPage() {
                           ))}
                         </div>
                       </div>
-                    )}
-                  </div>
-
-                  <div className="pt-4 border-t space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label>Header Personalization</Label>
-                        <p className="text-[11px] text-muted-foreground">Inject custom MIME headers for better deliverability.</p>
-                      </div>
-                      <Switch
-                        checked={config.use_custom_headers}
-                        onCheckedChange={(val) => setConfig(prev => ({ ...prev, use_custom_headers: val }))}
-                      />
-                    </div>
-                    {config.use_custom_headers && (
-                      <Textarea
-                        placeholder="X-Custom-Header: value..."
-                        className="h-24 font-mono text-xs"
-                        value={config.custom_headers}
-                        onChange={(e) => setConfig(prev => ({ ...prev, custom_headers: e.target.value }))}
-                      />
                     )}
                   </div>
                 </CardContent>
@@ -388,13 +419,20 @@ export default function NewDraftPage() {
                                 }));
                               }}
                             />
-                            <label htmlFor={`acc-${account.id}`} className="text-xs font-medium cursor-pointer">{account.email}</label>
+                            <label htmlFor={`acc-${account.id}`} className="text-xs font-medium cursor-pointer">{account.client_email}</label>
                           </div>
                         ))}
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Persona Assignment ({users.length} available)</Label>
+                      <div className="flex justify-between items-center">
+                        <Label>Persona Assignment ({users.length} available)</Label>
+                        <div className="flex gap-2 text-[10px] font-bold text-primary">
+                          <button onClick={() => setConfig(prev => ({ ...prev, selected_user_ids: users.map(u => u.id) }))} className="hover:underline">SELECT ALL</button>
+                          <span className="opacity-30">/</span>
+                          <button onClick={() => setConfig(prev => ({ ...prev, selected_user_ids: [] }))} className="hover:underline">NONE</button>
+                        </div>
+                      </div>
                       <div className="grid grid-cols-1 gap-2 border rounded-lg p-3 h-48 overflow-y-auto bg-muted/50">
                         {users.map(user => (
                           <div key={user.id} className="flex items-center space-x-2">
@@ -447,37 +485,50 @@ export default function NewDraftPage() {
                         </div>
                       ))}
                     </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-2">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-bold uppercase tracking-tighter">List Start Index</Label>
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          value={config.list_start_index}
+                          onChange={(e) => setConfig(prev => ({ ...prev, list_start_index: parseInt(e.target.value) || 0 }))}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-bold uppercase tracking-tighter">Send Limit (Slice)</Label>
+                        <Input
+                          type="number"
+                          placeholder="All"
+                          value={config.list_send_limit || ''}
+                          onChange={(e) => setConfig(prev => ({ ...prev, list_send_limit: e.target.value ? parseInt(e.target.value) : null }))}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Load Balancing</CardTitle>
+                  <CardTitle className="text-base">Distribution Parameters</CardTitle>
                 </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <Label>Delivery Mode</Label>
-                    <Select
-                      value={config.distribution_strategy}
-                      onValueChange={(val: string) => setConfig(prev => ({ ...prev, distribution_strategy: val as any }))}
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="round_robin">Round Robin (Cyclic)</SelectItem>
-                        <SelectItem value="even_split">Even Split (Linear)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-muted-foreground">Round robin ensures uniform saturation across active personas.</p>
-                  </div>
-                  <div className="space-y-4">
-                    <Label>Burst Density (Daily Cap)</Label>
-                    <Input
-                      type="number"
-                      value={config.emails_per_user}
-                      onChange={(e) => setConfig(prev => ({ ...prev, emails_per_user: parseInt(e.target.value) }))}
-                    />
-                    <p className="text-[11px] text-muted-foreground">Global dispatch limit per assigned persona per session.</p>
+                <CardContent>
+                  <div className="space-y-4 max-w-xs">
+                    <Label>Burst Density (Daily Cap per Persona)</Label>
+                    <div className="flex items-center gap-4">
+                      <Input
+                        type="number"
+                        value={config.emails_per_user}
+                        onChange={(e) => setConfig(prev => ({ ...prev, emails_per_user: parseInt(e.target.value) || 1 }))}
+                        className="w-32"
+                      />
+                      <span className="text-xs text-muted-foreground font-medium">emails / user</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">Sets the maximum number of drafts generated per selected sender account.</p>
                   </div>
                 </CardContent>
               </Card>

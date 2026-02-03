@@ -162,23 +162,33 @@ def get_draft_campaigns(db: Session = Depends(get_db)):
             else:
                 logger.info(f"Contact association has no contact_list")
         
-        response.append(schemas.DraftCampaignResponse(
-            id=campaign.id,
-            name=campaign.name,
-            subject=campaign.subject,
-            from_name=campaign.from_name,
-            created_at=campaign.created_at,
-            total_drafts=total_drafts,
-            drafts_by_user=drafts_by_user,
-            status=campaign.status or DraftStatus.CREATED.value,
-            recipients_count=recipients_count,
-            users_count=len(campaign.selected_users),
-            emails_per_user=campaign.emails_per_user or 0,
-            # Analytics (Always query real-time tracking table for 100% accuracy)
-            opens_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'open').count(),
-            clicks_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'click').count(),
-            bounces_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'bounce').count()
-        ))
+        try:
+            response.append(schemas.DraftCampaignResponse(
+                id=campaign.id,
+                name=campaign.name,
+                subject=campaign.subject,
+                from_name=campaign.from_name,
+                created_at=campaign.created_at,
+                total_drafts=total_drafts,
+                drafts_by_user=drafts_by_user,
+                status=campaign.status or DraftStatus.CREATED.value,
+                recipients_count=recipients_count,
+                users_count=len(campaign.selected_users),
+                emails_per_user=campaign.emails_per_user or 0,
+                list_start_index=campaign.list_start_index or 0,
+                list_send_limit=campaign.list_send_limit,
+                # Content fields
+                body_html=campaign.body_html,
+                use_custom_headers=campaign.use_custom_headers,
+                custom_headers=campaign.custom_headers,
+                # Analytics (Always query real-time tracking table for 100% accuracy)
+                opens_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'open').count(),
+                clicks_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'click').count(),
+                bounces_count=db.query(models.TrackingEvent).filter(models.TrackingEvent.draft_campaign_id == campaign.id, models.TrackingEvent.event_type == 'bounce').count()
+            ))
+        except Exception as ve:
+            logger.error(f"Schema Validation Error for campaign {campaign.id}: {ve}")
+            continue
     return response
 
 @router.get("/drafts/{draft_id}", response_model=schemas.DraftCampaignResponse)
@@ -221,6 +231,8 @@ def get_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         recipients_count=recipients_count,
         users_count=len(campaign.selected_users),
         emails_per_user=campaign.emails_per_user or 0,
+        list_start_index=campaign.list_start_index or 0,
+        list_send_limit=campaign.list_send_limit,
         # Content fields
         body_html=campaign.body_html,
         use_custom_headers=campaign.use_custom_headers,
@@ -284,6 +296,8 @@ def update_draft_campaign(draft_id: int, draft_data: schemas.DraftCampaignUpdate
         recipients_count=0,
         users_count=0,
         emails_per_user=campaign.emails_per_user or 0,
+        list_start_index=campaign.list_start_index or 0,
+        list_send_limit=campaign.list_send_limit,
         # Content fields
         body_html=campaign.body_html,
         use_custom_headers=campaign.use_custom_headers,
@@ -313,7 +327,10 @@ def delete_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         db.execute(text("DELETE FROM draft_campaign_users WHERE draft_campaign_id = :id"), {"id": draft_id})
         db.execute(text("DELETE FROM draft_campaign_contacts WHERE draft_campaign_id = :id"), {"id": draft_id})
         
-        # 2. Delete generated drafts
+        # 2. Delete tracking events (CRITICAL)
+        db.execute(text("DELETE FROM tracking_events WHERE draft_campaign_id = :id"), {"id": draft_id})
+        
+        # 3. Delete generated drafts
         db.execute(text("DELETE FROM gmail_drafts WHERE draft_campaign_id = :id"), {"id": draft_id})
         
         # 3. Delete the campaign itself
@@ -379,6 +396,20 @@ def upload_drafts_to_users(draft_id: int, db: Session = Depends(get_db)):
             all_recipients.extend([contact.email for contact in contacts])
     
     logger.info(f"Total recipients collected: {len(all_recipients)}")
+    
+    # Apply Segment Slicing
+    start_idx = campaign.list_start_index or 0
+    send_limit = campaign.list_send_limit
+    
+    if start_idx > 0:
+        logger.info(f"Applying slice: starting from index {start_idx}")
+        all_recipients = all_recipients[start_idx:]
+    
+    if send_limit and send_limit > 0:
+        logger.info(f"Applying slice: limiting to {send_limit} recipients")
+        all_recipients = all_recipients[:send_limit]
+        
+    logger.info(f"Recipients after slicing: {len(all_recipients)}")
     
     if not all_recipients:
         raise HTTPException(status_code=400, detail="No recipients found in selected contact lists")
