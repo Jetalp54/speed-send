@@ -305,6 +305,10 @@ class DraftCampaign(Base):
     test_after_email = Column(String(255))
     test_after_count = Column(Integer, default=0)
     
+    # List range control
+    list_start_index = Column(Integer, default=0)
+    list_send_limit = Column(Integer, nullable=True)
+    
     # Real-time analytics
     opens_count = Column(Integer, default=0)
     clicks_count = Column(Integer, default=0)

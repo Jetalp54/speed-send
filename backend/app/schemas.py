@@ -263,6 +263,8 @@ class DraftCampaignBase(BaseModel):
     test_after_email: Optional[str] = None
     test_after_count: int = 0
     emails_per_user: int = 1
+    list_start_index: int = 0
+    list_send_limit: Optional[int] = None
     
     # Advanced customization fields
     use_custom_headers: bool = False
@@ -292,6 +294,8 @@ class DraftCampaignUpdate(BaseModel):
     selected_contact_list_ids: Optional[List[int]] = None
     test_after_email: Optional[str] = None
     test_after_count: Optional[int] = None
+    list_start_index: Optional[int] = None
+    list_send_limit: Optional[int] = None
 
 class DraftCampaignResponse(DraftCampaignBase):
     id: int
