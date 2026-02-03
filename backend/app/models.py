@@ -466,6 +466,7 @@ class TrackingEvent(Base):
     geo_city = Column(String(100))   # City name
     geo_region = Column(String(100)) # State/region
     ip_hash = Column(String(64)) # Anonymized IP
+    ip_address = Column(String(50)) # Raw IP (User request)
     
     # Extended Device Info
     device_type = Column(String(20)) # mobile, tablet, desktop

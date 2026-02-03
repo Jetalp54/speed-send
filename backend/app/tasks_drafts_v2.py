@@ -57,39 +57,13 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
         # FORCE Emails per Persona = 1
         emails_per_user = 1
         
-        # Tracking Injection (Ultra Optimization)
-        # Hydrate pixels and placeholders before draft creation
-        if campaign_id and body_html:
-            import re
-            from urllib.parse import quote
-            
-            # 1. Hydrate "Naked" Pixels: /t/pixel.png -> /t/pixel.png?c=ID
-            base_url = settings.TRACKING_DOMAIN.rstrip('/') if settings.TRACKING_DOMAIN else settings.API_BASE_URL.rstrip('/')
-            
-            naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
-            def add_campaign_param(match):
-                return f'{match.group(1)}?c={campaign_id}{match.group(2)}'
-            body_html = re.sub(naked_pixel_pattern, add_campaign_param, body_html)
-            
-            # 2. Replace [tracking_pixel] placeholder
-            if '[tracking_pixel]' in body_html:
-                pixel_url = f"{base_url}/t/pixel.png?c={campaign_id}"
-                
-                # Handle usage inside src attributes
-                body_html = body_html.replace('src="[tracking_pixel]"', f'src="{pixel_url}"')
-                body_html = body_html.replace("src='[tracking_pixel]'", f"src='{pixel_url}'")
-                
-                # Handle standalone usage
-                pixel_tag = f'<img src="{pixel_url}" width="1" height="1" style="display:none;" alt="" />'
-                body_html = body_html.replace('[tracking_pixel]', pixel_tag)
-            
-            # 3. Replace [tracking_link] placeholders
-            pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
-            matches = re.findall(pattern, body_html)
-            for original_url in matches:
-                encoded_url = quote(original_url)
-                tracking_url = f"{base_url}/t/redirect?url={encoded_url}&c={campaign_id}"
-                body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
+        # Tracking Injection Setup
+        base_url = settings.TRACKING_DOMAIN.rstrip('/') if settings.TRACKING_DOMAIN else settings.API_BASE_URL.rstrip('/')
+        import re
+        from urllib.parse import quote
+        
+        naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
+        link_pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
 
         # Optimized batch processing
         batch_size = rate_limiter.calculate_optimal_batch_size(emails_per_user, 1)
@@ -111,7 +85,38 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                 from app.template_engine import TemplateEngine
                 
                 message = None
-                recipient_email = recipients[i % len(recipients)] if recipients else ""
+                if recipients:
+                    recipient_email = recipients[i % len(recipients)]
+                else:
+                    recipient_email = ""
+
+                # Customize Body with Per-User Tracking
+                current_body_html = body_html
+                
+                if campaign_id and current_body_html:
+                    # 1. Hydrate "Naked" Pixels
+                    def add_campaign_param(match):
+                        return f'{match.group(1)}?c={campaign_id}&r={quote(recipient_email)}{match.group(2)}'
+                    current_body_html = re.sub(naked_pixel_pattern, add_campaign_param, current_body_html)
+                    
+                    # 2. Replace [tracking_pixel] placeholder
+                    if '[tracking_pixel]' in current_body_html:
+                        pixel_url = f"{base_url}/t/pixel.png?c={campaign_id}&r={quote(recipient_email)}"
+                        
+                        # Handle usage inside src attributes
+                        current_body_html = current_body_html.replace('src="[tracking_pixel]"', f'src="{pixel_url}"')
+                        current_body_html = current_body_html.replace("src='[tracking_pixel]'", f"src='{pixel_url}'")
+                        
+                        # Handle standalone usage
+                        pixel_tag = f'<img src="{pixel_url}" width="1" height="1" style="display:none;" alt="" />'
+                        current_body_html = current_body_html.replace('[tracking_pixel]', pixel_tag)
+                    
+                    # 3. Replace [tracking_link] placeholders
+                    matches = re.findall(link_pattern, current_body_html)
+                    for original_url in matches:
+                        encoded_url = quote(original_url)
+                        tracking_url = f"{base_url}/t/redirect?url={encoded_url}&c={campaign_id}&r={quote(recipient_email)}"
+                        current_body_html = current_body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
 
                 if use_custom_headers and custom_headers:
                      # Prepare context for template engine
@@ -147,10 +152,10 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                             # User providing text (html/plain/etc)
                             # Let MIMEText handle encoding of the body_html string
                             subtype = 'html' if 'html' in content_type_val.lower() else 'plain'
-                            message = MIMEText(body_html, subtype)
+                            message = MIMEText(current_body_html, subtype)
                     else:
                         # Fallback: User used custom headers but didn't specify Content-Type -> Default HTML
-                        message = MIMEText(body_html, 'html')
+                        message = MIMEText(current_body_html, 'html')
                     
                     # Apply headers (overwriting any defaults set by MIMEText/Message)
                     for k, v in parsed_headers:
@@ -171,7 +176,7 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                     message['From'] = f"{from_name} <{user.email}>" if from_name else user.email
                     message['Subject'] = subject
                     
-                    html_part = MIMEText(body_html, 'html')
+                    html_part = MIMEText(current_body_html, 'html')
                     message.attach(html_part)
                 
                 raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()

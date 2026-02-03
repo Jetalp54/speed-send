@@ -712,7 +712,10 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
              naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
              
              def add_campaign_param(match):
-                 return f'{match.group(1)}?c={campaign_id}{match.group(2)}'
+                 params = f"?c={campaign_id}"
+                 if recipients and len(recipients) == 1:
+                     params += f"&r={quote(recipients[0])}"
+                 return f'{match.group(1)}{params}{match.group(2)}'
                  
              body_html = re.sub(naked_pixel_pattern, add_campaign_param, body_html)
              logger.info(f"✅ Hydrated frontend-inserted pixels with draft_campaign_id={campaign_id}")
@@ -735,6 +738,8 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                 # Replace [tracking_pixel] placeholder
                 if '[tracking_pixel]' in body_html:
                     pixel_params = f"?c={campaign_id}" if campaign_id else ""
+                    if recipients and len(recipients) == 1:
+                        pixel_params += f"&r={quote(recipients[0])}"
                     pixel_url = f"{base_url}/t/pixel.png{pixel_params}"
                     
                     # 1. Handle usage inside src attributes (e.g. <img src="[tracking_pixel]">)
@@ -758,6 +763,8 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                         tracking_params = f"?url={encoded_url}"
                         if campaign_id:
                             tracking_params += f"&c={campaign_id}"
+                        if recipients and len(recipients) == 1:
+                            tracking_params += f"&r={quote(recipients[0])}"
                             
                         tracking_url = f"{base_url}/t/redirect{tracking_params}"
                         body_html = body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)

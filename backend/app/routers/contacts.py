@@ -153,7 +153,11 @@ async def create_contact(contact: ContactCreate, db: Session = Depends(get_db)):
             contact_list_id=contact.contact_list_id,
             email=contact.email,
             first_name=contact.first_name,
-            last_name=contact.last_name
+            last_name=contact.last_name,
+            isp=contact.isp,
+            geo_country=contact.geo_country,
+            geo_city=contact.geo_city,
+            tags=contact.tags
         )
         
         db.add(db_contact)
@@ -248,7 +252,11 @@ async def bulk_import_contacts(
                 contact_list_id=contact_list_id,
                 email=contact_data.email,
                 first_name=contact_data.first_name,
-                last_name=contact_data.last_name
+                last_name=contact_data.last_name,
+                isp=contact_data.isp,
+                geo_country=contact_data.geo_country,
+                geo_city=contact_data.geo_city,
+                tags=contact_data.tags
             )
             db.add(contact)
             created_contacts.append(contact)

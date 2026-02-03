@@ -1,146 +1,148 @@
 
 import csv
 import logging
-import hashlib
 import io
+import json
 from sqlalchemy.orm import Session
-from sqlalchemy import insert, select, text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-from app.models import EnterpriseContact, ListMember, ContactList
-from app.encryption import EncryptionService
+from sqlalchemy import text
+from app.models import Contact, ContactList
 
 logger = logging.getLogger(__name__)
 
 class ContactImporter:
     def __init__(self, db: Session):
         self.db = db
-        self.encryption = EncryptionService()
 
     def import_csv_stream(self, file_content: str, list_id: int):
         """
-        Parses CSV string and imports contacts in batches.
-        Assumes headers: email, [first_name, last_name, ...]
+        Parses CSV string and imports contacts into the simple 'Contact' model.
+        Targeted for the User Sender frontend.
+        
+        Supported Headers (Case Insensitive):
+        - email (Required)
+        - first_name, firstname
+        - last_name, lastname
+        - isp
+        - geo, country, geo_country
+        - city, geo_city
+        - tags (comma separated)
         """
+        # Handle BOM if present
+        if file_content.startswith('\ufeff'):
+            file_content = file_content[1:]
+            
         csv_file = io.StringIO(file_content)
         reader = csv.DictReader(csv_file)
         
-        # Normalize headers
+        # Normalize headers validation
         if not reader.fieldnames:
-             raise ValueError("CSV file is empty or missing headers")
+            raise ValueError("CSV file is empty or missing headers")
              
-        headers = [h.lower() for h in reader.fieldnames]
+        headers_map = {h.lower().strip(): h for h in reader.fieldnames}
         
-        if 'email' not in headers:
-            # Fallback: try to find column that looks like email
-            raise ValueError("CSV must have an 'email' column")
+        # Find email column
+        email_col = next((h for h in headers_map if 'email' in h), None)
+        if not email_col:
+             raise ValueError("CSV must have an 'email' column")
+        email_header = headers_map[email_col]
+
+        logger.info(f"Importing to List {list_id}. Headers found: {list(headers_map.keys())}")
 
         batch_size = 1000
         batch = []
-        
         count = 0
+        
+        # Valid column mappings
+        first_name_col = next((h for h in headers_map if h in ['first_name', 'firstname', 'first name']), None)
+        last_name_col = next((h for h in headers_map if h in ['last_name', 'lastname', 'last name']), None)
+        isp_col = next((h for h in headers_map if h in ['isp', 'carrier']), None)
+        
+        # Geo / Country
+        country_col = next((h for h in headers_map if h in ['geo', 'country', 'geo_country', 'location']), None)
+        city_col = next((h for h in headers_map if h in ['city', 'geo_city']), None)
+        
+        # Tags
+        tags_col = next((h for h in headers_map if 'tags' in h), None)
+        
         for row in reader:
             # Clean email
-            email = row.get('email', '').strip().lower()
-            if not email or '@' not in email:
+            raw_email = row.get(email_header, '')
+            if raw_email:
+                email = raw_email.strip().lower()
+            else:
                 continue
                 
-            batch.append({
+            if not email or '@' not in email:
+                continue
+            
+            # Extract fields
+            c_data = {
+                'contact_list_id': list_id,
                 'email': email,
-                'first_name': row.get('first_name', row.get('firstname', '')),
-                'last_name': row.get('last_name', row.get('lastname', '')),
-                'attributes': row # Store full row as attributes for now
-            })
+                'first_name': row.get(headers_map[first_name_col]) if first_name_col else None,
+                'last_name': row.get(headers_map[last_name_col]) if last_name_col else None,
+                'isp': row.get(headers_map[isp_col]) if isp_col else None,
+                'geo_country': row.get(headers_map[country_col]) if country_col else None,
+                'geo_city': row.get(headers_map[city_col]) if city_col else None,
+                'tags': []
+            }
+            
+            # Parse tags
+            if tags_col:
+                raw_tags = row.get(headers_map[tags_col])
+                if raw_tags:
+                    # Split by comma or pipe
+                    c_data['tags'] = [t.strip() for t in raw_tags.replace('|', ',').split(',') if t.strip()]
+
+            batch.append(c_data)
             
             if len(batch) >= batch_size:
-                self._process_batch(batch, list_id)
+                self._process_batch_simple(batch)
                 count += len(batch)
                 batch = []
                 
         if batch:
-            self._process_batch(batch, list_id)
+            self._process_batch_simple(batch)
             count += len(batch)
             
         return count
 
-    def _process_batch(self, rows: list, list_id: int):
+    def _process_batch_simple(self, contacts_data: list):
         """
-        1. Hash emails.
-        2. Upsert EnterpriseContact (get IDs).
-        3. Upsert ListMember.
+        Inserts contacts into the 'contacts' table.
+        Handled Duplicates: Skips if email exists in this list.
         """
-        contact_mappings = []
-        email_hashes = []
-        
-        # Prepare data
-        for row in rows:
-            email = row['email']
-            m = hashlib.sha256()
-            m.update(email.encode('utf-8'))
-            email_hash = m.hexdigest()
-            
-            encrypted = self.encryption.encrypt(email)
-            
-            contact_mappings.append({
-                'workspace_id': 0, # Default workspace for now
-                'email_hash': email_hash,
-                'email_encrypted': encrypted,
-                'attributes': row['attributes']
-            })
-            email_hashes.append(email_hash)
-            
-        if not contact_mappings:
+        if not contacts_data:
             return
 
-        # 1. Upsert Contacts (ON CONFLICT DO NOTHING)
-        # We want to insert if not exists, and get IDs.
-        # SQLAlchemy 1.4/2.0+ Core 
-        stmt = pg_insert(EnterpriseContact).values(contact_mappings)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=['email_hash'],
-            set_=dict(updated_at=text("now()")) # Touch updated_at to return ID? No need, just do nothing or update aux fields
-        ).returning(EnterpriseContact.id, EnterpriseContact.email_hash)
+        # 1. Identify existing emails in this list to avoid constraint errors
+        # (Assuming uniqueness is preferred per list, though simple model allows dups unless logic prevents it)
+        # We will retrieve existing emails for this list to filter them out.
         
-        result = self.db.execute(stmt)
-        # Result contains (id, email_hash) for affected rows (inserted or updated)
-        # Note: If ON CONFLICT DO NOTHING and row exists, it might NOT return the row in some PG versions/drivers unless we emulate.
-        # Safer approach for "Get or Create":
-        # A) Insert ignore -> Select IN hashes
-        # B) Upsert returning ID
+        list_id = contacts_data[0]['contact_list_id']
+        emails = {c['email'] for c in contacts_data}
         
-        # Let's do B (Upsert with DO UPDATE) - it guarantees returning IDs.
-        upserted_map = {row.email_hash: row.id for row in result}
+        # Query existing in this list
+        existing_q = self.db.query(Contact.email).filter(
+            Contact.contact_list_id == list_id,
+            Contact.email.in_(emails)
+        ).all()
         
-        # For any missing hashes (if unexpected behavior), fetch them
-        missing_hashes = set(email_hashes) - set(upserted_map.keys())
-        if missing_hashes:
-            # Fetch existing IDs
-            existing = self.db.query(EnterpriseContact.id, EnterpriseContact.email_hash)\
-                .filter(EnterpriseContact.email_hash.in_(list(missing_hashes))).all()
-            for r in existing:
-                upserted_map[r.email_hash] = r.id
-                
-        # 2. Prepare List Members
-        member_mappings = []
-        for i, row in enumerate(rows):
-            email_h = email_hashes[i]
-            contact_id = upserted_map.get(email_h)
-            
-            if contact_id:
-                member_mappings.append({
-                    'contact_list_id': list_id,
-                    'contact_id': contact_id,
-                    'status': 'active',
-                    'tags': []
-                })
-                
-        if member_mappings:
-            # Upsert Members
-            # Unique constraint needed on (contact_list_id, contact_id)
-            # We assume unique index exists or we strictly rely on "ON CONFLICT DO NOTHING"
-            # The schema definition in models.py didn't explicitly show the unique index code but it's implied for list membership.
-            # I will use DO NOTHING just in case to avoid dups.
-            stmt_members = pg_insert(ListMember).values(member_mappings)
-            stmt_members = stmt_members.on_conflict_do_nothing()
-            self.db.execute(stmt_members)
-            
-        self.db.commit()
+        existing_emails = {r[0] for r in existing_q}
+        
+        # Filter out existing
+        to_insert = []
+        for c in contacts_data:
+            if c['email'] not in existing_emails:
+                # Add to DB
+                # Note: We must create model instances
+                # or use bulk_insert_mappings if performance is critical.
+                # bulk_save_objects is faster for Core, but let's use model instances for safety.
+                # Actually, bulk_insert_mappings is best here.
+                to_insert.append(c)
+                # Add to existing_emails to prevent duplicates strictly within this batch (e.g. valid csv dups)
+                existing_emails.add(c['email'])
+
+        if to_insert:
+            self.db.bulk_insert_mappings(Contact, to_insert)
+            self.db.commit()

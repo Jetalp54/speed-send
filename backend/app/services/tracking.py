@@ -176,6 +176,7 @@ def log_tracking_event_task(event_data):
             geo_city=event_data.get('geo_city'),
             geo_region=event_data.get('geo_region'),
             ip_hash=ip_hash,
+            ip_address=ip_address, # Raw IP
             # Extended fields
             device_type=event_data.get('device_type'),
             os=event_data.get('os'),
@@ -261,8 +262,11 @@ def log_tracking_event_task(event_data):
                     draft.clicks_count = (draft.clicks_count or 0) + 1
                 logger.info(f"📈 Updated Draft {d_id} counters")
         
-        # 3. Update Email Log Stats (if linked)
+        # 3. Update Email Log Stats & Handle Auto-Segmentation
         email_log_id = event_data.get('email_log_id')
+        source_list_id = None
+        recipient_email = None
+
         if email_log_id:
             from app.models import EmailLog, ContactList, Contact
             log = db.query(EmailLog).filter(EmailLog.id == email_log_id).first()
@@ -276,50 +280,74 @@ def log_tracking_event_task(event_data):
                     if hasattr(log, 'unsubscribes_count'):
                         log.unsubscribes_count = (log.unsubscribes_count or 0) + 1
                 
-                # --- AUTO-SEGMENTATION LOGIC ---
                 source_list_id = getattr(log, 'contact_list_id', None)
-                if not source_list_id and d_id:
-                    draft_campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == d_id).first()
-                    if draft_campaign and draft_campaign.recipient_metadata:
-                        source_list_id = draft_campaign.recipient_metadata.get(log.recipient_email)
-                
-                if source_list_id:
-                    source_list = db.query(ContactList).filter(ContactList.id == source_list_id).first()
-                    if source_list:
-                        target_list_name = f"{source_list.name}_{event_data['event_type']}"
-                        
-                        target_list = db.query(ContactList).filter(ContactList.name == target_list_name).first()
-                        if not target_list:
-                            target_list = ContactList(
-                                name=target_list_name,
-                                description=f"Auto-segment: {event_data['event_type']} from {source_list.name}"
-                            )
-                            db.add(target_list)
-                            db.flush()
-                        
-                        existing = db.query(Contact).filter(
-                            Contact.contact_list_id == target_list.id,
-                            Contact.email == log.recipient_email
+                recipient_email = log.recipient_email
+        else:
+            # Explicit tracking (no log ID) -> Use &r= param
+            recipient_email = event_data.get('recipient')
+
+        # --- AUTO-SEGMENTATION LOGIC (Shared) ---
+        if recipient_email and d_id:
+             # If source list not known from log, try to resolve from draft's contacts
+             if not source_list_id:
+                 draft_campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == d_id).first()
+                 if draft_campaign:
+                     # Check connection: Draft -> ContactList -> Contact(email)
+                     from app.models import DraftCampaignContact, ContactList, Contact
+                     
+                     # Find which of the draft's lists contains this recipient
+                     found_contact = db.query(Contact).join(
+                         ContactList, Contact.contact_list_id == ContactList.id
+                     ).join(
+                         DraftCampaignContact, DraftCampaignContact.contact_list_id == ContactList.id
+                     ).filter(
+                         DraftCampaignContact.draft_campaign_id == d_id,
+                         Contact.email == recipient_email
+                     ).first()
+                     
+                     if found_contact:
+                         source_list_id = found_contact.contact_list_id
+            
+             # If we identified a linked source list, copy contact to Action List
+             if source_list_id:
+                source_list = db.query(models.ContactList).filter(models.ContactList.id == source_list_id).first()
+                if source_list:
+                    target_list_name = f"{source_list.name}_{event_data['event_type']}"
+                    
+                    target_list = db.query(models.ContactList).filter(models.ContactList.name == target_list_name).first()
+                    if not target_list:
+                        target_list = models.ContactList(
+                            name=target_list_name,
+                            description=f"Auto-segment: {event_data['event_type']} from {source_list.name}"
+                        )
+                        db.add(target_list)
+                        db.flush()
+                    
+                    # Check if already in target list
+                    existing = db.query(models.Contact).filter(
+                        models.Contact.contact_list_id == target_list.id,
+                        models.Contact.email == recipient_email
+                    ).first()
+                    
+                    if not existing:
+                        # Copy contact details from source (if found) or create new partial contact
+                        orig = db.query(models.Contact).filter(
+                             models.Contact.contact_list_id == source_list_id,
+                             models.Contact.email == recipient_email
                         ).first()
                         
-                        if not existing:
-                            orig = db.query(Contact).filter(
-                                Contact.contact_list_id == source_list_id,
-                                Contact.email == log.recipient_email
-                            ).first()
-                            
-                            new_c = Contact(
-                                contact_list_id=target_list.id,
-                                email=log.recipient_email,
-                                first_name=orig.first_name if orig else None,
-                                last_name=orig.last_name if orig else None,
-                                isp=orig.isp if orig else None,
-                                geo_country=orig.geo_country if orig else None,
-                                geo_city=orig.geo_city if orig else None,
-                                tags=orig.tags if orig else []
-                            )
-                            db.add(new_c)
-                            logger.info(f"👥 Segments: {log.recipient_email} -> {target_list_name}")
+                        new_c = models.Contact(
+                            contact_list_id=target_list.id,
+                            email=recipient_email,
+                            first_name=orig.first_name if orig else None,
+                            last_name=orig.last_name if orig else None,
+                            isp=orig.isp if orig else None,
+                            geo_country=orig.geo_country if orig else None,
+                            geo_city=orig.geo_city if orig else None,
+                            tags=orig.tags if orig else []
+                        )
+                        db.add(new_c)
+                        logger.info(f"👥 Segments: {recipient_email} -> {target_list_name}")
         
         db.commit()
         logger.info(f"✅ TRACKING LOGGED: Event recorded in database for email_log_id={email_log_id or 'explicit'}")

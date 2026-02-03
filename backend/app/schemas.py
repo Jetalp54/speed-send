@@ -133,11 +133,19 @@ class ContactBase(BaseModel):
 
 class ContactCreate(ContactBase):
     contact_list_id: int
+    isp: Optional[str] = None
+    geo_country: Optional[str] = None
+    geo_city: Optional[str] = None
+    tags: Optional[List[str]] = []
 
 class ContactUpdate(BaseModel):
     email: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    isp: Optional[str] = None
+    geo_country: Optional[str] = None
+    geo_city: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 class ContactResponse(ContactBase):
     id: int
