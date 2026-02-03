@@ -11,7 +11,7 @@ import {
   Target,
   Zap,
   Mail,
-  User,
+  User as UserIcon,
   ArrowRight,
   Sparkles,
   Eye,
@@ -20,7 +20,8 @@ import {
   Save,
   LineChart,
   ChevronRight,
-  HelpCircle
+  HelpCircle,
+  Building2
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -223,9 +224,14 @@ export default function NewDraftPage() {
       showToast('Campaign draft successfully initialized.', 'success');
       router.push('/drafts');
     } catch (error: any) {
-      const errorMsg = typeof error.message === 'object'
-        ? JSON.stringify(error.message)
-        : (error.message || 'Failed to create campaign');
+      let errorMsg = 'Failed to create campaign';
+      if (error.message) {
+        if (typeof error.message === 'object') {
+          errorMsg = error.message.detail || JSON.stringify(error.message);
+        } else {
+          errorMsg = error.message;
+        }
+      }
       showToast(errorMsg, 'error');
     } finally {
       setSubmitting(false);
@@ -268,7 +274,8 @@ export default function NewDraftPage() {
               <Input
                 value={config.name}
                 onChange={(e) => setConfig(prev => ({ ...prev, name: e.target.value }))}
-                className="h-8 border-none bg-transparent p-0 text-lg font-bold focus-visible:ring-0 w-64"
+                placeholder="Campaign Name (e.g. Winter Sale 2024)"
+                className="h-8 border-none bg-transparent p-0 text-lg font-bold focus-visible:ring-0 w-64 italic placeholder:text-muted-foreground/50 placeholder:italic"
               />
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 High Velocity Outreach <ChevronRight className="h-3 w-3" /> New Campaign
@@ -294,391 +301,383 @@ export default function NewDraftPage() {
 
         {/* Left & Center: Configuration Workspace */}
         <div className="lg:col-span-8 flex flex-col gap-6 h-[calc(100vh-10rem)] overflow-y-auto pr-2 custom-scrollbar">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="creative" className="gap-2">
-                <Sparkles className="h-4 w-4" /> Creative Outreach
-              </TabsTrigger>
-              <TabsTrigger value="strategy" className="gap-2">
-                <Target className="h-4 w-4" /> Distribution Strategy
-              </TabsTrigger>
-            </TabsList>
 
-            <TabsContent value="creative" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <CardTitle>Creative Content</CardTitle>
-                      <CardDescription>Design your message and define identity parameters.</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2 bg-muted p-1 rounded-md">
-                      <Button
-                        variant={config.body_format === 'html' ? 'secondary' : 'ghost'}
-                        size="sm"
-                        onClick={() => setConfig(prev => ({ ...prev, body_format: 'html' }))}
-                        className="h-8"
-                      >HTML</Button>
-                      <Button
-                        variant={config.body_format === 'text' ? 'secondary' : 'ghost'}
-                        size="sm"
-                        onClick={() => setConfig(prev => ({ ...prev, body_format: 'text' }))}
-                        className="h-8"
-                      >Text</Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="flex items-center justify-between">
-                        Identity Name
-                        {config.use_custom_headers && <span className="text-[10px] text-primary opacity-60 font-medium tracking-tighter">OPTIONAL (MIME)</span>}
-                      </Label>
-                      <Input
-                        placeholder="e.g. John from SpeedSend"
-                        value={config.from_name}
-                        onChange={(e) => setConfig(prev => ({ ...prev, from_name: e.target.value }))}
-                        className={config.use_custom_headers ? "bg-primary/5 border-primary/20" : ""}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center justify-between">
-                        Subject Line
-                        {config.use_custom_headers && <span className="text-[10px] text-primary opacity-60 font-medium tracking-tighter">OPTIONAL (MIME)</span>}
-                      </Label>
-                      <Input
-                        placeholder="Enter headline..."
-                        value={config.subject}
-                        onChange={(e) => setConfig(prev => ({ ...prev, subject: e.target.value }))}
-                        className={config.use_custom_headers ? "bg-primary/5 border-primary/20" : ""}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t space-y-4 bg-muted/5 p-4 rounded-lg border border-dashed border-primary/20">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <Label className="flex items-center gap-2">
-                          Header Personalization
-                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/30 text-primary uppercase font-black">Pro</Badge>
-                        </Label>
-                        <p className="text-[11px] text-muted-foreground">Inject custom MIME headers (X-Prefix/List-Unsubscribe/etc).</p>
-                      </div>
-                      <Switch
-                        checked={config.use_custom_headers}
-                        onCheckedChange={(val) => setConfig(prev => ({
-                          ...prev,
-                          use_custom_headers: val,
-                          custom_headers: (val && !prev.custom_headers) ? DEFAULT_MIME_HEADERS : prev.custom_headers
-                        }))}
-                      />
-                    </div>
-                    {config.use_custom_headers && (
-                      <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {[
-                            { t: 'Feedback-ID: [rnda_16]', l: 'Feedback-ID' },
-                            { t: 'List-Unsubscribe: <mailto:unsub@domain.com>, <https://domain.com/unsub>', l: 'List-Unsubscribe' },
-                            { t: 'X-Campaign-ID: [rndn_8]', l: 'X-Campaign-ID' },
-                            { t: 'X-Priority: 1 (Highest)', l: 'X-Priority' }
-                          ].map(htag => (
-                            <Button
-                              key={htag.l}
-                              variant="outline"
-                              size="sm"
-                              className="h-6 text-[9px] px-2 bg-background/50 border-primary/20 hover:bg-primary/5 hover:border-primary/40 text-primary/80"
-                              onClick={() => setConfig(prev => ({ ...prev, custom_headers: (prev.custom_headers ? prev.custom_headers + '\n' : '') + htag.t }))}
-                            >
-                              + {htag.l}
-                            </Button>
-                          ))}
-                        </div>
-                        <Textarea
-                          placeholder="X-Campaign-ID: 123&#10;List-Unsubscribe: <mailto:unsub@domain.com>"
-                          className="h-24 font-mono text-xs bg-muted/30 border-primary/10 focus-visible:ring-primary/20"
-                          value={config.custom_headers}
-                          onChange={(e) => setConfig(prev => ({ ...prev, custom_headers: e.target.value }))}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2 relative pt-4 border-t">
-                    <div className="flex justify-between items-center mb-1">
-                      <div className="flex items-center gap-4">
-                        <Label>Message Body ({config.body_format.toUpperCase()})</Label>
-                        <div className="flex gap-1 items-center">
-                          <Button
-                            variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2 border-dashed"
-                            onClick={() => insertTag('[tracking_pixel]')}
-                          >
-                            <LineChart className="h-3 w-3" /> PIXEL
-                          </Button>
-                          <Button
-                            variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2 border-dashed"
-                            onClick={() => insertTag('[tracking_link]')}
-                          >
-                            <Plus className="h-3 w-3" /> LINK
-                          </Button>
-                          <Button
-                            variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2 border-dashed text-destructive border-destructive/20"
-                            onClick={() => insertTag('[unsubscribe]')}
-                          >
-                            <Trash2 className="h-3 w-3" /> UNSUB
-                          </Button>
-                          {trackingDomains.find(d => d.status === 'active') ? (
-                            <Badge variant="outline" className="text-[8px] h-4 bg-green-500/10 text-green-600 border-green-500/20 px-1 gap-1">
-                              <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
-                              {trackingDomains.find(d => d.status === 'active')?.domain}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-[8px] h-4 bg-red-500/10 text-red-600 border-red-500/20 px-1 gap-1">
-                              <div className="w-1 h-1 rounded-full bg-red-500" />
-                              No Active Tracking Domain
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <Button variant="ghost" size="sm" onClick={() => setTagGuideOpen(!tagGuideOpen)} className="h-7 gap-1 text-xs">
-                        <HelpCircle className="h-3 w-3" /> Tag Guide
-                      </Button>
-                    </div>
-                    <Textarea
-                      placeholder={config.body_format === 'html' ? "Enter HTML source..." : "Enter plain text message..."}
-                      className="min-h-[400px] font-mono text-sm leading-relaxed shadow-inner"
-                      value={config.body_format === 'html' ? config.body_html : config.body_template}
-                      onChange={(e) => setConfig(prev => ({
-                        ...prev,
-                        [config.body_format === 'html' ? 'body_html' : 'body_template']: e.target.value
-                      }))}
-                    />
-                    {tagGuideOpen && (
-                      <div className="absolute top-20 right-4 w-64 bg-card border rounded-lg shadow-xl p-4 z-10 animate-in slide-in-from-right-2">
-                        <h4 className="text-xs font-bold uppercase mb-3 flex items-center gap-2">
-                          <Code className="h-3 w-3" /> Tag Insertion
-                        </h4>
-                        <div className="space-y-1">
-                          {TEMPLATE_TAGS.map(tag => (
-                            <button
-                              key={tag.tag}
-                              onClick={() => insertTag(tag.tag)}
-                              className="flex justify-between items-center w-full p-2 text-[11px] rounded hover:bg-muted transition-colors"
-                            >
-                              <code className="text-primary font-bold">{tag.tag}</code>
-                              <span className="text-muted-foreground">{tag.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="strategy" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2 text-primary">
-                      <User className="h-5 w-5" /> Workspace Source
-                    </CardTitle>
-                    <CardDescription>Select identity clusters and personas.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Service Accounts</Label>
-                        <Badge variant="outline" className="text-[10px] h-5">{accounts.length} Available</Badge>
-                      </div>
-                      <div className="grid grid-cols-1 gap-1.5 border rounded-xl p-3 h-44 overflow-y-auto bg-muted/20 shadow-inner scrollbar-thin">
-                        {accounts.map(account => (
-                          <div key={account.id} className="flex items-center space-x-2 py-1 px-2 rounded-md hover:bg-background/80 transition-all group">
-                            <Checkbox
-                              id={`acc-${account.id}`}
-                              checked={config.selected_account_ids.includes(account.id)}
-                              className="border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                              onCheckedChange={(checked) => {
-                                setConfig(prev => ({
-                                  ...prev,
-                                  selected_account_ids: checked
-                                    ? [...prev.selected_account_ids, account.id]
-                                    : prev.selected_account_ids.filter(id => id !== account.id)
-                                }));
-                              }}
-                            />
-                            <div className="flex flex-col">
-                              <label htmlFor={`acc-${account.id}`} className="text-[11px] font-bold cursor-pointer group-hover:text-primary transition-colors">{account.name || 'Cloud SMT'}</label>
-                              <span className="text-[9px] text-muted-foreground leading-tight italic">{account.client_email}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Persona Assignment</Label>
-                        <div className="flex gap-2 text-[10px] font-black text-primary/60">
-                          <button onClick={() => setConfig(prev => ({ ...prev, selected_user_ids: users.map(u => u.id) }))} className="hover:text-primary transition-colors">ALL</button>
-                          <span className="opacity-30">|</span>
-                          <button onClick={() => setConfig(prev => ({ ...prev, selected_user_ids: [] }))} className="hover:text-primary transition-colors">NONE</button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 gap-1.5 border rounded-xl p-3 h-52 overflow-y-auto bg-muted/20 shadow-inner scrollbar-thin font-mono">
-                        {users.map(user => (
-                          <div key={user.id} className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-background/80 transition-all border border-transparent hover:border-primary/10 group">
-                            <div className="flex items-center space-x-3">
-                              <Checkbox
-                                id={`usr-${user.id}`}
-                                checked={config.selected_user_ids.includes(user.id)}
-                                className="data-[state=checked]:bg-primary"
-                                onCheckedChange={(checked) => {
-                                  setConfig(prev => ({
-                                    ...prev,
-                                    selected_user_ids: checked
-                                      ? [...prev.selected_user_ids, user.id]
-                                      : prev.selected_user_ids.filter(id => id !== user.id)
-                                  }));
-                                }}
-                              />
-                              <label htmlFor={`usr-${user.id}`} className="text-[11px] font-medium cursor-pointer flex items-center gap-2">
-                                <User className="h-3 w-3 opacity-40 group-hover:opacity-100 group-hover:text-primary" />
-                                {user.email}
-                              </label>
-                            </div>
-                            <Badge variant="outline" className="text-[9px] h-4 px-1 opacity-40 group-hover:opacity-100 border-primary/20">Persona</Badge>
-                          </div>
-                        ))}
-                        {users.length === 0 && (
-                          <div className="h-full flex flex-col items-center justify-center opacity-30 italic text-xs">
-                            Select an account to load personas
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2 text-primary">
-                      <Mail className="h-5 w-5" /> Destination Segments
-                    </CardTitle>
-                    <CardDescription>Assign recipient clusters to this session.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 gap-1 border rounded-xl p-3 h-[26rem] overflow-y-auto bg-muted/20 shadow-inner scrollbar-thin">
-                      {contactLists.map(list => (
-                        <div key={list.id} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-background transition-all border border-transparent hover:border-primary/10 group">
-                          <div className="flex items-center space-x-3">
-                            <Checkbox
-                              id={`list-${list.id}`}
-                              checked={config.selected_contact_list_ids.includes(list.id)}
-                              className="data-[state=checked]:bg-primary"
-                              onCheckedChange={(checked) => {
-                                setConfig(prev => ({
-                                  ...prev,
-                                  selected_contact_list_ids: checked
-                                    ? [...prev.selected_contact_list_ids, list.id]
-                                    : prev.selected_contact_list_ids.filter(id => id !== list.id)
-                                }));
-                              }}
-                            />
-                            <div className="flex flex-col">
-                              <label htmlFor={`list-${list.id}`} className="text-[11px] font-bold cursor-pointer transition-colors leading-tight group-hover:text-primary">{list.name}</label>
-                              <span className="text-[8px] uppercase tracking-tighter opacity-40 font-black italic">{list.id} :: CONTACT LIST</span>
-                            </div>
-                          </div>
-                          <Badge variant="secondary" className="text-[10px] h-5 px-2 bg-primary/5 text-primary border-primary/10 font-black">{list.contact_count} REC.</Badge>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 pt-2">
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-tighter">List Start Index</Label>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          value={config.list_start_index}
-                          onChange={(e) => setConfig(prev => ({ ...prev, list_start_index: parseInt(e.target.value) || 0 }))}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-bold uppercase tracking-tighter">Send Limit (Slice)</Label>
-                        <Input
-                          type="number"
-                          placeholder="All"
-                          value={config.list_send_limit || ''}
-                          onChange={(e) => setConfig(prev => ({ ...prev, list_send_limit: e.target.value ? parseInt(e.target.value) : null }))}
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+          {/* Section 1: Creative Content */}
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" /> Creative Outreach
+                  </CardTitle>
+                  <CardDescription>Design your message and define identity parameters.</CardDescription>
+                </div>
+                <div className="flex items-center gap-2 bg-muted p-1 rounded-md">
+                  <Button
+                    variant={config.body_format === 'html' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setConfig(prev => ({ ...prev, body_format: 'html' }))}
+                    className="h-8"
+                  >HTML</Button>
+                  <Button
+                    variant={config.body_format === 'text' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => setConfig(prev => ({ ...prev, body_format: 'text' }))}
+                    className="h-8"
+                  >Text</Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center justify-between">
+                    Identity Name
+                    {config.use_custom_headers && <span className="text-[10px] text-primary opacity-60 font-medium tracking-tighter">OPTIONAL (MIME)</span>}
+                  </Label>
+                  <Input
+                    placeholder="e.g. John from SpeedSend"
+                    value={config.from_name}
+                    onChange={(e) => setConfig(prev => ({ ...prev, from_name: e.target.value }))}
+                    className={config.use_custom_headers ? "bg-primary/5 border-primary/20" : ""}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="flex items-center justify-between">
+                    Subject Line
+                    {config.use_custom_headers && <span className="text-[10px] text-primary opacity-60 font-medium tracking-tighter">OPTIONAL (MIME)</span>}
+                  </Label>
+                  <Input
+                    placeholder="Enter headline..."
+                    value={config.subject}
+                    onChange={(e) => setConfig(prev => ({ ...prev, subject: e.target.value }))}
+                    className={config.use_custom_headers ? "bg-primary/5 border-primary/20" : ""}
+                  />
+                </div>
               </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Distribution Parameters</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4 border-r pr-8">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Burst Density</Label>
-                      <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">Global Limit</Badge>
+              <div className="pt-4 border-t space-y-4 bg-muted/5 p-4 rounded-lg border border-dashed border-primary/20">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label className="flex items-center gap-2">
+                      Header Personalization
+                      <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/30 text-primary uppercase font-black">Pro</Badge>
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground">Inject custom MIME headers (X-Prefix/List-Unsubscribe/etc).</p>
+                  </div>
+                  <Switch
+                    checked={config.use_custom_headers}
+                    onCheckedChange={(val) => setConfig(prev => ({
+                      ...prev,
+                      use_custom_headers: val,
+                      custom_headers: (val && !prev.custom_headers) ? DEFAULT_MIME_HEADERS : prev.custom_headers
+                    }))}
+                  />
+                </div>
+                {config.use_custom_headers && (
+                  <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {[
+                        { t: 'Feedback-ID: [rnda_16]', l: 'Feedback-ID' },
+                        { t: 'List-Unsubscribe: <mailto:unsub@domain.com>, <https://domain.com/unsub>', l: 'List-Unsubscribe' },
+                        { t: 'X-Campaign-ID: [rndn_8]', l: 'X-Campaign-ID' },
+                        { t: 'X-Priority: 1 (Highest)', l: 'X-Priority' }
+                      ].map(htag => (
+                        <Button
+                          key={htag.l}
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-[9px] px-2 bg-background/50 border-primary/20 hover:bg-primary/5 hover:border-primary/40 text-primary/80"
+                          onClick={() => setConfig(prev => ({ ...prev, custom_headers: (prev.custom_headers ? prev.custom_headers + '\n' : '') + htag.t }))}
+                        >
+                          + {htag.l}
+                        </Button>
+                      ))}
                     </div>
-                    <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-xl border border-dashed hover:border-primary/30 transition-colors">
+                    <Textarea
+                      placeholder="X-Campaign-ID: 123&#10;List-Unsubscribe: <mailto:unsub@domain.com>"
+                      className="h-24 font-mono text-xs bg-muted/30 border-primary/10 focus-visible:ring-primary/20"
+                      value={config.custom_headers}
+                      onChange={(e) => setConfig(prev => ({ ...prev, custom_headers: e.target.value }))}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2 relative pt-4 border-t">
+                <div className="flex justify-between items-center mb-1">
+                  <div className="flex items-center gap-4">
+                    <Label>Message Body ({config.body_format.toUpperCase()})</Label>
+                    <div className="flex gap-1 items-center">
+                      <Button
+                        variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2 border-dashed"
+                        onClick={() => insertTag('[tracking_pixel]')}
+                      >
+                        <LineChart className="h-3 w-3" /> PIXEL
+                      </Button>
+                      <Button
+                        variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2 border-dashed"
+                        onClick={() => insertTag('[tracking_link]')}
+                      >
+                        <Plus className="h-3 w-3" /> LINK
+                      </Button>
+                      <Button
+                        variant="outline" size="sm" className="h-6 text-[10px] gap-1 px-2 border-dashed text-destructive border-destructive/20"
+                        onClick={() => insertTag('[unsubscribe]')}
+                      >
+                        <Trash2 className="h-3 w-3" /> UNSUB
+                      </Button>
+                      {trackingDomains.find(d => d.status === 'active') ? (
+                        <Badge variant="outline" className="text-[8px] h-4 bg-green-500/10 text-green-600 border-green-500/20 px-1 gap-1">
+                          <div className="w-1 h-1 rounded-full bg-green-500 animate-pulse" />
+                          {trackingDomains.find(d => d.status === 'active')?.domain}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[8px] h-4 bg-red-500/10 text-red-600 border-red-500/20 px-1 gap-1">
+                          <div className="w-1 h-1 rounded-full bg-red-500" />
+                          No Active Tracking Domain
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setTagGuideOpen(!tagGuideOpen)} className="h-7 gap-1 text-xs">
+                    <HelpCircle className="h-3 w-3" /> Tag Guide
+                  </Button>
+                </div>
+                <Textarea
+                  placeholder={config.body_format === 'html' ? "Enter HTML source..." : "Enter plain text message..."}
+                  className="min-h-[400px] font-mono text-sm leading-relaxed shadow-inner"
+                  value={config.body_format === 'html' ? config.body_html : config.body_template}
+                  onChange={(e) => setConfig(prev => ({
+                    ...prev,
+                    [config.body_format === 'html' ? 'body_html' : 'body_template']: e.target.value
+                  }))}
+                />
+                {tagGuideOpen && (
+                  <div className="absolute top-20 right-4 w-64 bg-card border rounded-lg shadow-xl p-4 z-10 animate-in slide-in-from-right-2">
+                    <h4 className="text-xs font-bold uppercase mb-3 flex items-center gap-2">
+                      <Code className="h-3 w-3" /> Tag Insertion
+                    </h4>
+                    <div className="space-y-1">
+                      {TEMPLATE_TAGS.map(tag => (
+                        <button
+                          key={tag.tag}
+                          onClick={() => insertTag(tag.tag)}
+                          className="flex justify-between items-center w-full p-2 text-[11px] rounded hover:bg-muted transition-colors"
+                        >
+                          <code className="text-primary font-bold">{tag.tag}</code>
+                          <span className="text-muted-foreground">{tag.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Section 2: Target Audience */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-primary">
+                  <Building2 className="h-5 w-5" /> Identity Cluster
+                </CardTitle>
+                <CardDescription>Select identity clusters and active users.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Service Accounts</Label>
+                    <Badge variant="outline" className="text-[10px] h-5">{accounts.length} Available</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 gap-1.5 border rounded-xl p-3 h-44 overflow-y-auto bg-muted/20 shadow-inner scrollbar-thin text-xs">
+                    {accounts.map(account => (
+                      <div key={account.id} className="flex items-center space-x-2 py-1 px-2 rounded-md hover:bg-background/80 transition-all group">
+                        <Checkbox
+                          id={`acc-${account.id}`}
+                          checked={config.selected_account_ids.includes(account.id)}
+                          className="border-primary/30 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                          onCheckedChange={(checked) => {
+                            setConfig(prev => ({
+                              ...prev,
+                              selected_account_ids: checked
+                                ? [...prev.selected_account_ids, account.id]
+                                : prev.selected_account_ids.filter(id => id !== account.id)
+                            }));
+                          }}
+                        />
+                        <div className="flex flex-col">
+                          <label htmlFor={`acc-${account.id}`} className="font-bold cursor-pointer group-hover:text-primary transition-colors">{account.name || 'Cloud SMTP'}</label>
+                          <span className="text-[10px] text-muted-foreground leading-tight italic">{account.client_email}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <Label className="text-[11px] font-black uppercase text-primary tracking-widest">users</Label>
+                    <div className="flex gap-2 text-[10px] font-black text-primary/60">
+                      <button onClick={() => setConfig(prev => ({ ...prev, selected_user_ids: users.map(u => u.id) }))} className="hover:text-primary transition-colors">ALL</button>
+                      <span className="opacity-30">|</span>
+                      <button onClick={() => setConfig(prev => ({ ...prev, selected_user_ids: [] }))} className="hover:text-primary transition-colors">NONE</button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-1.5 border rounded-xl p-3 h-52 overflow-y-auto bg-muted/20 shadow-inner scrollbar-thin font-mono text-xs">
+                    {users.map(user => (
+                      <div key={user.id} className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-background/80 transition-all border border-transparent hover:border-primary/10 group">
+                        <div className="flex items-center space-x-3">
+                          <Checkbox
+                            id={`usr-${user.id}`}
+                            checked={config.selected_user_ids.includes(user.id)}
+                            className="data-[state=checked]:bg-primary"
+                            onCheckedChange={(checked) => {
+                              setConfig(prev => ({
+                                ...prev,
+                                selected_user_ids: checked
+                                  ? [...prev.selected_user_ids, user.id]
+                                  : prev.selected_user_ids.filter(id => id !== user.id)
+                              }));
+                            }}
+                          />
+                          <label htmlFor={`usr-${user.id}`} className="font-medium cursor-pointer flex items-center gap-2">
+                            <UserIcon className="h-3 w-3 opacity-40 group-hover:opacity-100 group-hover:text-primary" />
+                            {user.email}
+                          </label>
+                        </div>
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 opacity-40 group-hover:opacity-100 border-primary/20">Persona</Badge>
+                      </div>
+                    ))}
+                    {users.length === 0 && (
+                      <div className="h-full flex flex-col items-center justify-center opacity-30 italic text-xs">
+                        Select an account to load personas
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2 text-primary">
+                  <Mail className="h-5 w-5" /> Select Target Lists
+                </CardTitle>
+                <CardDescription>Assign recipient clusters to this session.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 gap-1 border rounded-xl p-3 h-44 overflow-y-auto bg-muted/20 shadow-inner scrollbar-thin text-xs">
+                  {contactLists.map(list => (
+                    <div key={list.id} className="flex items-center justify-between p-2.5 rounded-lg hover:bg-background transition-all border border-transparent hover:border-primary/10 group">
+                      <div className="flex items-center space-x-3">
+                        <Checkbox
+                          id={`list-${list.id}`}
+                          checked={config.selected_contact_list_ids.includes(list.id)}
+                          className="data-[state=checked]:bg-primary"
+                          onCheckedChange={(checked) => {
+                            setConfig(prev => ({
+                              ...prev,
+                              selected_contact_list_ids: checked
+                                ? [...prev.selected_contact_list_ids, list.id]
+                                : prev.selected_contact_list_ids.filter(id => id !== list.id)
+                            }));
+                          }}
+                        />
+                        <div className="flex flex-col">
+                          <label htmlFor={`list-${list.id}`} className="font-bold cursor-pointer transition-colors leading-tight group-hover:text-primary">{list.name}</label>
+                          <span className="text-[8px] uppercase tracking-tighter opacity-40 font-black italic">{list.id} :: CONTACT LIST</span>
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="text-[10px] h-5 px-2 bg-primary/5 text-primary border-primary/10 font-black">{list.contact_count} REC.</Badge>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-dashed">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-tighter">List Start Index</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={config.list_start_index}
+                      onChange={(e) => setConfig(prev => ({ ...prev, list_start_index: parseInt(e.target.value) || 0 }))}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-bold uppercase tracking-tighter">Send Limit (Slice)</Label>
+                    <Input
+                      type="number"
+                      placeholder="All"
+                      value={config.list_send_limit || ''}
+                      onChange={(e) => setConfig(prev => ({ ...prev, list_send_limit: e.target.value ? parseInt(e.target.value) : null }))}
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2 text-primary">
+                <Target className="h-5 w-5" /> Distribution Parameters
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-4 border-r pr-8">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Burst Density</Label>
+                  <Badge variant="outline" className="text-[10px] border-primary/30 text-primary">Global Limit</Badge>
+                </div>
+                <div className="flex items-center gap-4 bg-muted/30 p-4 rounded-xl border border-dashed hover:border-primary/30 transition-colors">
+                  <Input
+                    type="number"
+                    value={config.emails_per_user}
+                    onChange={(e) => setConfig(prev => ({ ...prev, emails_per_user: parseInt(e.target.value) || 1 }))}
+                    className="w-24 h-10 text-lg font-black text-center bg-background border-primary/20"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold">Emails per Persona</span>
+                    <span className="text-[10px] text-muted-foreground italic leading-tight">Max drafts to generate per cycle</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Automation Parameters</Label>
+                  <Badge variant="outline" className="text-[10px] border-orange-500/30 text-orange-600 bg-orange-500/5">Safety Lock</Badge>
+                </div>
+                <div className="grid grid-cols-1 gap-3 p-4 bg-muted/10 rounded-xl border">
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col flex-1">
+                      <span className="text-[10px] font-bold uppercase tracking-tighter opacity-70">Test Recovery Email</span>
+                      <Input
+                        placeholder="audit@domain.com"
+                        className="h-8 text-xs font-mono mt-1"
+                        value={config.test_after_email}
+                        onChange={(e) => setConfig(prev => ({ ...prev, test_after_email: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex flex-col w-24">
+                      <span className="text-[10px] font-bold uppercase tracking-tighter opacity-70">Trigger (X)</span>
                       <Input
                         type="number"
-                        value={config.emails_per_user}
-                        onChange={(e) => setConfig(prev => ({ ...prev, emails_per_user: parseInt(e.target.value) || 1 }))}
-                        className="w-24 h-10 text-lg font-black text-center bg-background border-primary/20"
+                        placeholder="100"
+                        className="h-8 text-xs font-mono mt-1"
+                        value={config.test_after_count}
+                        onChange={(e) => setConfig(prev => ({ ...prev, test_after_count: parseInt(e.target.value) || 0 }))}
                       />
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold">Emails per Persona</span>
-                        <span className="text-[10px] text-muted-foreground italic leading-tight">Max drafts to generate per cycle</span>
-                      </div>
                     </div>
                   </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-[11px] font-black uppercase text-muted-foreground tracking-widest">Automation Parameters</Label>
-                      <Badge variant="outline" className="text-[10px] border-orange-500/30 text-orange-600 bg-orange-500/5">Safety Lock</Badge>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 p-4 bg-muted/10 rounded-xl border">
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col flex-1">
-                          <span className="text-[10px] font-bold uppercase tracking-tighter opacity-70">Test Recovery Email</span>
-                          <Input
-                            placeholder="audit@domain.com"
-                            className="h-8 text-xs font-mono mt-1"
-                            value={config.test_after_email}
-                            onChange={(e) => setConfig(prev => ({ ...prev, test_after_email: e.target.value }))}
-                          />
-                        </div>
-                        <div className="flex flex-col w-24">
-                          <span className="text-[10px] font-bold uppercase tracking-tighter opacity-70">Trigger (X)</span>
-                          <Input
-                            type="number"
-                            placeholder="100"
-                            className="h-8 text-xs font-mono mt-1"
-                            value={config.test_after_count}
-                            onChange={(e) => setConfig(prev => ({ ...prev, test_after_count: parseInt(e.target.value) || 0 }))}
-                          />
-                        </div>
-                      </div>
-                      <p className="text-[9px] text-muted-foreground italic">Automatically sends a test to the recovery email after every X successful drafts.</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+                  <p className="text-[9px] text-muted-foreground italic">Automatically sends a test to the recovery email after every X successful drafts.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Right Pane: Real-Time Insights & Mini Preview */}

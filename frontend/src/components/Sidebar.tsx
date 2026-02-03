@@ -25,7 +25,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Legacy Mailer', href: '/campaigns', icon: Mail },
   { name: 'Sending Mailboxes', href: '/accounts', icon: Building2 },
-  { name: 'Subscriber Lists', href: '/contacts', icon: Contact },
+  { name: 'User Sender', href: '/contacts', icon: Contact },
   { name: 'Campaign Center', href: '/drafts', icon: FileEdit },
   { name: 'Outreach Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Team Management', href: '/users', icon: Users },

@@ -280,7 +280,7 @@ export default function ContactsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50">
-                Contact Lists
+                User Sender
               </h1>
               <p className="text-muted-foreground mt-1">
                 Organize your recipients into segmented lists.

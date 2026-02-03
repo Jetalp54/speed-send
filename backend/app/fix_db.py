@@ -81,7 +81,8 @@ def fix_schema():
                 ("draft_campaigns", "list_send_limit", "INTEGER"),
                 ("draft_campaigns", "opens_count", "INTEGER DEFAULT 0"),
                 ("draft_campaigns", "clicks_count", "INTEGER DEFAULT 0"),
-                ("draft_campaigns", "bounces_count", "INTEGER DEFAULT 0")
+                ("draft_campaigns", "bounces_count", "INTEGER DEFAULT 0"),
+                ("draft_campaigns", "saved_test_recipients", "JSONB DEFAULT '[]'")
             ]
             for table, col_name, col_type in attr_cols:
                 try:
@@ -100,7 +101,8 @@ def fix_schema():
                 ("ip_hash", "VARCHAR(64)"),
                 ("device_type", "VARCHAR(20)"),
                 ("os", "VARCHAR(50)"),
-                ("browser", "VARCHAR(50)")
+                ("browser", "VARCHAR(50)"),
+                ("draft_campaign_id", "INTEGER")
             ]
             
             for col_name, col_type in tracking_cols:

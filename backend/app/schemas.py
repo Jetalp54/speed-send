@@ -307,6 +307,16 @@ class DraftCampaignResponse(DraftCampaignBase):
     drafts_by_user: Dict[str, int] = {}
     recipients_count: int = 0
     users_count: int = 0
+    # Content fields
+    body_html: Optional[str] = None
+    use_custom_headers: bool = False
+    custom_headers: Optional[str] = None
+    body_format: Optional[str] = None
+    body_template: Optional[str] = None
+    # Test fields
+    test_after_email: Optional[str] = None
+    test_after_count: int = 0
+    saved_test_recipients: List[str] = []
     # Analytics Stats
     opens_count: int = 0
     clicks_count: int = 0

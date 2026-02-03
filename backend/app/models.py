@@ -322,7 +322,7 @@ class DraftCampaign(Base):
     # Map of recipient -> source_contact_list_id
     recipient_metadata = Column(JSON, default=dict) 
     
-    # saved_test_recipients = Column(JSON, default=list)
+    saved_test_recipients = Column(JSON, default=list)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

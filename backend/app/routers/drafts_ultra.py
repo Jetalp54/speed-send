@@ -11,6 +11,7 @@ import logging
 import asyncio
 import json
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
 router_v2 = APIRouter()
@@ -129,7 +130,7 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
     drafts = db.query(models.GmailDraft).filter(models.GmailDraft.draft_campaign_id == draft_id).all()
     
     if not drafts:
-        emit_log({
+        LogManager.emit_sync({
             "level": "warning",
             "campaign_id": draft_id,
             "message": f"Campaign {draft_id} has no drafts to launch. Please upload drafts first.",
@@ -168,37 +169,14 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
         })
         raise HTTPException(status_code=500, detail=f"Failed to update campaign status: {str(e)}")
     
-    # EXECUTE SYNCHRONOUSLY (No Celery)
-    logger.info(f"🚀 EXECUTING SYNCHRONOUS LAUNCH for {len(drafts_by_user)} users, {len(drafts)} total drafts")
-    LogManager.emit_sync({
-        "level": "info",
-        "campaign_id": draft_id,
-        "message": f"🚀 Processing {len(drafts_by_user)} users with {len(drafts)} total drafts",
-    })
-    
-    total_sent = 0
-    total_failed = 0
-    
-    # Execute synchronously for each user
-    for user_id, user_drafts in drafts_by_user.items():
+    # HELPER: Process a single user's drafts in parallel using Batch API
+    def process_user_launch(u_id, u_drafts, c_id):
+        from app.database import SessionLocal
+        local_db = SessionLocal()
         try:
-            user = db.query(models.WorkspaceUser).filter(models.WorkspaceUser.id == user_id).first()
+            user = local_db.query(models.WorkspaceUser).filter(models.WorkspaceUser.id == u_id).first()
             if not user:
-                logger.error(f"User {user_id} not found")
-                emit_log({
-                    "level": "error",
-                    "campaign_id": draft_id,
-                    "message": f"User {user_id} not found. Skipping drafts for this user.",
-                })
-                total_failed += len(user_drafts)
-                continue
-            
-            logger.info(f"📧 Processing {len(user_drafts)} drafts for user: {user.email}")
-            LogManager.emit_sync({
-                "level": "info",
-                "campaign_id": draft_id,
-                "message": f"📧 Sending {len(user_drafts)} drafts from {user.email}",
-            })
+                return 0, len(u_drafts)
             
             # Setup Gmail API
             from app.encryption import EncryptionService
@@ -212,39 +190,68 @@ def launch_drafts_ultra(draft_id: int, db: Session = Depends(get_db)):
             credentials = google_service.get_delegated_credentials(user.email, settings.GMAIL_SCOPES)
             gmail_service = build('gmail', 'v1', credentials=credentials)
             
-            # Send each draft
-            for draft in user_drafts:
-                try:
-                    logger.info(f"Sending draft {draft.id} (Gmail ID: {draft.gmail_draft_id}) for {user.email}")
-                    
-                    response = gmail_service.users().drafts().send(
-                        userId='me',
-                        body={'id': draft.gmail_draft_id}
-                    ).execute()
-                    
-                    draft.status = 'sent'
-                    draft.sent_at = datetime.utcnow()
-                    draft.gmail_message_id = response.get('id')
-                    total_sent += 1
-                    logger.info(f"✅ Successfully sent draft {draft.id} for {user.email}")
-                except Exception as e:
-                    logger.error(f"❌ Failed to send draft {draft.id}: {e}")
-                    draft.status = 'failed'
-                    draft.error_message = str(e)
-                    total_failed += 1
+            s_count = 0
+            f_count = 0
             
-            db.commit()
-            logger.info(f"Completed sending for user {user.email}: {total_sent} sent so far")
+            # Send drafts using Batch API
+            def b_callback(request_id, response, exception):
+                nonlocal s_count, f_count
+                d_id = int(request_id)
+                # Need to update draft in DB
+                d = local_db.query(models.GmailDraft).filter(models.GmailDraft.id == d_id).first()
+                if exception:
+                    f_count += 1
+                    if d:
+                        d.status = 'failed'
+                        d.error_message = str(exception)
+                else:
+                    s_count += 1
+                    if d:
+                        d.status = 'sent'
+                        d.sent_at = datetime.utcnow()
+                        d.gmail_message_id = response.get('id')
             
-        except Exception as user_error:
-            logger.error(f"❌ Failed to process user {user_id}: {user_error}")
-            # Mark all user's drafts as failed
-            for draft in user_drafts:
-                draft.status = 'failed'
-                draft.error_message = str(user_error)
-            total_failed += len(user_drafts)
-            db.commit()
+            batch = gmail_service.new_batch_http_request(callback=b_callback)
+            for d in u_drafts:
+                batch.add(
+                    gmail_service.users().drafts().send(userId='me', body={'id': d.gmail_draft_id}),
+                    request_id=str(d.id)
+                )
+            
+            batch.execute()
+            local_db.commit()
+            
+            LogManager.emit_sync({
+                "level": "info",
+                "campaign_id": c_id,
+                "message": f"📧 Completed {user.email}: {s_count} sent, {f_count} failed",
+            })
+            
+            return s_count, f_count
+        except Exception as e:
+            logger.error(f"Error processing user {u_id}: {e}")
+            return 0, len(u_drafts)
+        finally:
+            local_db.close()
+
+    # EXECUTE IN PARALLEL
+    logger.info(f"🚀 EXECUTING ULTRA PARALLEL LAUNCH for {len(drafts_by_user)} users, {len(drafts)} total drafts")
     
+    total_sent = 0
+    total_failed = 0
+    
+    max_workers = min(100, len(drafts_by_user))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_user = {
+            executor.submit(process_user_launch, uid, udrafts, draft_id): uid 
+            for uid, udrafts in drafts_by_user.items()
+        }
+        
+        for future in as_completed(future_to_user):
+            s, f = future.result()
+            total_sent += s
+            total_failed += f
+
     # Mark campaign as completed
     if total_sent > 0:
         campaign.status = DraftStatus.COMPLETED

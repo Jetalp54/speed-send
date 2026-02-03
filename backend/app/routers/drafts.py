@@ -49,7 +49,9 @@ def create_draft_campaign(draft_data: schemas.DraftCampaignCreate, db: Session =
         custom_headers=draft_data.custom_headers,
         body_template=draft_data.body_template,
         list_start_index=draft_data.list_start_index,
-        list_send_limit=draft_data.list_send_limit
+        list_send_limit=draft_data.list_send_limit,
+        recipient_metadata={},
+        saved_test_recipients=[]
     )
     db.add(new_draft_campaign)
     db.flush()  # Get the ID before committing
@@ -329,7 +331,8 @@ def update_draft_campaign(draft_id: int, draft_data: schemas.DraftCampaignUpdate
         body_template=campaign.body_template,
         # Test fields
         test_after_email=campaign.test_after_email,
-        test_after_count=campaign.test_after_count or 0
+        test_after_count=campaign.test_after_count or 0,
+        saved_test_recipients=campaign.saved_test_recipients or []
     )
 
 @router.delete("/drafts/{draft_id}")
@@ -1227,7 +1230,8 @@ def duplicate_draft_campaign(draft_id: int, db: Session = Depends(get_db)):
         body_format=new_campaign.body_format,
         body_template=new_campaign.body_template,
         test_after_email=new_campaign.test_after_email,
-        test_after_count=new_campaign.test_after_count or 0
+        test_after_count=new_campaign.test_after_count or 0,
+        saved_test_recipients=new_campaign.saved_test_recipients or []
     )
 
 

@@ -575,13 +575,19 @@ const DraftsPage: React.FC = () => {
                             <Mail className="h-4 w-4" /> Send Test Pulse
                           </DropdownMenuItem>
 
-                          {(campaign.status === 'ready' || campaign.status === 'uploaded') && (
+                          {(campaign.status === 'ready' || campaign.status === 'uploaded' || campaign.status === 'paused') && (
                             <>
-                              <DropdownMenuItem onClick={() => launchDrafts(campaign.id)} className="rounded-lg gap-2 py-2.5 font-bold text-xs cursor-pointer text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700">
-                                <Play className="h-4 w-4" /> Standard Launch
-                              </DropdownMenuItem>
+                              {campaign.status === 'paused' ? (
+                                <DropdownMenuItem onClick={() => resumeNow(campaign.id)} className="rounded-lg gap-2 py-2.5 font-bold text-xs cursor-pointer text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700">
+                                  <Play className="h-4 w-4" /> Resume Now
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => launchDrafts(campaign.id)} className="rounded-lg gap-2 py-2.5 font-bold text-xs cursor-pointer text-emerald-600 focus:bg-emerald-50 focus:text-emerald-700">
+                                  <Rocket className="h-4 w-4" /> Launch Campaign
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem onClick={() => openScheduleModal(campaign.id)} className="rounded-lg gap-2 py-2.5 font-bold text-xs cursor-pointer text-blue-600 focus:bg-blue-50 focus:text-blue-700">
-                                <Rocket className="h-4 w-4" /> Hyper-Resume (ms)
+                                <Clock className="h-4 w-4" /> Schedule Resume
                               </DropdownMenuItem>
                             </>
                           )}
