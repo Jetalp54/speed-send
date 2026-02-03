@@ -142,6 +142,10 @@ class ContactUpdate(BaseModel):
 class ContactResponse(ContactBase):
     id: int
     contact_list_id: int
+    isp: Optional[str] = None
+    geo_country: Optional[str] = None
+    geo_city: Optional[str] = None
+    tags: Optional[List[str]] = []
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -322,8 +326,12 @@ class EmailLogCreate(EmailLogBase):
 
 class EmailLogResponse(EmailLogBase):
     id: int
-    campaign_id: int
+    campaign_id: Optional[int] = None
     service_account_id: int
+    contact_list_id: Optional[int] = None
+    opens_count: int = 0
+    clicks_count: int = 0
+    unsubscribes_count: int = 0
     created_at: datetime
     sent_at: Optional[datetime] = None
 
@@ -345,6 +353,7 @@ class GmailDraftResponse(GmailDraftBase):
     id: int
     draft_campaign_id: int
     user_id: int
+    contact_list_id: Optional[int] = None
     created_at: datetime
     sent_at: Optional[datetime] = None
 

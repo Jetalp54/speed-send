@@ -166,6 +166,20 @@ logger.info(f"API Documentation: /docs (disabled in production)")
 logger.info(f"Ready to handle requests!")
 
 
+@app.get("/api/v1/debug/fix-db")
+async def debug_fix_db():
+    """
+    Temporary debug endpoint to trigger schema fixing
+    """
+    try:
+        from app.fix_db import fix_schema
+        logger.info("🔧 Manual trigger: Running DB Schema Fixer...")
+        fix_schema()
+        return {"status": "success", "message": "DB Schema Fixer completed successfully"}
+    except Exception as e:
+        logger.error(f"Manual trigger failed: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.get("/")
 async def root():
     """

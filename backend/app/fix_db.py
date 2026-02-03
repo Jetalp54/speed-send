@@ -53,8 +53,39 @@ def fix_schema():
                 print(f"- Error adding body_template: {e}")
 
             # ==========================================
-            # Fix Tracking Events (Missing Columns)
+            # Subscriber Action Mastery & Auto-Segmentation
             # ==========================================
+            
+            # 1. Contacts Table (ISP/Geo/Tags)
+            contact_cols = [
+                ("isp", "VARCHAR(255)"),
+                ("geo_country", "VARCHAR(2)"),
+                ("geo_city", "VARCHAR(100)"),
+                ("tags", "JSONB")
+            ]
+            for col_name, col_type in contact_cols:
+                try:
+                    conn.execute(text(f"ALTER TABLE contacts ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                    print(f"- Checked/Added contacts.{col_name}")
+                except Exception as e:
+                    print(f"- Error contacts.{col_name}: {e}")
+
+            # 2. Attribution & Counters
+            attr_cols = [
+                ("email_logs", "contact_list_id", "INTEGER"),
+                ("email_logs", "unsubscribes_count", "INTEGER DEFAULT 0"),
+                ("gmail_drafts", "contact_list_id", "INTEGER"),
+                ("campaigns", "tracking_domain_id", "INTEGER"),
+                ("draft_campaigns", "recipient_metadata", "JSONB DEFAULT '{}'")
+            ]
+            for table, col_name, col_type in attr_cols:
+                try:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                    print(f"- Checked/Added {table}.{col_name}")
+                except Exception as e:
+                    print(f"- Error {table}.{col_name}: {e}")
+
+            # 3. Tracking Events (Extended Privacy-Safe Metadata)
             tracking_cols = [
                 ("user_agent", "TEXT"),
                 ("user_agent_type", "VARCHAR(50)"),
@@ -69,11 +100,10 @@ def fix_schema():
             
             for col_name, col_type in tracking_cols:
                 try:
-                    # distinct 'tracking_events' table
                     conn.execute(text(f"ALTER TABLE tracking_events ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
                     print(f"- Checked/Added tracking_events.{col_name}")
                 except Exception as e:
-                    print(f"- Error checking {col_name}: {e}")
+                    print(f"- Error tracking_events.{col_name}: {e}")
 
             conn.commit()
             print("Schema update completed successfully.")
