@@ -199,6 +199,7 @@ def get_draft_campaigns(db: Session = Depends(get_db)):
             ))
         except Exception as ve:
             logger.error(f"Schema Validation Error for campaign {campaign.id}: {ve}")
+            db.rollback() # Reset session to allow next iteration
             continue
     return response
 

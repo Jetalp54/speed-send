@@ -473,11 +473,6 @@ class TrackingEvent(Base):
     os = Column(String(50)) # Windows, iOS, Android
     browser = Column(String(50)) # Chrome, Safari, Firefox
     
-    # Device Detection (NEW)
-    device_type = Column(String(20))  # 'mobile', 'tablet', 'desktop'
-    os = Column(String(50))           # e.g., 'iOS 15.0'
-    browser = Column(String(50))      # e.g., 'Safari 15.0'
-    
     # Relationships
     campaign = relationship("Campaign")
     # email_log = relationship("EmailLog") # Optional to avoid heavy joins
