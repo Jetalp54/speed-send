@@ -13,6 +13,10 @@ router = APIRouter(prefix="/contacts-enterprise", tags=["contacts-enterprise"])
 @router.post("/import/async")
 async def import_contacts_async(
     list_id: int,
+    default_isp: str = None,
+    default_geo_country: str = None,
+    default_geo_city: str = None,
+    default_tags: str = None,
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
@@ -36,8 +40,16 @@ async def import_contacts_async(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
         
+    # Prepare defaults
+    defaults = {
+        "isp": default_isp,
+        "geo_country": default_geo_country,
+        "geo_city": default_geo_city,
+        "tags": default_tags
+    }
+        
     # Trigger Task
-    task = import_contacts_task.delay(file_path, list_id)
+    task = import_contacts_task.delay(file_path, list_id, defaults)
     
     return {
         "message": "Import started",

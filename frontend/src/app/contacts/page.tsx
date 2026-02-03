@@ -254,7 +254,18 @@ export default function ContactsPage() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const uploadRes = await fetch(`${API_URL}/api/v1/contacts-enterprise/import/async?list_id=${listData.id}`, {
+      // Extract country code from "NZ New Zealand (NZ)" format if needed
+      // Assuming metadata.geo might be full string
+      const geoCountry = metadata.geo.split('(').pop()?.replace(')', '') || metadata.geo;
+
+      const queryParams = new URLSearchParams({
+        list_id: listData.id.toString(),
+        default_isp: metadata.isp,
+        default_geo_country: geoCountry,
+        default_tags: metadata.type // Map "List Type" to tag for now
+      });
+
+      const uploadRes = await fetch(`${API_URL}/api/v1/contacts-enterprise/import/async?${queryParams.toString()}`, {
         method: 'POST',
         body: formData,
       });

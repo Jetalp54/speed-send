@@ -382,14 +382,48 @@ def queue_optimized_upload(campaign_id, users, subject, from_name, body_html, re
         for user in users
     ]
     
-    job = group(tasks)
-    result = job.apply_async()
+    from celery import chord
+    # Use chord: Upload tasks -> Finalize task
+    callback = finalize_upload_task.s(campaign_id, task_group_id)
+    job = chord(tasks)(callback)
     
     # Initialize progress tracking
     cache = get_performance_cache()
     cache.update_progress(task_group_id, 0, len(users), "queued")
     
-    return result, task_group_id
+    return job, task_group_id
+
+@celery_app.task(bind=True)
+def finalize_upload_task(self, results, campaign_id, task_group_id):
+    """
+    Finalize the upload process:
+    1. Update Campaign status to READY
+    2. Update progress cache
+    """
+    db = SessionLocal()
+    try:
+        logger.info(f"Finalizing upload for campaign {campaign_id}")
+        
+        # Update Campaign Status
+        campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == campaign_id).first()
+        if campaign:
+            campaign.status = models.DraftStatus.READY
+            logger.info(f"Campaign {campaign_id} marked as READY")
+            db.commit()
+            
+        # Update progress to 100%
+        cache = get_performance_cache()
+        cache.update_progress(task_group_id, 100, 100, "completed")
+        
+        return {
+            "campaign_id": campaign_id,
+            "status": "ready"
+        }
+    except Exception as e:
+        logger.error(f"Failed to finalize upload for campaign {campaign_id}: {str(e)}")
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
 
 
 def queue_optimized_launch(drafts_by_user):

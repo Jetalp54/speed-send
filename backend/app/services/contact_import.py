@@ -13,7 +13,7 @@ class ContactImporter:
     def __init__(self, db: Session):
         self.db = db
 
-    def import_csv_stream(self, file_content: str, list_id: int):
+    def import_csv_stream(self, file_content: str, list_id: int, defaults: dict = None):
         """
         Parses CSV string and imports contacts into the simple 'Contact' model.
         Targeted for the User Sender frontend.
@@ -27,6 +27,7 @@ class ContactImporter:
         - city, geo_city
         - tags (comma separated)
         """
+        defaults = defaults or {}
         # Handle BOM if present
         if file_content.startswith('\ufeff'):
             file_content = file_content[1:]
@@ -75,24 +76,40 @@ class ContactImporter:
             if not email or '@' not in email:
                 continue
             
-            # Extract fields
+            # Extract fields with correct fallbacks
+            # Priority: CSV Value -> Default Value -> None
+            c_isp = row.get(headers_map[isp_col]) if isp_col else defaults.get('isp')
+            c_country = row.get(headers_map[country_col]) if country_col else defaults.get('geo_country')
+            c_city = row.get(headers_map[city_col]) if city_col else defaults.get('geo_city')
+            
             c_data = {
                 'contact_list_id': list_id,
                 'email': email,
                 'first_name': row.get(headers_map[first_name_col]) if first_name_col else None,
                 'last_name': row.get(headers_map[last_name_col]) if last_name_col else None,
-                'isp': row.get(headers_map[isp_col]) if isp_col else None,
-                'geo_country': row.get(headers_map[country_col]) if country_col else None,
-                'geo_city': row.get(headers_map[city_col]) if city_col else None,
+                'isp': c_isp,
+                'geo_country': c_country,
+                'geo_city': c_city,
                 'tags': []
             }
             
             # Parse tags
+            final_tags = []
+            # 1. Add CSV tags
             if tags_col:
                 raw_tags = row.get(headers_map[tags_col])
                 if raw_tags:
-                    # Split by comma or pipe
-                    c_data['tags'] = [t.strip() for t in raw_tags.replace('|', ',').split(',') if t.strip()]
+                    final_tags.extend([t.strip() for t in raw_tags.replace('|', ',').split(',') if t.strip()])
+            
+            # 2. Add Default tags
+            if 'tags' in defaults and defaults['tags']:
+                default_tags = defaults['tags']
+                if isinstance(default_tags, list):
+                    final_tags.extend(default_tags)
+                elif isinstance(default_tags, str):
+                    final_tags.extend([t.strip() for t in default_tags.split(',') if t.strip()])
+            
+            c_data['tags'] = list(set(final_tags)) # Unique
 
             batch.append(c_data)
             
