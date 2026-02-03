@@ -152,7 +152,22 @@ def log_tracking_event_task(event_data):
     db = SessionLocal()
     # Log database name for debugging connection issues
     db_name = db.get_bind().url.database
-    logger.info(f"⚙️ EXECUTING TASK | DB: {db_name} | logging {event_data['event_type']} for Cam:{event_data.get('campaign_id')} Draft:{event_data.get('draft_campaign_id')}")
+    
+    # --- MOVED UP: Auto-Resolve Campaign/Draft ID ---
+    # Must happen BEFORE creating TrackingEvent to avoid Foreign Key Violation
+    c_id = event_data.get('campaign_id')
+    d_id = event_data.get('draft_campaign_id')
+    
+    from app.models import DraftCampaign
+    if c_id and not d_id:
+        # Check if this ID exists in draft_campaigns
+        is_draft = db.query(DraftCampaign).filter(DraftCampaign.id == c_id).first()
+        if is_draft:
+            d_id = c_id
+            c_id = None # CLEAR campaign_id effectively
+            logger.info(f"🔄 Auto-resolved Campaign ID {event_data.get('campaign_id')} as Draft ID {d_id}. Cleared campaign_id to avoid DB error.")
+
+    logger.info(f"⚙️ EXECUTING TASK | DB: {db_name} | logging {event_data['event_type']} for Cam:{c_id} Draft:{d_id}")
     try:
         # Anonymize IP if present (GDPR compliance)
         ip_address = event_data.get('ip')
@@ -165,8 +180,8 @@ def log_tracking_event_task(event_data):
 
         event = TrackingEvent(
             event_type=event_data['event_type'],
-            campaign_id=event_data.get('campaign_id'),
-            draft_campaign_id=event_data.get('draft_campaign_id'),
+            campaign_id=c_id, # Use resolved ID
+            draft_campaign_id=d_id, # Use resolved ID
             email_log_id=event_data.get('email_log_id'),
             link_map_id=event_data.get('link_map_id'),
             user_agent=event_data.get('user_agent'),
@@ -231,23 +246,9 @@ def log_tracking_event_task(event_data):
         # --- NEW: Real-time counter updates ---
         from app.models import Campaign, EmailLog, DraftCampaign
         
-        c_id = event_data.get('campaign_id')
-        d_id = event_data.get('draft_campaign_id')
+        # c_id and d_id are already defined at top
 
-        # 1. AUTO-RESOLVE: If c_id is provided but it's actually a Draft, link it
-        if c_id and not d_id:
-            # Check if this ID exists in draft_campaigns
-            is_draft = db.query(DraftCampaign).filter(DraftCampaign.id == c_id).first()
-            if is_draft:
-                d_id = c_id
-                # CRITICAL: If we found it's a draft, we MUST clear the campaign__id 
-                # on the event object or the database will throw a ForeignKeyViolation 
-                # because the ID doesn't exist in the "campaigns" table.
-                event.draft_campaign_id = d_id
-                event.campaign_id = None 
-                # Re-sync local variable for the update logic below
-                c_id = None 
-                logger.info(f"🔄 Auto-resolved Campaign ID {event_data.get('campaign_id')} as Draft ID {d_id}. Cleared campaign_id to avoid DB error.")
+        # 1. AUTO-RESOLVE: Moved to top of function
 
         # 2. Update Campaign Stats
         if c_id:
