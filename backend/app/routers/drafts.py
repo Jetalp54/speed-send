@@ -736,8 +736,16 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
                 if '[tracking_pixel]' in body_html:
                     pixel_params = f"?c={campaign_id}" if campaign_id else ""
                     pixel_url = f"{base_url}/t/pixel.png{pixel_params}"
-                    body_html = body_html.replace('[tracking_pixel]', pixel_url)
-                    logger.info(f"✅ REPLACED [tracking_pixel] with {pixel_url}")
+                    
+                    # 1. Handle usage inside src attributes (e.g. <img src="[tracking_pixel]">)
+                    body_html = body_html.replace('src="[tracking_pixel]"', f'src="{pixel_url}"')
+                    body_html = body_html.replace("src='[tracking_pixel]'", f"src='{pixel_url}'")
+                    
+                    # 2. Handle standalone usage (replace with full <img> tag)
+                    pixel_tag = f'<img src="{pixel_url}" width="1" height="1" style="display:none;" alt="" />'
+                    body_html = body_html.replace('[tracking_pixel]', pixel_tag)
+                    
+                    logger.info(f"✅ REPLACED [tracking_pixel] with tag/url")
 
                 # Replace links
                 pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'

@@ -74,7 +74,14 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
             # 2. Replace [tracking_pixel] placeholder
             if '[tracking_pixel]' in body_html:
                 pixel_url = f"{base_url}/t/pixel.png?c={campaign_id}"
-                body_html = body_html.replace('[tracking_pixel]', pixel_url)
+                
+                # Handle usage inside src attributes
+                body_html = body_html.replace('src="[tracking_pixel]"', f'src="{pixel_url}"')
+                body_html = body_html.replace("src='[tracking_pixel]'", f"src='{pixel_url}'")
+                
+                # Handle standalone usage
+                pixel_tag = f'<img src="{pixel_url}" width="1" height="1" style="display:none;" alt="" />'
+                body_html = body_html.replace('[tracking_pixel]', pixel_tag)
             
             # 3. Replace [tracking_link] placeholders
             pattern = r'\[tracking_link\](https?://[^\[]+)\[/tracking_link\]'
