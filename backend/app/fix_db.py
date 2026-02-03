@@ -76,7 +76,9 @@ def fix_schema():
                 ("email_logs", "unsubscribes_count", "INTEGER DEFAULT 0"),
                 ("gmail_drafts", "contact_list_id", "INTEGER"),
                 ("campaigns", "tracking_domain_id", "INTEGER"),
-                ("draft_campaigns", "recipient_metadata", "JSONB DEFAULT '{}'")
+                ("draft_campaigns", "recipient_metadata", "JSONB DEFAULT '{}'"),
+                ("draft_campaigns", "list_start_index", "INTEGER DEFAULT 0"),
+                ("draft_campaigns", "list_send_limit", "INTEGER")
             ]
             for table, col_name, col_type in attr_cols:
                 try:

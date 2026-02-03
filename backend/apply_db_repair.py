@@ -42,6 +42,8 @@ def repair_db():
         
         # Table: draft_campaigns
         ("draft_campaigns", "recipient_metadata", "JSONB DEFAULT '{}'"),
+        ("draft_campaigns", "list_start_index", "INTEGER DEFAULT 0"),
+        ("draft_campaigns", "list_send_limit", "INTEGER"),
     ]
 
     inspector = inspect(engine)
