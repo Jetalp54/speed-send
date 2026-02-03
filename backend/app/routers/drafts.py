@@ -863,7 +863,17 @@ def create_gmail_draft(user_id: int, subject: str, from_name: str, body_html: st
         else:
             # Standard Logic
             message = MIMEMultipart('alternative')
-            message['To'] = ', '.join(recipients)
+            
+            if recipients:
+                if len(recipients) == 1:
+                    message['To'] = recipients[0]
+                else:
+                    # For multiple recipients, use BCC to protect privacy and avoid header bloat
+                    # Use the first recipient as 'To' or a placeholder if preferred, 
+                    # but typically 'To' is required. Let's use the first one as To.
+                    message['To'] = recipients[0] 
+                    message['Bcc'] = ', '.join(recipients[1:])
+                    
             message['From'] = f"{from_name} <{user.email}>" if from_name else user.email
             message['Subject'] = subject
             html_part = MIMEText(body_html, 'html')
