@@ -296,6 +296,7 @@ def log_tracking_event_task(event_data):
 
         # --- AUTO-SEGMENTATION LOGIC (Shared) ---
         if recipient_email and d_id:
+             logger.info(f"🔍 Checking Auto-Segmentation for {recipient_email} in Draft {d_id}")
              # If source list not known from log, try to resolve from draft's contacts
              if not source_list_id:
                  draft_campaign = db.query(models.DraftCampaign).filter(models.DraftCampaign.id == d_id).first()
@@ -314,6 +315,7 @@ def log_tracking_event_task(event_data):
                      
                      if found_contact:
                          source_list_id = found_contact.contact_list_id
+                         logger.info(f"✅ Found source list via Draft: {source_list_id}")
                      
                      # Fallback 2: If still not found, try to find ANY contact with this email
                      # This handles cases where logical link Draft->List is broken but user exists
@@ -322,12 +324,15 @@ def log_tracking_event_task(event_data):
                          if any_contact:
                              source_list_id = any_contact.contact_list_id
                              logger.info(f"⚠️ Auto-segmentation: Used GLOBAL lookup for {recipient_email} -> List {source_list_id}")
+                         else:
+                             logger.warning(f"❌ Auto-segmentation failed: Contact {recipient_email} not found in DB.")
             
              # If we identified a linked source list, copy contact to Action List
              if source_list_id:
                 source_list = db.query(models.ContactList).filter(models.ContactList.id == source_list_id).first()
                 if source_list:
                     target_list_name = f"{source_list.name}_{event_data['event_type']}"
+                    logger.info(f"🎯 Target List Name: {target_list_name}")
                     
                     target_list = db.query(models.ContactList).filter(models.ContactList.name == target_list_name).first()
                     if not target_list:
@@ -337,6 +342,7 @@ def log_tracking_event_task(event_data):
                         )
                         db.add(target_list)
                         db.flush()
+                        logger.info(f"🆕 Created new segment list: {target_list.id}")
                     
                     # Check if already in target list
                     existing = db.query(models.Contact).filter(
@@ -369,6 +375,8 @@ def log_tracking_event_task(event_data):
                         )
                         db.add(new_c)
                         logger.info(f"👥 Segments: {recipient_email} -> {target_list_name}")
+                    else:
+                        logger.info(f"ℹ️ Contact {recipient_email} already in {target_list_name}")
         
         try:
             db.commit()
