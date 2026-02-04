@@ -3,14 +3,14 @@
 import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { dashboardApi, campaignsApi, serviceAccountsApi } from '@/lib/api';
-import { 
-  Mail, 
-  Users, 
-  Zap, 
-  TrendingUp, 
-  AlertCircle, 
-  CheckCircle, 
+import { dashboardApi, campaignsApi, serviceAccountsApi, draftsApi } from '@/lib/api';
+import {
+  Mail,
+  Users,
+  Zap,
+  TrendingUp,
+  AlertCircle,
+  CheckCircle,
   Clock,
   Activity,
   Rocket
@@ -40,14 +40,16 @@ export default function DashboardPage() {
 
   const loadDashboard = async () => {
     try {
-      const [statsRes, campaignsRes, accountsRes] = await Promise.all([
+      // Use draftsApi instead of campaignsApi to show real usage
+      const [statsRes, draftsRes, accountsRes] = await Promise.all([
         dashboardApi.stats(),
-        campaignsApi.list(),
+        draftsApi.list(),
         serviceAccountsApi.list()
       ]);
 
       setStats(statsRes.data);
-      setRecentCampaigns(Array.isArray(campaignsRes.data) ? campaignsRes.data.slice(0, 5) : []);
+      // Slice drafts to show recent 5
+      setRecentCampaigns(Array.isArray(draftsRes.data) ? draftsRes.data.slice(0, 5) : []);
       setAccounts(Array.isArray(accountsRes.data) ? accountsRes.data : []);
     } catch (error) {
       console.error('Failed to load dashboard:', error);
@@ -93,7 +95,7 @@ export default function DashboardPage() {
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
-      
+
       <div className="flex-1 overflow-auto">
         <div className="p-8">
           {/* Header */}
@@ -225,7 +227,7 @@ export default function DashboardPage() {
                       const quotaPercent = account.quota_limit > 0
                         ? (account.quota_used_today / account.quota_limit) * 100
                         : 0;
-                      
+
                       return (
                         <div
                           key={account.id}
