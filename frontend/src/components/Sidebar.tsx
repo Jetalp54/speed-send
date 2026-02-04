@@ -29,7 +29,7 @@ const navigation = [
   { name: 'Campaign Center', href: '/drafts', icon: FileEdit },
   { name: 'Outreach Analytics', href: '/analytics', icon: BarChart3 },
   { name: 'Team Management', href: '/users', icon: Users },
-  { name: 'System Logs', href: '/reports', icon: Activity },
+  { name: 'System Logs', href: '/system-logs', icon: Activity },
   { name: 'Tracking Domains', href: '/settings/domains', icon: Globe },
 ];
 

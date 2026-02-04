@@ -141,3 +141,8 @@ export const trackingDomainsApi = {
   create: (payload: { domain: string, ip_address: string, root_password: string }) => apiClient.request(`/api/v1/tracking-domains`, { method: 'POST', body: JSON.stringify(payload) }),
   delete: (id: number | string) => apiClient.request(`/api/v1/tracking-domains/${id}`, { method: 'DELETE' }),
 };
+
+// Logs API
+export const logsApi = {
+  getRecent: (limit: number = 100) => apiClient.request(`/api/v1/live-logs/recent?limit=${limit}`),
+};
