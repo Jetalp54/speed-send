@@ -111,11 +111,31 @@ def upload_drafts_optimized_task(self, campaign_id, user_id, subject, from_name,
                         pixel_tag = f'<img src="{pixel_url}" width="1" height="1" style="display:none;" alt="" />'
                         current_body_html = current_body_html.replace('[tracking_pixel]', pixel_tag)
                     
-                    # 3. Replace [tracking_link] placeholders
+                    # 3. AUTO-LINK TRACKING (Standard hrefs)
+                    # Regex to find href="..." or href='...'
+                    # Skips mailto:, tel:, #, and unsubscribes logic if needed
+                    href_pattern = r'href=([\'"])(http[s]?://[^"\']+)\1'
+                    
+                    def replace_href(match):
+                        quote_char = match.group(1)
+                        original_url = match.group(2)
+                        
+                        # Encode params
+                        encoded_url = quote(original_url)
+                        enc_recipient = quote(recipient_email)
+                        
+                        # Explicit Tracking URL (No EmailLog ID yet, so we use explicit params)
+                        tracking_url = f"{base_url}/t/redirect?url={encoded_url}&c={campaign_id}&d={campaign_id}&r={enc_recipient}"
+                        
+                        return f'href={quote_char}{tracking_url}{quote_char}'
+                        
+                    current_body_html = re.sub(href_pattern, replace_href, current_body_html)
+                    
+                    # 4. Handle [tracking_link] legacy placeholders (fallback)
                     matches = re.findall(link_pattern, current_body_html)
                     for original_url in matches:
                         encoded_url = quote(original_url)
-                        tracking_url = f"{base_url}/t/redirect?url={encoded_url}&c={campaign_id}&r={quote(recipient_email)}"
+                        tracking_url = f"{base_url}/t/redirect?url={encoded_url}&c={campaign_id}&d={campaign_id}&r={quote(recipient_email)}"
                         current_body_html = current_body_html.replace(f'[tracking_link]{original_url}[/tracking_link]', tracking_url)
 
                 if use_custom_headers and custom_headers:

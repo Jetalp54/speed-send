@@ -72,11 +72,10 @@ class QuotaManager:
             redis_client.expire(key, 86400)
             
         if new_usage > daily_limit:
-            # Rollback the increment if it exceeded limit
-            # This is "optimistic" reservation. If failed, we revert.
-            redis_client.decrby(key, count)
-            logger.warning(f"Quota exceeded for SA {service_account_id}: Limit {daily_limit}, Attempted {new_usage}")
-            return False
+            # UNLIMITED MODE: Log warning but ALLOW sending
+            # redis_client.decrby(key, count)
+            logger.warning(f"Quota exceeded for SA {service_account_id}: Limit {daily_limit}, Attempted {new_usage} (ALLOWED by UNLIMITED policy)")
+            return True
             
         return True
 
