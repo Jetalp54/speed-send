@@ -196,7 +196,8 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-4">
                           <div className="text-right">
                             <p className="text-sm font-medium">
-                              {campaign.sent_count}/{campaign.total_recipients}
+                              {/* Drafts schema uses diff fields: total_drafts / recipients_count */}
+                              {campaign.total_drafts || 0}/{campaign.recipients_count || campaign.total_recipients || 0}
                             </p>
                             <p className={`text-xs font-semibold uppercase ${getStatusColor(campaign.status)}`}>
                               {campaign.status}
