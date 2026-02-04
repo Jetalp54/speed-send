@@ -54,6 +54,15 @@ def resume_all_user_drafts_task(self, user_id, batch_size=50):
         sent_count = 0
         failed_count = 0
         
+        # Pre-fetch DB drafts to link data
+        gmail_draft_ids = [d['id'] for d in gmail_drafts]
+        db_drafts_map = {}
+        if gmail_draft_ids:
+            db_drafts = db.query(models.GmailDraft).filter(
+                models.GmailDraft.gmail_draft_id.in_(gmail_draft_ids)
+            ).all()
+            db_drafts_map = {d.gmail_draft_id: d for d in db_drafts}
+
         # Send drafts in batches using Gmail Batch API
         for i in range(0, len(gmail_drafts), batch_size):
             batch_drafts = gmail_drafts[i:i + batch_size]
@@ -61,11 +70,46 @@ def resume_all_user_drafts_task(self, user_id, batch_size=50):
             
             def batch_callback(request_id, response, exception):
                 nonlocal sent_count, failed_count
+                
+                # Get local DB draft counterpart
+                db_draft = db_drafts_map.get(request_id)
+                
                 if exception:
-                    logger.error(f"Failed to send draft: {str(exception)}")
+                    logger.error(f"Failed to send draft {request_id}: {str(exception)}")
                     failed_count += 1
+                    if db_draft:
+                        db_draft.status = 'failed'
+                        # Optional: Create failed EmailLog?
                 else:
                     sent_count += 1
+                    
+                    # 1. Update GmailDraft status
+                    if db_draft:
+                        db_draft.status = 'sent'
+                        db_draft.sent_at = datetime.utcnow()
+                        db_draft.gmail_message_id = response.get('id') if response else None
+                        
+                        # 2. CREATE EMAIL LOG (Critical for Dashboard!)
+                        # Extract first recipient (simplified)
+                        recipient = "unknown@example.com"
+                        if db_draft.recipients and len(db_draft.recipients) > 0:
+                            recipient = db_draft.recipients[0]
+                        
+                        email_log = models.EmailLog(
+                            campaign_id=0, # Use 0 or generic ID for drafts
+                            draft_campaign_id=db_draft.draft_campaign_id, # Link to Draft Campaign!
+                            service_account_id=service_account.id,
+                            sender_email=user.email,
+                            recipient_email=recipient,
+                            status=models.EmailStatus.SENT,
+                            message_id=response.get('id') if response else None,
+                            sent_at=datetime.utcnow(),
+                            subject="Draft Resume", # We could query subject but acceptable fallback
+                            contact_list_id=db_draft.contact_list_id
+                        )
+                        db.add(email_log)
+                        # We won't commit every single one inside callback to avoid locking, 
+                        # but we add to session. Only commit at end of batch or task.
             
             for draft in batch_drafts:
                 batch.add(
@@ -78,6 +122,13 @@ def resume_all_user_drafts_task(self, user_id, batch_size=50):
                 )
             
             batch.execute()
+            
+            # Commit logs for this batch to ensure visibility
+            try:
+                db.commit()
+            except Exception as e:
+                logger.error(f"Failed to commit batch logs: {e}")
+                db.rollback()
             
             # Small delay between batches to respect rate limits
             if i + batch_size < len(gmail_drafts):
