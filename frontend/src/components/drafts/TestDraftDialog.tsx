@@ -115,11 +115,13 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
                 recipient,
                 sender_user_id: parseInt(senderUserId),
                 save_recipient: true,
-                subject: config?.subject,
-                body_template: config?.body_format === 'html' ? config?.body_html : config?.body_template,
-                from_name: config?.from_name,
-                use_custom_headers: config?.use_custom_headers,
-                custom_headers: config?.custom_headers
+                subject: config?.subject || "Test Subject",  // Fallback to prevent empty subject
+                body_template: config?.body_format === 'html'
+                    ? (config?.body_html || "<p>Test body</p>")  // Ensure body_html is sent when format is html
+                    : (config?.body_template || "Test body"),     // Ensure body_template is sent when format is text
+                from_name: config?.from_name || "Test Sender",   // Fallback for from_name
+                use_custom_headers: config?.use_custom_headers || false,
+                custom_headers: config?.custom_headers || ""
             };
 
             const response = await apiClient.request(endpoint, {
