@@ -146,13 +146,31 @@ export function TestDraftDialog({ draftId, open, onClose, config, availableUsers
 
         } catch (err: any) {
             let errorMsg = 'Dispatch failed';
-            if (err.message) {
-                if (typeof err.message === 'object') {
-                    errorMsg = err.message.detail || JSON.stringify(err.message);
-                } else {
-                    errorMsg = err.message;
+
+            // Try to parse if it's a JSON string (from our lib/api fix)
+            let parsedError = null;
+            try {
+                if (err.message && err.message.startsWith('[') || err.message.startsWith('{')) {
+                    parsedError = JSON.parse(err.message);
                 }
+            } catch (e) { /* ignore */ }
+
+            if (parsedError) {
+                if (Array.isArray(parsedError)) {
+                    // Handle FastAPI validation errors array
+                    errorMsg = parsedError.map((e: any) => e.msg ? `${e.loc?.at(-1) || 'Field'}: ${e.msg}` : JSON.stringify(e)).join(', ');
+                } else if (parsedError.detail) {
+                    errorMsg = parsedError.detail;
+                } else if (parsedError.error) {
+                    errorMsg = parsedError.error;
+                } else {
+                    errorMsg = err.message; // Fallback
+                }
+            } else if (err.message) {
+                // Regular string error
+                errorMsg = err.message;
             }
+
             setError(errorMsg);
         } finally {
             setSending(false);

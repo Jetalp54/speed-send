@@ -41,7 +41,11 @@ class ApiClient {
         payload = await response.text();
       }
       if (!response.ok) {
-        return { error: (payload && (payload.detail || payload.error)) || `HTTP ${response.status}`, status: response.status };
+        let errorMsg = (payload && (payload.detail || payload.error));
+        if (typeof errorMsg === 'object') {
+          errorMsg = JSON.stringify(errorMsg);
+        }
+        return { error: errorMsg || `HTTP ${response.status}`, status: response.status };
       }
       return { data: payload, status: response.status };
     } catch (err: any) {
