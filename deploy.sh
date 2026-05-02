@@ -391,8 +391,8 @@ if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
     exit 1
 fi
 
-docker builder prune -af || true
-docker system prune -af || true
+docker builder prune -f || true
+docker system prune -f || true
 print_info "Building frontend image..."
 
 # Create backup of current running containers before rebuilding
