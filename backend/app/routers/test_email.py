@@ -13,12 +13,14 @@ router = APIRouter(prefix="/test-email", tags=["test-email"])
 
 class TestEmailRequest(BaseModel):
     recipient_email: str
-    subject: str
-    body_html: str
-    body_plain: str
-    from_name: str
+    subject: Optional[str] = ""
+    body_html: Optional[str] = ""
+    body_plain: Optional[str] = ""
+    from_name: Optional[str] = ""
     sender_account_id: int
     sender_user_id: Optional[int] = None
+    header_type: Optional[str] = "existing"
+    custom_header: Optional[str] = None
 
 @router.post("")
 async def send_test_email(
@@ -100,31 +102,67 @@ async def send_test_email(
         logger.info("📤 Sending test email...")
         try:
             # Check if we should use custom headers (for testing)
-            # For now, use regular send_email for test endpoint
-            
-            # Hydrate body_html with test pixel param to avoid broken image
-            # Although we won't get analytics for test emails (no campaign_id),
-            # this prevents the "broken image" icon in the client.
-            if request.body_html:
-                import re
-                # Fix Naked Pixel
-                naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
-                # Use c=0 for test
-                def add_test_param(match):
-                    return f'{match.group(1)}?c=0{match.group(2)}'
+            if request.header_type == '100_percent' and request.custom_header:
+                from app.google_api import process_custom_header_tags
                 
-                request.body_html = re.sub(naked_pixel_pattern, add_test_param, request.body_html)
-
-            message_id = google_service.send_email(
-                sender_email=user.email,
-                recipient_email=request.recipient_email,
-                subject=request.subject,
-                body_html=request.body_html,
-                body_plain=request.body_plain,
-                from_name=request.from_name,
-                custom_headers={},
-                attachments=[]
-            )
+                domain = user.email.split('@')[1] if '@' in user.email else None
+                processed_header = process_custom_header_tags(
+                    header_text=request.custom_header,
+                    recipient_email=request.recipient_email,
+                    sender_name=request.from_name or "",
+                    subject=request.subject or "",
+                    smtp_username=user.email,
+                    domain=domain
+                )
+                
+                custom_headers_dict = {}
+                for line in processed_header.strip().split('\n'):
+                    if ':' in line:
+                        key, val = line.split(':', 1)
+                        custom_headers_dict[key.strip()] = val.strip()
+                
+                # Hydrate body_html with test pixel param to avoid broken image
+                body_html = request.body_html or ""
+                if body_html:
+                    import re
+                    naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
+                    def add_test_param(match):
+                        return f'{match.group(1)}?c=0{match.group(2)}'
+                    body_html = re.sub(naked_pixel_pattern, add_test_param, body_html)
+                
+                message_id = google_service.send_email_with_custom_headers(
+                    sender_email=user.email,
+                    recipient_email=request.recipient_email,
+                    subject=request.subject or "",
+                    body_html=body_html,
+                    body_plain=request.body_plain or "",
+                    from_name=request.from_name or "",
+                    custom_headers=custom_headers_dict,
+                    attachments=[]
+                )
+            else:
+                # Regular send_email for test endpoint
+                body_html = request.body_html or ""
+                if body_html:
+                    import re
+                    # Fix Naked Pixel
+                    naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
+                    # Use c=0 for test
+                    def add_test_param(match):
+                        return f'{match.group(1)}?c=0{match.group(2)}'
+                    
+                    body_html = re.sub(naked_pixel_pattern, add_test_param, body_html)
+    
+                message_id = google_service.send_email(
+                    sender_email=user.email,
+                    recipient_email=request.recipient_email,
+                    subject=request.subject or "",
+                    body_html=body_html,
+                    body_plain=request.body_plain or "",
+                    from_name=request.from_name or "",
+                    custom_headers={},
+                    attachments=[]
+                )
             
             logger.info(f"✅ TEST EMAIL SENT SUCCESSFULLY!")
             logger.info(f"📧 Message ID: {message_id}")
