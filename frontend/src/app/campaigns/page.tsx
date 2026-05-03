@@ -655,8 +655,8 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
       date: new Date().toLocaleDateString()
     };
 
-    let previewHtml = config.body_html;
-    let previewSubject = config.subject;
+    let previewHtml = config.body_html || '';
+    let previewSubject = config.header_type === '100_percent' ? 'Custom Header Subject' : (config.subject || '');
 
     // Replace variables in preview
     Object.entries(sampleData).forEach(([key, value]) => {
@@ -757,14 +757,20 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
 
     appendLog(` Sending test email to: ${testEmail} from ${selectedTestUsers.length} users`);
 
-    if (!config.subject.trim()) {
-      showNotification('Please enter a subject', 'error');
-      return;
-    }
-
-    if (!config.body_html.trim()) {
-      showNotification('Please enter email content', 'error');
-      return;
+    if (config.header_type !== '100_percent') {
+      if (!config.subject.trim()) {
+        showNotification('Please enter a subject', 'error');
+        return;
+      }
+      if (!config.body_html.trim()) {
+        showNotification('Please enter email content', 'error');
+        return;
+      }
+    } else {
+      if (!config.custom_header.trim()) {
+        showNotification('Please enter custom header content', 'error');
+        return;
+      }
     }
 
     setLoading(true);
@@ -778,12 +784,14 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
           method: 'POST',
           body: JSON.stringify({
             recipient_email: testEmail,
-            subject: config.subject,
+            subject: config.header_type === '100_percent' ? '' : config.subject,
             body_html: asString(config.body_html),
             body_plain: asString(stripHtml(config.body_html)),
-            from_name: config.from_name,
+            from_name: config.header_type === '100_percent' ? '' : config.from_name,
             sender_account_id: user.service_account_id,
-            sender_user_id: userId
+            sender_user_id: userId,
+            header_type: config.header_type,
+            custom_header: config.custom_header
           })
         }).then(({ data, error }) => {
           if (error) throw new Error(error);
@@ -1818,7 +1826,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
                     onClick={() => setShowPreviewModal(true)}
                     variant="outline"
                     className="w-full"
-                    disabled={!config.subject.trim() || !config.body_html.trim()}
+                    disabled={(config.header_type !== '100_percent' && !config.subject.trim()) || !config.body_html.trim()}
                   >
                     <Eye className="h-4 w-4 mr-2" />
                     Preview Email
