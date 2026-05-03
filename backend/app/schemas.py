@@ -188,7 +188,7 @@ class DataListResponse(DataListBase):
 # Campaign Schemas
 class CampaignBase(BaseModel):
     name: str
-    subject: str
+    subject: Optional[str] = ""  # Optional: not required in 100% custom header mode
     body_html: Optional[str] = None
     body_plain: Optional[str] = None
     from_name: Optional[str] = None
