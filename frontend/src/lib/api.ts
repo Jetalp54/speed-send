@@ -23,16 +23,24 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  async request<T = any>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
+  async request<T = any>(endpoint: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
+    const timeoutMs = options.timeoutMs ?? 30000; // Default: 30 second timeout
+    const { timeoutMs: _, ...fetchOptions } = options as any;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
       const response = await fetch(url, {
         headers: {
           'Content-Type': options.body instanceof FormData ? undefined as any : 'application/json',
           ...(options.headers || {}),
         } as any,
-        ...options,
+        ...fetchOptions,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const contentType = response.headers.get('content-type') || '';
       let payload: any = undefined;
       if (contentType.includes('application/json')) {
@@ -49,6 +57,10 @@ class ApiClient {
       }
       return { data: payload, status: response.status };
     } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err?.name === 'AbortError') {
+        return { error: `Request timed out after ${timeoutMs / 1000}s. The server is still processing — check logs.` };
+      }
       return { error: err?.message || 'Network error' };
     }
   }

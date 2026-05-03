@@ -825,6 +825,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
 
         return apiClient.request('/api/v1/test-email/', {
           method: 'POST',
+          timeoutMs: 60000, // 60 second timeout for Gmail API calls
           body: JSON.stringify({
             recipient_email: testEmail,
             subject: config.header_type === '100_percent' ? '' : config.subject,
