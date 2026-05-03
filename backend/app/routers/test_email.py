@@ -121,22 +121,49 @@ async def send_test_email(
                         key, val = line.split(':', 1)
                         custom_headers_dict[key.strip()] = val.strip()
                 
-                # Hydrate body_html with test pixel param to avoid broken image
+                logger.info(f"🎯 100% Custom Header parsed keys: {list(custom_headers_dict.keys())}")
+                
+                # Extract subject and from_name from parsed custom header so Gmail API
+                # receives valid values (not empty strings which cause silent rejections)
+                effective_subject = (
+                    custom_headers_dict.get('Subject')
+                    or custom_headers_dict.get('subject')
+                    or request.subject
+                    or "No Subject"
+                )
+                
+                # Extract From display name from custom header (e.g. "John Doe <john@example.com>")
+                raw_from = (
+                    custom_headers_dict.get('From')
+                    or custom_headers_dict.get('from')
+                    or ""
+                )
+                import re as _re
+                from_name_match = _re.match(r'^(.+?)\s*<', raw_from)
+                effective_from_name = (
+                    from_name_match.group(1).strip() if from_name_match
+                    else request.from_name or ""
+                )
+                
+                # If body_html is empty in 100% header mode, use a minimal placeholder
+                # so Gmail API doesn't silently drop the message
                 body_html = request.body_html or ""
-                if body_html:
-                    import re
+                if not body_html.strip():
+                    body_html = "<html><body></body></html>"
+                    logger.info("⚠️  No body_html provided in 100% header mode – using minimal placeholder")
+                else:
                     naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
                     def add_test_param(match):
                         return f'{match.group(1)}?c=0{match.group(2)}'
-                    body_html = re.sub(naked_pixel_pattern, add_test_param, body_html)
+                    body_html = _re.sub(naked_pixel_pattern, add_test_param, body_html)
                 
                 message_id = google_service.send_email_with_custom_headers(
                     sender_email=user.email,
                     recipient_email=request.recipient_email,
-                    subject=request.subject or "",
+                    subject=effective_subject,
                     body_html=body_html,
                     body_plain=request.body_plain or "",
-                    from_name=request.from_name or "",
+                    from_name=effective_from_name,
                     custom_headers=custom_headers_dict,
                     attachments=[]
                 )
