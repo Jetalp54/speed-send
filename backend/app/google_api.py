@@ -10,6 +10,7 @@ import json
 from typing import List, Dict, Optional
 from app.config import settings
 from app.encryption import encryption_service
+import logging
 
 
 class GoogleWorkspaceService:
