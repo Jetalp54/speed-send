@@ -986,12 +986,20 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
       <Sidebar />
 
       <div className="flex-1 overflow-auto">
-        <div className="min-h-screen bg-gray-50 p-8">
+        <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-50 via-slate-50 to-purple-50 p-4 md:p-8 lg:p-12 transition-all duration-500">
           {/* Header */}
-          <div className="mb-8 flex items-center justify-between">
+          <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 backdrop-blur-xl transition-all hover:bg-white/50">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Google Workspace Campaign <span className="ml-2 text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 align-middle">v2.1 UI</span></h1>
-              <p className="text-gray-600 mt-2">PowerMTA-style sending via Google Workspace API — multi-domain, high-speed delivery</p>
+              <h1 className="text-4xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 tracking-tight pb-2">
+                Campaign Creator <span className="ml-3 text-xs px-3 py-1.5 rounded-full bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-800 align-middle font-bold shadow-sm border border-indigo-200/50 uppercase tracking-wider">v2.1 Pro</span>
+              </h1>
+              <p className="text-gray-600 mt-3 font-medium flex items-center gap-2 text-sm md:text-base">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                </span>
+                Enterprise-grade delivery engine via Google Workspace API
+              </p>
             </div>
             <div className="flex items-center gap-4">
               {/* Backend Status Indicator */}
@@ -1098,19 +1106,19 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
 
           {/* Main Content - 3 columns: Left (Debug+Accounts), Center (Config+Composer+Recipients), Right (Stats+Actions) */}
           <div
-            className="grid grid-cols-1 xl:grid-cols-3 gap-6"
+            className="grid grid-cols-1 lg:grid-cols-12 gap-8"
             onContextMenu={handleContextMenu}
             onClick={closeContextMenu}
           >
 
             {/* LEFT COLUMN: Debug Log + Google Accounts + Users */}
-            <div className="space-y-6">
+            <div className="lg:col-span-3 space-y-8">
               {/* Debug Log Panel */}
-              <Card>
-                <CardHeader>
+              <Card className="border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white/70 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:bg-white/90 rounded-2xl overflow-hidden">
+                <CardHeader className="border-b border-gray-100/80 bg-gradient-to-r from-gray-50/50 to-transparent pb-4">
                   <CardTitle className="flex items-center gap-2">Debug Log</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                   <div className="flex justify-between mb-2">
                     <div className="text-xs text-muted-foreground">Backend: {API_URL}</div>
                     <Button size="sm" variant="outline" onClick={() => setLogs([])}>Clear</Button>
@@ -1128,8 +1136,8 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
               </Card>
 
               {/* Google Workspace Accounts Panel */}
-              <Card>
-                <CardHeader>
+              <Card className="border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white/70 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:bg-white/90 rounded-2xl overflow-hidden">
+                <CardHeader className="border-b border-gray-100/80 bg-gradient-to-r from-gray-50/50 to-transparent pb-4">
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <Users className="h-5 w-5" />
@@ -1146,7 +1154,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                   <div className="space-y-3 max-h-64 overflow-y-auto">
                     {(accounts || []).map(account => (
                       <div key={account.id} className="flex items-center space-x-3 p-3 border rounded-lg hover:bg-gray-50">
@@ -1210,8 +1218,8 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
               </Card>
 
               {/* Users of Selected Accounts */}
-              <Card>
-                <CardHeader>
+              <Card className="border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white/70 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:bg-white/90 rounded-2xl overflow-hidden">
+                <CardHeader className="border-b border-gray-100/80 bg-gradient-to-r from-gray-50/50 to-transparent pb-4">
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <Users className="h-5 w-5 text-indigo-600" />
@@ -1234,7 +1242,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                   {(selectedUsers || []).length === 0 ? (
                     <div className="text-sm text-gray-500">Select one or more accounts to see their users.</div>
                   ) : (
@@ -1301,14 +1309,14 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
               </Card>
 
               {/* Test After Feature */}
-              <Card>
-                <CardHeader>
+              <Card className="border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white/70 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:bg-white/90 rounded-2xl overflow-hidden">
+                <CardHeader className="border-b border-gray-100/80 bg-gradient-to-r from-gray-50/50 to-transparent pb-4">
                   <CardTitle className="flex items-center gap-2">
                     <Mail className="h-5 w-5 text-orange-600" />
                     Test After Feature
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 pt-6">
                   <div className="text-sm text-muted-foreground">
                     Send a test email after every X number of emails are sent during the campaign.
                   </div>
@@ -1358,17 +1366,17 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
             </div>
 
             {/* CENTER COLUMN: Campaign Config + Email Composer + Recipients */}
-            <div className="space-y-6">
+            <div className="lg:col-span-6 space-y-8">
 
               {/* Campaign Settings */}
-              <Card>
-                <CardHeader>
+              <Card className="border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white/70 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:bg-white/90 rounded-2xl overflow-hidden">
+                <CardHeader className="border-b border-gray-100/80 bg-gradient-to-r from-gray-50/50 to-transparent pb-4">
                   <CardTitle className="flex items-center gap-2">
                     <Settings className="h-5 w-5" />
                     Campaign Configuration
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="space-y-6 pt-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="campaign-name">Campaign Name</Label>
@@ -1437,7 +1445,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
                     <Label htmlFor="header-type">Header Type</Label>
                     <select
                       id="header-type"
-                      className="w-full p-2 border rounded-md"
+                      className="w-full p-2.5 bg-white/80 border border-gray-200/80 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-300 rounded-xl shadow-sm"
                       value={config.header_type}
                       onChange={(e) => setConfig(prev => ({ ...prev, header_type: e.target.value }))}
                     >
@@ -1533,7 +1541,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
                       <Label htmlFor="sender-rotation">Sender Rotation Strategy</Label>
                       <select
                         id="sender-rotation"
-                        className="w-full p-2 border rounded-md"
+                        className="w-full p-2.5 bg-white/80 border border-gray-200/80 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-300 rounded-xl shadow-sm"
                         defaultValue="round_robin"
                       >
                         <option value="round_robin">Round Robin (Recommended)</option>
@@ -1634,8 +1642,8 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
               </Card>
 
               {/* Email Composer */}
-              <Card>
-                <CardHeader>
+              <Card className="border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white/70 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:bg-white/90 rounded-2xl overflow-hidden">
+                <CardHeader className="border-b border-gray-100/80 bg-gradient-to-r from-gray-50/50 to-transparent pb-4">
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <Mail className="h-5 w-5" />
@@ -1667,7 +1675,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="email-body">Email Body (HTML)</Label>
@@ -1684,8 +1692,8 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
               </Card>
 
               {/* Recipients Panel (moved to center column per sketch) */}
-              <Card>
-                <CardHeader>
+              <Card className="border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white/70 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:bg-white/90 rounded-2xl overflow-hidden">
+                <CardHeader className="border-b border-gray-100/80 bg-gradient-to-r from-gray-50/50 to-transparent pb-4">
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <Mail className="h-5 w-5" />
@@ -1701,7 +1709,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 pt-6">
                   <div>
                     <Label htmlFor="recipients">Email Addresses (one per line)</Label>
                     <Textarea
@@ -1735,17 +1743,17 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
             </div>
 
             {/* RIGHT COLUMN: Stats & Actions */}
-            <div className="space-y-6">
+            <div className="lg:col-span-3 space-y-8">
 
               {/* Google Workspace Stats Panel */}
-              <Card>
-                <CardHeader>
+              <Card className="border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white/70 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:bg-white/90 rounded-2xl overflow-hidden">
+                <CardHeader className="border-b border-gray-100/80 bg-gradient-to-r from-gray-50/50 to-transparent pb-4">
                   <CardTitle className="flex items-center gap-2">
                     <CheckCircle className="h-5 w-5" />
                     Google Workspace Stats
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                   <div className="space-y-4">
                     <div className="text-center">
                       <div className="text-3xl font-bold text-blue-600">{queuedCount}</div>
@@ -1804,14 +1812,14 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
               </Card>
 
               {/* Google Workspace Actions Panel */}
-              <Card>
-                <CardHeader>
+              <Card className="border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.04)] bg-white/70 backdrop-blur-2xl transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] hover:bg-white/90 rounded-2xl overflow-hidden">
+                <CardHeader className="border-b border-gray-100/80 bg-gradient-to-r from-gray-50/50 to-transparent pb-4">
                   <CardTitle className="flex items-center gap-2">
                     <Play className="h-5 w-5" />
                     Gmail API Actions
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 pt-6">
                   <Button
                     onClick={() => setShowTestModal(true)}
                     variant="outline"
@@ -1846,7 +1854,7 @@ Received: by [rnda_15].[rnda_10].com with SMTP id [rnda_20] for [to]; [date]`
 
                   <Button
                     onClick={handleCreateCampaign}
-                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-0.5 rounded-xl py-6 text-lg font-semibold"
                     disabled={loading || selectedAccounts.length === 0 || recipients.length === 0}
                   >
                     {loading ? (
