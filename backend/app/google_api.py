@@ -508,7 +508,15 @@ class GoogleWorkspaceService:
         body_html_has_content = body_html and body_html.strip()
         body_plain_has_content = body_plain and body_plain.strip()
         
-        if body_html_has_content and body_plain_has_content:
+        has_custom_content_type = any(k.lower() == 'content-type' for k in (custom_headers or {}))
+        
+        if has_custom_content_type and body_html_has_content and body_html.lstrip().startswith('--'):
+            # The user provided a raw MIME structure with boundaries in the body
+            from email.message import Message
+            message = Message()
+            message.set_payload(body_html)
+            logger.info(f"📧 Detected custom Content-Type with manual MIME boundaries. Using raw payload.")
+        elif body_html_has_content and body_plain_has_content:
             message = MIMEMultipart('alternative')
             part1 = MIMEText(body_plain, 'plain', 'utf-8')
             part2 = MIMEText(body_html, 'html', 'utf-8')
@@ -552,9 +560,13 @@ class GoogleWorkspaceService:
                 key_lower = key.lower()
                 
                 # CRITICAL: Do not allow custom headers to override MIME structural headers
+                # UNLESS the user is manually providing the MIME structure (detected via raw payload)
                 if key_lower in ['content-type', 'mime-version', 'content-transfer-encoding']:
-                    logger.warning(f"⚠️ Skipping forbidden custom header: {key}")
-                    continue
+                    if not (has_custom_content_type and body_html_has_content and body_html.lstrip().startswith('--')):
+                        logger.warning(f"⚠️ Skipping forbidden custom header: {key}")
+                        continue
+                    else:
+                        logger.info(f"✅ Allowing custom structural header for raw payload: {key}")
 
                 # Check if this custom header should override an essential header
                 if key_lower in final_headers_lower:
