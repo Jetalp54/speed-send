@@ -121,7 +121,7 @@ async def send_test_email(
                         key, val = line.split(':', 1)
                         custom_headers_dict[key.strip()] = val.strip()
                 
-                logger.info(f"🎯 100% Custom Header parsed keys: {list(custom_headers_dict.keys())}")
+                logging.info(f"🎯 100% Custom Header parsed keys: {list(custom_headers_dict.keys())}")
                 
                 # Extract subject and from_name from parsed custom header so Gmail API
                 # receives valid values (not empty strings which cause silent rejections)
@@ -150,7 +150,7 @@ async def send_test_email(
                 body_html = request.body_html or ""
                 if not body_html.strip():
                     body_html = "<html><body></body></html>"
-                    logger.info("⚠️  No body_html provided in 100% header mode – using minimal placeholder")
+                    logging.info("⚠️  No body_html provided in 100% header mode – using minimal placeholder")
                 else:
                     naked_pixel_pattern = r'(src=["\']https://[^"\']+/t/pixel\.png)(["\'])'
                     def add_test_param(match):
